@@ -213,6 +213,8 @@ class BackupFlowTest : FlowTestBase() {
         assertTrue("export rows list the entry count", has(hasText("entries")) && has(hasText("5")))
 
         val shadow = Shadows.shadowOf(compose.activity)
+        // the payload is staged in a cache file first, then the screen opens the picker
+        waitUntil("save picker opened") { shadow.peekNextStartedActivityForResult() != null }
         val save = shadow.nextStartedActivityForResult
         assertEquals(Intent.ACTION_CREATE_DOCUMENT, save.intent.action)
         assertEquals(koinGet<BackupService>().fileName(), save.intent.getStringExtra(Intent.EXTRA_TITLE))

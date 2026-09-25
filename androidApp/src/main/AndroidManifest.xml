@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- lets rememberCameraCapture check that a camera app answers IMAGE_CAPTURE before showing 촬영 (API 30+) -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+    </queries>
     <application
         android:name=".CoffeeJournalApplication"
         android:allowBackup="true"

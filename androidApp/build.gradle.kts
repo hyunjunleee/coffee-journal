@@ -57,6 +57,7 @@ dependencies {
     testImplementation(libs.roborazzi.compose)
     testImplementation(libs.roborazzi.junit.rule)
     testImplementation(libs.androidx.compose.ui.test.junit4)
+    testImplementation(libs.androidx.compose.material3)
     testImplementation(libs.androidx.test.core)
     testImplementation(libs.androidx.test.ext.junit)
     testImplementation(libs.sqlite.framework)

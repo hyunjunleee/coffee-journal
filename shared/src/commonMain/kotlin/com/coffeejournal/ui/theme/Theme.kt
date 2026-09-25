@@ -2,7 +2,9 @@ package com.coffeejournal.ui.theme
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
@@ -80,23 +82,49 @@ object AppType {
 
 }
 
+/**
+ * Every Material role is mapped onto the archive palette, so components that read roles the app never sets itself
+ * (the date and time pickers above all) show ink, ivory and hairline grey instead of the Material baseline lavender.
+ */
 private val ArchiveColors = lightColorScheme(
     primary = Ink.accent,
     onPrimary = Ink.bg,
+    // time picker: selected hour/minute box (filled ink, like the app's selected tabs)
+    primaryContainer = Ink.accent,
+    onPrimaryContainer = Ink.bg,
     secondary = Ink.cafe,
     onSecondary = Ink.bg,
+    // date picker range fill and other tonal highlights
+    secondaryContainer = Ink.surfaceRaised,
+    onSecondaryContainer = Ink.text,
     tertiary = Ink.cupping,
+    // time picker: selected AM/PM
+    tertiaryContainer = Ink.accent,
+    onTertiaryContainer = Ink.bg,
     background = Ink.bg,
     onBackground = Ink.text,
     surface = Ink.surface,
     onSurface = Ink.text,
     surfaceVariant = Ink.surfaceRaised,
     onSurfaceVariant = Ink.textMuted,
+    surfaceBright = Ink.surface,
+    surfaceDim = Ink.surfaceRaised,
+    surfaceContainerLowest = Ink.surface,
+    surfaceContainerLow = Ink.surface,
+    surfaceContainer = Ink.surface,
+    // date picker dialog container (and any default dialog): ivory
+    surfaceContainerHigh = Ink.bg,
+    // time picker clock dial and unselected hour/minute boxes
+    surfaceContainerHighest = Ink.surfaceRaised,
     outline = Ink.line,
     outlineVariant = Ink.line,
     error = Ink.bad,
     onError = Ink.bg,
 )
+
+/** Design §5.3: corner radius 0 everywhere, including Material's own dialogs, pickers and menus. */
+private val Square = RoundedCornerShape(0.dp)
+private val ArchiveShapes = Shapes(extraSmall = Square, small = Square, medium = Square, large = Square, extraLarge = Square)
 
 private val ArchiveTypography = Typography(
     bodyLarge = AppType.body,
@@ -110,7 +138,7 @@ private val ArchiveTypography = Typography(
 
 @Composable
 fun CoffeeJournalTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = ArchiveColors, typography = ArchiveTypography) {
+    MaterialTheme(colorScheme = ArchiveColors, typography = ArchiveTypography, shapes = ArchiveShapes) {
         Surface(Modifier.fillMaxSize().background(Ink.bg), color = Ink.bg, contentColor = Ink.text, content = content)
     }
 }
