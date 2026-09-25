@@ -67,7 +67,7 @@ object AppType {
 
     val headerTitle = TextStyle(fontFamily = mono, fontSize = 22.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.04).em, color = Ink.text)
     val tagline = TextStyle(fontFamily = mono, fontSize = 11.sp, color = Ink.textMuted, letterSpacing = 0.02.em)
-    val count = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Ink.textFaint)
+    val count = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Ink.text)
     val sectionLabel = TextStyle(fontFamily = mono, fontSize = 10.5.sp, letterSpacing = 0.05.em, color = Ink.textFaint, fontWeight = FontWeight.Medium)
     val fieldLabel = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Ink.textMuted)
     val body = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Ink.text, lineHeight = 21.sp)
