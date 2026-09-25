@@ -74,10 +74,11 @@ class PlatformFlowTest : FlowTestBase() {
 
     private fun dp(value: Int): Float = value * context.resources.displayMetrics.density
 
-    /** 기타 tab → floating "+" → the equipment form (a full-screen route). */
+    /** 기타 tab → 드리퍼 → floating "+" → the equipment form (a full-screen route). */
     private fun openEquipmentForm() {
         launchApp()
         tab("tab-misc")
+        clickText("드리퍼") // miscBackup-9: like the web, "+ 추가" is hidden on 전체 until a type is picked
         clickNode(hasContentDescription("추가") and hasClickAction())
         waitFor(button("대표 사진"), "equipment form")
     }
