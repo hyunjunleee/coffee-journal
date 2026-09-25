@@ -29,7 +29,7 @@ data class ExtractControls(
     val filterMode: String = ExtractFilter.ALL,
     val smallMode: String = SmallPackFilter.ALL,
     val query: String = "",
-    /** Explicit expand/collapse overrides; the first group is open by default. */
+    /** Explicit expand/collapse overrides; every group starts collapsed, like the web. */
     val expanded: Map<String, Boolean> = emptyMap(),
     val editingSummaryKey: String? = null,
     val summaryDraft: String = "",
@@ -88,11 +88,11 @@ class ExtractViewModel(
         val selection = ExtractGrouping.selectEntries(s.entries, s.pantry, c.filterMode, c.smallMode)
         val listed = selection.brewEntries.map { ListedEntry(it) } + ExtractGrouping.projectHomeCuppings(s.entries, selection.brewEntries)
         val groups = ExtractGrouping.buildGroups(listed, s.entries)
-        val groupUis = groups.mapIndexed { index, g ->
+        val groupUis = groups.map { g ->
             val bestId = m.best[g.key]
             GroupUi(
                 group = g,
-                expanded = c.expanded[g.key] ?: (index == 0),
+                expanded = c.expanded[g.key] ?: false,
                 summary = m.summaries[g.key]?.text,
                 bestEntry = bestId?.let { id -> g.recipeEntries.firstOrNull { it.id == id } },
                 bestEntryId = bestId,

@@ -91,7 +91,8 @@ internal object CalendarGrid {
         today: LocalDate,
         ranges: List<BeanRange> = CalendarRanges.compute(entries),
     ): MonthGrid {
-        val byDay = entriesForFilter(entries, filter).groupBy { Dates.toLocalDate(it.createdAt) }
+        // oldest first within a day, like the web (its records array is in creation order): panel rows, dots, colour bar
+        val byDay = entriesForFilter(entries, filter).sortedBy { it.createdAt }.groupBy { Dates.toLocalDate(it.createdAt) }
         val includeBlends = filter == CalFilter.ALL || filter == CalFilter.BEAN
         val blendsByDay = if (includeBlends) blends.groupBy(::blendDate) else emptyMap()
         val cells = (1..yearMonth.dayCount).map { day ->
@@ -167,7 +168,11 @@ internal object CalendarGrid {
         return if (clean.length > 115) clean.take(115).trimEnd() + "…" else clean
     }
 
-    /** Web findCurrentRoadmapPhase: first phase whose [dayStart, dayEnd) contains the D-day count. */
+    /**
+     * Web findCurrentRoadmapPhase: the phase whose [dayStart, dayEnd) contains the D-day count. When phases overlap
+     * (the starter phase spans every day, so any phase added by hand overlaps it) the narrowest one wins, earlier
+     * position on ties — the same answer as the web whenever phases do not overlap.
+     */
     fun currentPhase(phases: List<RoadmapPhase>, day: Int?): RoadmapPhase? =
-        day?.let { d -> phases.firstOrNull { d >= it.dayStart && d < it.dayEnd } }
+        day?.let { d -> phases.filter { d >= it.dayStart && d < it.dayEnd }.minByOrNull { it.dayEnd.toLong() - it.dayStart } }
 }

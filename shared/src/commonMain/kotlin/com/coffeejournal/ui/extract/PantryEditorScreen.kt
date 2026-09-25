@@ -17,17 +17,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.PackageType
 import com.coffeejournal.domain.reference.RoastLevels
-import com.coffeejournal.ui.extract.components.DateField
+import com.coffeejournal.ui.form.imeOverlapPadding
 import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Chip
 import com.coffeejournal.ui.theme.ChipInput
+import com.coffeejournal.ui.theme.DateField
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GhostButton
@@ -49,11 +52,17 @@ fun PantryEditorScreen(nav: NavHostController, itemId: String?) {
     val vm = koinViewModel<PantryEditorViewModel> { parametersOf(itemId ?: "") }
     val form by vm.form.collectAsStateWithLifecycle()
     LaunchedEffect(form.saved) { if (form.saved) nav.popBackStack() }
+    // one pop per back / 취소 even when tapped again during the exit transition
+    val leave = dropUnlessResumed { nav.popBackStack() }
 
     Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar(title = "원두 보관함", onBack = { nav.popBackStack() })
+        ScreenTitleBar(title = "원두 보관함", onBack = leave)
         if (!form.loaded) return
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter).padding(top = 12.dp, bottom = 96.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Column(
+            Modifier.fillMaxSize().imeOverlapPadding().verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.gutter).padding(top = 12.dp, bottom = 96.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             AppTextField(form.name, { v -> vm.update { copy(name = v) } }, label = "원두 이름", placeholder = "예: 에티오피아 벤사 내추럴")
             AppTextField(form.roastery, { v -> vm.update { copy(roastery = v) } }, label = "로스터리", placeholder = "예: 커피 리브레")
             Column {
@@ -61,7 +70,10 @@ fun PantryEditorScreen(nav: NavHostController, itemId: String?) {
                 Seg(PACKAGE_OPTIONS, form.packageType, { v -> vm.update { copy(packageType = v) } }, allowClear = false, labels = PACKAGE_LABELS)
             }
             AppTextField(form.weight, { v -> vm.update { copy(weight = v) } }, label = "봉투 용량 (g)", placeholder = "예: 200", keyboardType = KeyboardType.Number)
-            AppTextField(form.price, vm::setPrice, label = "구매 가격 (원)", placeholder = "예: 18,000", keyboardType = KeyboardType.Number)
+            AppTextField(
+                form.price, vm::setPrice, label = "구매 가격 (원)", placeholder = "예: 18,000", keyboardType = KeyboardType.Number,
+                modifier = Modifier.onFocusChanged { if (!it.hasFocus) vm.formatPrice() },
+            )
             if (form.unitPriceText.isNotBlank()) HintText(form.unitPriceText)
             Column {
                 FieldLabel("배전도")
@@ -88,8 +100,8 @@ fun PantryEditorScreen(nav: NavHostController, itemId: String?) {
             form.error?.let { Text(it, style = AppType.small.copy(color = Ink.bad)) }
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                PrimaryButton(if (form.isEdit) "수정 저장" else "저장", onClick = vm::save, modifier = Modifier.weight(1f))
-                GhostButton("취소", onClick = { nav.popBackStack() }, modifier = Modifier.weight(1f))
+                PrimaryButton(if (form.isEdit) "수정 저장" else "저장", onClick = vm::save, enabled = !form.saving, modifier = Modifier.weight(1f))
+                GhostButton("취소", onClick = leave, modifier = Modifier.weight(1f))
             }
         }
     }

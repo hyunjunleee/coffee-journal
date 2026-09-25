@@ -1,5 +1,6 @@
 package com.coffeejournal.ui.extract
 
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.coffeejournal.data.repo.PantryRepository
@@ -11,6 +12,8 @@ import com.coffeejournal.domain.rules.NoteCanon
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.PantryRules
 import com.coffeejournal.domain.rules.Prices
+import com.coffeejournal.ui.form.SavedFormState
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +22,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.Transient
 
 data class PantryUiState(
     val loaded: Boolean = false,
@@ -43,15 +48,18 @@ class PantryViewModel(private val pantry: PantryRepository) : ViewModel() {
     fun delete(item: PantryItem) { viewModelScope.launch { pantry.delete(item.id) } }
 }
 
-/** Editable copy of a pantry item (web #bean-pantry-form). */
+/** Editable copy of a pantry item (web #bean-pantry-form). Serializable so the typed input survives process death. */
+@Serializable
 data class PantryForm(
     val loaded: Boolean = false,
     val isEdit: Boolean = false,
+    /** Id a new bag is stored under: fixed for this form, so a repeated save upserts the same row. */
+    val draftId: String = "",
     val name: String = "",
     val roastery: String = "",
     val packageType: String = PackageType.STANDARD,
     val weight: String = "",
-    /** Displayed with thousands separators; digits only are stored. */
+    /** As typed; thousands separators are added when the field loses focus (web blur), digits only are stored. */
     val price: String = "",
     val roastLevel: String = "",
     val roastDate: String = "",
@@ -61,22 +69,32 @@ data class PantryForm(
     val expectedNotes: List<String> = emptyList(),
     val noteInput: String = "",
     val notes: String = "",
-    val error: String? = null,
-    val saved: Boolean = false,
+    @Transient val error: String? = null,
+    /** A save is running or has succeeded: 저장 is disabled and further saves are ignored. */
+    @Transient val saving: Boolean = false,
+    @Transient val saved: Boolean = false,
 ) {
     val unitPriceText: String get() = PantryRules.unitPriceText(weight, price)
 }
 
-class PantryEditorViewModel(private val itemId: String?, private val pantry: PantryRepository) : ViewModel() {
-    private val _form = MutableStateFlow(PantryForm())
+class PantryEditorViewModel(
+    private val itemId: String?,
+    private val pantry: PantryRepository,
+    savedState: SavedStateHandle? = null,
+) : ViewModel() {
+    private val kept = SavedFormState(savedState, "pantryForm", PantryForm.serializer())
+    private val restored: PantryForm? = kept.restore()
+    private val _form = MutableStateFlow(restored ?: PantryForm(loaded = itemId == null, isEdit = itemId != null, draftId = Ids.newId()))
     val form: StateFlow<PantryForm> = _form.asStateFlow()
     private var existing: PantryItem? = null
 
     init {
-        viewModelScope.launch {
-            val item = itemId?.let { pantry.getById(it) }
+        kept.keep(viewModelScope, _form)
+        if (itemId != null) viewModelScope.launch {
+            val item = pantry.getById(itemId)
             existing = item
-            _form.value = if (item == null) PantryForm(loaded = true) else PantryForm(
+            if (restored != null) return@launch
+            _form.value = if (item == null) _form.value.copy(loaded = true, isEdit = false) else _form.value.copy(
                 loaded = true,
                 isEdit = true,
                 name = item.name,
@@ -97,17 +115,23 @@ class PantryEditorViewModel(private val itemId: String?, private val pantry: Pan
 
     fun update(transform: PantryForm.() -> PantryForm) = _form.update { it.transform().copy(error = null) }
 
-    fun setPrice(raw: String) = update { copy(price = Prices.formatInput(raw)) }
+    /** Typing keeps the text as it is; reformatting on every key moved the cursor and swapped digits. */
+    fun setPrice(raw: String) = update { copy(price = raw) }
 
+    /** Web pantry-price blur: "18000" → "18,000". */
+    fun formatPrice() = _form.update { it.copy(price = Prices.formatInput(it.price)) }
+
+    /** One save per form: taps while it runs, or after it succeeded (the screen is closing), are ignored. */
     fun save() {
         val f = _form.value
+        if (!f.loaded || f.saving || f.saved) return
         val notes = if (f.noteInput.isNotBlank()) NoteCanon.addChips(f.expectedNotes, f.noteInput) else f.expectedNotes
         val name = f.name.trim()
         if (name.isEmpty()) { _form.update { it.copy(error = "원두 이름을 입력해주세요.") }; return }
         val prev = existing
         val now = Dates.nowMillis()
         val item = PantryItem(
-            id = prev?.id ?: Ids.newId(now),
+            id = prev?.id ?: f.draftId.ifBlank { Ids.newId(now) },
             name = name,
             roastery = f.roastery.trim(),
             packageType = f.packageType,
@@ -125,9 +149,16 @@ class PantryEditorViewModel(private val itemId: String?, private val pantry: Pan
             createdAt = prev?.createdAt ?: now,
             sourceEntryId = prev?.sourceEntryId ?: "",
         )
+        _form.update { it.copy(saving = true, error = null) }
         viewModelScope.launch {
-            pantry.upsert(item)
-            _form.update { it.copy(expectedNotes = notes, noteInput = "", saved = true) }
+            try {
+                pantry.upsert(item)
+                _form.update { it.copy(expectedNotes = notes, noteInput = "", saved = true) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _form.update { it.copy(saving = false, error = "저장하지 못했어요: ${e.message ?: "알 수 없는 오류"}") }
+            }
         }
     }
 

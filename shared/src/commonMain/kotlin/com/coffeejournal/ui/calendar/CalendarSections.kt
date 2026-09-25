@@ -90,6 +90,7 @@ internal fun StudySection(state: CalendarUiState, vm: CalendarViewModel, nav: Na
                 onDeleteItem = vm::deleteItem,
                 onAddItem = vm::addItem,
                 onAddPhase = vm::addPhase,
+                onDeletePhase = vm::deletePhase,
             )
         }
     }

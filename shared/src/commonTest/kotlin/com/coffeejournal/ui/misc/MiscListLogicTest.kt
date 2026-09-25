@@ -66,7 +66,8 @@ class MiscListLogicTest {
         assertEquals("2025.3.1부터 사용", MiscListLogic.sinceLabel("2025-03-01"))
         assertNull(MiscListLogic.sinceLabel(""))
         assertNull(MiscListLogic.sinceLabel("not-a-date"))
-        assertEquals(MiscType.DRIPPER, MiscListLogic.formType(MiscListLogic.ALL))
+        // web hides "+ 추가" on 전체 (miscBackup-9): no type, no button
+        assertNull(MiscListLogic.formType(MiscListLogic.ALL))
         assertEquals(MiscType.WATER, MiscListLogic.formType(MiscType.WATER))
         assertEquals(listOf("all", "dripper", "filter", "kettle", "thermometer", "scale", "water"), MiscListLogic.typeTabs)
     }

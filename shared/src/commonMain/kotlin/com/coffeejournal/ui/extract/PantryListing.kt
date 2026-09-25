@@ -26,7 +26,7 @@ object PantryListing {
     fun metaLine(item: PantryItem): String = listOf(
         PantryRules.packageLabel(item),
         item.roastery,
-        PantryRules.priceText(item.weight, item.price).ifBlank { if (item.weight.isNotBlank()) "${item.weight}g" else "" },
+        PantryRules.priceText(item.weight, item.price).ifBlank { ExtractGrouping.weightText(item.weight) },
         if (item.roastDate.isNotBlank()) "로스팅 ${item.roastDate}" else "",
         if (item.purchaseDate.isNotBlank()) "구매 ${item.purchaseDate}" else "",
     ).filter { it.isNotBlank() }.joinToString(" · ")

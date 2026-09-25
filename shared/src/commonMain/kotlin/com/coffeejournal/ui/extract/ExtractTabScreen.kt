@@ -30,6 +30,7 @@ import com.coffeejournal.ui.extract.components.DrinkingRow
 import com.coffeejournal.ui.extract.components.GroupActions
 import com.coffeejournal.ui.extract.components.SmallPackCardView
 import com.coffeejournal.ui.extract.components.searchResultItems
+import com.coffeejournal.ui.form.imeOverlapPadding
 import com.coffeejournal.ui.nav.FormMode
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.AppIcons
@@ -59,7 +60,8 @@ fun ExtractTabScreen(nav: NavHostController) {
     val openEntry = { id: String -> nav.navigate(Route.EntryDetail(id)) }
 
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 96.dp)) {
+        // ends at the keyboard, so the search / D-day / summary fields scroll above it
+        LazyColumn(Modifier.fillMaxSize().imeOverlapPadding(), contentPadding = PaddingValues(bottom = 96.dp)) {
             item { TopHeader("coffee_journal / 2026", "[ personal coffee archive ]", if (state.loaded) "${state.entryCount} entries" else null) }
             item {
                 if (state.loaded) DdaySection(

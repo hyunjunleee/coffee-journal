@@ -8,6 +8,7 @@ import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.Dates
+import com.coffeejournal.domain.rules.Numbers
 import kotlin.math.roundToInt
 
 /** One card in the 블렌드 view; [kind] matches the web filter values. */
@@ -38,10 +39,11 @@ object BlendSources {
 
     /** "이름 12g (40%)" per component; the percentage only when any grams were entered. */
     fun componentLines(components: List<BlendComponent>): List<String> {
-        val total = components.sumOf { it.grams.trim().toDoubleOrNull() ?: 0.0 }
+        // "NaN" / "Infinity" / "1e999" grams count as missing (a NaN share would crash roundToInt)
+        val total = components.sumOf { Numbers.parse(it.grams) ?: 0.0 }.takeIf { it.isFinite() } ?: 0.0
         return components.map { c ->
             val g = c.grams.trim()
-            val pct = if (total > 0) " (${((g.toDoubleOrNull() ?: 0.0) / total * 100).roundToInt()}%)" else ""
+            val pct = if (total > 0) " (${((Numbers.parse(g) ?: 0.0) / total * 100).roundToInt()}%)" else ""
             c.name + (if (g.isNotEmpty()) " ${g}g" else "") + pct
         }
     }

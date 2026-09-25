@@ -6,15 +6,18 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.coffeejournal.ui.form.imeOverlapPadding
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.SubTabs
 import com.coffeejournal.ui.theme.TopHeader
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
 /** 원두 tab: header → horizontally scrolling sub tabs (default 커피 지도) → the selected view. */
@@ -22,11 +25,17 @@ import org.koin.compose.viewmodel.koinViewModel
 fun BeanTabScreen(nav: NavHostController) {
     val vm = koinViewModel<BeanViewModel>()
     val data by vm.data.collectAsStateWithLifecycle()
-    val view by vm.selectedView.collectAsStateWithLifecycle()
+    val selected by vm.selectedView.collectAsStateWithLifecycle()
+    // a view asked for by another screen (the calendar's blend row → 블렌드) wins from the first frame, then sticks
+    val requests = koinInject<BeanViewRequests>()
+    val requested by requests.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(requested) { requested?.let { vm.selectView(it); requests.clear() } }
+    val view = requested ?: selected
     val stateHolder = rememberSaveableStateHolder()
 
     Column(Modifier.fillMaxSize()) {
-        TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = "${data.records.size} beans")
+        // the web header is global: every tab shows the record count
+        TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = if (data.loaded) "${data.entries.size} entries" else null)
         SubTabs(
             items = BeanViews.all,
             selected = view,
@@ -34,7 +43,8 @@ fun BeanTabScreen(nav: NavHostController) {
             labels = BeanViews.labels,
             modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.gutter, vertical = 10.dp),
         )
-        Box(Modifier.fillMaxSize()) {
+        // every sub view fills this box, so its scroll area ends at the keyboard (search fields, the process add form)
+        Box(Modifier.fillMaxSize().imeOverlapPadding()) {
             // Each view keeps its own rememberSaveable state (search text, toggles) while another tab is showing.
             stateHolder.SaveableStateProvider(view) {
                 when (view) {

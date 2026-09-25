@@ -8,6 +8,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import com.coffeejournal.ui.theme.AppTextField
 import org.koin.compose.viewmodel.koinViewModel
@@ -18,7 +19,9 @@ import org.koin.core.parameter.parametersOf
 fun VideoFormScreen(nav: NavHostController, videoId: String?) {
     val vm = koinViewModel<VideoFormViewModel>(key = "video-form-$videoId") { parametersOf(videoId) }
     val s by vm.state.collectAsStateWithLifecycle()
-    FormScaffold(title = if (s.isEdit) "동영상 수정" else "동영상 추가", onBack = { nav.popBackStack() }, onSave = { vm.save { nav.popBackStack() } }) {
+    // one pop per back / 취소 / successful save, even when tapped again during the exit transition
+    val leave = dropUnlessResumed { nav.popBackStack() }
+    FormScaffold(title = if (s.isEdit) "동영상 수정" else "동영상 추가", onBack = leave, onSave = { vm.save(leave) }, saving = s.saving) {
         AppTextField(label = "동영상 제목", value = s.title, onValueChange = { v -> vm.update { copy(title = v, titleError = false) } }, placeholder = "예: 추출 변수와 맛의 관계")
         RequiredHint(s.titleError, "동영상 제목을 입력해주세요")
         Spacer(Modifier.height(12.dp))

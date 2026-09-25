@@ -15,33 +15,29 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.DatePicker
-import androidx.compose.material3.DatePickerDialog
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import coil3.compose.AsyncImage
 import com.coffeejournal.domain.model.MiscStatus
-import com.coffeejournal.domain.rules.Dates
+import com.coffeejournal.ui.form.imeOverlapPadding
 import com.coffeejournal.ui.platform.rememberCameraCapture
 import com.coffeejournal.ui.platform.rememberImagePicker
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
+import com.coffeejournal.ui.theme.DateField
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GhostButton
@@ -49,7 +45,6 @@ import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
 import com.coffeejournal.ui.theme.Seg
-import kotlinx.datetime.LocalDate
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -60,10 +55,15 @@ fun MiscFormScreen(nav: NavHostController, type: String, itemId: String?) {
     val title = MiscListLogic.title(state.type)
 
     LaunchedEffect(state.done) { if (state.done) nav.popBackStack() }
+    // one pop per back / 취소 even when tapped again during the exit transition
+    val leave = dropUnlessResumed { nav.popBackStack() }
 
     Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar(if (state.isEdit) "$title 수정" else "$title 추가", onBack = { nav.popBackStack() })
-        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter).padding(top = 14.dp, bottom = 96.dp)) {
+        ScreenTitleBar(if (state.isEdit) "$title 수정" else "$title 추가", onBack = leave)
+        Column(
+            Modifier.fillMaxSize().imeOverlapPadding().verticalScroll(rememberScrollState())
+                .padding(horizontal = Dimens.gutter).padding(top = 14.dp, bottom = 96.dp),
+        ) {
             FieldLabel("상태")
             Seg(
                 options = listOf(MiscStatus.OWNED, MiscStatus.CURIOUS),
@@ -89,7 +89,7 @@ fun MiscFormScreen(nav: NavHostController, type: String, itemId: String?) {
             Spacer(Modifier.height(22.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton(if (state.isEdit) "수정 저장" else "저장", enabled = state.canSave, onClick = vm::save)
-                GhostButton("취소", onClick = { nav.popBackStack() })
+                GhostButton("취소", onClick = leave)
             }
         }
     }
@@ -112,10 +112,15 @@ private fun PhotoSlotRow(index: Int, slot: PhotoSlot?, emptyLabel: String, photo
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
+                // 24dp mark, 48dp touch target (design §8)
                 Box(
-                    Modifier.align(Alignment.TopEnd).size(24.dp).background(Ink.accent).clickable(onClick = onRemove),
-                    contentAlignment = Alignment.Center,
-                ) { Text("✕", style = AppType.small.copy(color = Ink.bg)) }
+                    Modifier.align(Alignment.TopEnd).size(48.dp)
+                        .clickable(role = Role.Button, onClick = onRemove)
+                        .semantics { contentDescription = if (index == 0) "대표 사진 삭제" else "사진 2 삭제" },
+                    contentAlignment = Alignment.TopEnd,
+                ) {
+                    Box(Modifier.size(24.dp).background(Ink.accent), contentAlignment = Alignment.Center) { Text("✕", style = AppType.small.copy(color = Ink.bg)) }
+                }
             }
             Spacer(Modifier.width(10.dp))
             GhostButton("사진 변경", small = true, onClick = pick)
@@ -125,47 +130,6 @@ private fun PhotoSlotRow(index: Int, slot: PhotoSlot?, emptyLabel: String, photo
                 Spacer(Modifier.width(8.dp))
                 GhostButton("촬영", small = true, onClick = capture)
             }
-        }
-    }
-}
-
-/** ISO date field backed by the Material date picker; empty value shows a placeholder. */
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun DateField(label: String, value: String, onChange: (String) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    val date = Dates.parseIsoDate(value)
-    Column {
-        FieldLabel(label)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            GhostButton(
-                text = date?.let { Dates.ymdCompact(it) } ?: "날짜 선택",
-                onClick = { open = true },
-            )
-            if (date != null) {
-                Spacer(Modifier.width(8.dp))
-                Box(Modifier.size(Dimens.touch).clickable { onChange("") }, contentAlignment = Alignment.Center) {
-                    Icon(AppIcons.close, contentDescription = "지우기", tint = Ink.textMuted, modifier = Modifier.size(16.dp))
-                }
-            }
-        }
-    }
-    if (open) {
-        val pickerState = rememberDatePickerState(initialSelectedDateMillis = (date ?: Dates.today()).toEpochDays() * Dates.DAY_MS)
-        DatePickerDialog(
-            onDismissRequest = { open = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    pickerState.selectedDateMillis?.let { millis ->
-                        val days = millis.floorDiv(Dates.DAY_MS)
-                        onChange(Dates.isoDate(LocalDate.fromEpochDays(days)))
-                    }
-                    open = false
-                }) { Text("확인", style = AppType.body) }
-            },
-            dismissButton = { TextButton(onClick = { open = false }) { Text("취소", style = AppType.body.copy(color = Ink.textMuted)) } },
-        ) {
-            DatePicker(state = pickerState)
         }
     }
 }

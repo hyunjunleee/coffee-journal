@@ -14,7 +14,8 @@ import org.koin.dsl.module
 object MiscFeature : Feature {
     override val module = module {
         viewModelOf(::MiscViewModel)
-        viewModel { (type: String, itemId: String?) -> MiscFormViewModel(type, itemId, get(), get()) }
+        // the last get() is the destination's SavedStateHandle: the form survives process death while the camera is open
+        viewModel { (type: String, itemId: String?) -> MiscFormViewModel(type, itemId, get(), get(), get()) }
     }
 
     override fun NavGraphBuilder.routes(nav: NavHostController) {

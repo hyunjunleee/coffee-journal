@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,13 +18,19 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,6 +38,7 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.RoadmapItem
 import com.coffeejournal.domain.model.RoadmapPhase
+import com.coffeejournal.domain.reference.RoadmapDefaults
 import com.coffeejournal.ui.calendar.components.ConfirmDialog
 import com.coffeejournal.ui.calendar.components.TodayBox
 import com.coffeejournal.ui.theme.AppIcons
@@ -55,6 +63,7 @@ internal fun RoadmapSection(
     onDeleteItem: (phaseId: String, itemId: String) -> Unit,
     onAddItem: (phaseId: String, text: String) -> Unit,
     onAddPhase: (title: String, range: String, dayStart: Int, dayEnd: Int) -> Unit,
+    onDeletePhase: (phaseId: String) -> Unit,
 ) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (ddayCount != null) {
@@ -74,6 +83,8 @@ internal fun RoadmapSection(
                 onEditItem = { id, text -> onEditItem(phase.id, id, text) },
                 onDeleteItem = { onDeleteItem(phase.id, it) },
                 onAddItem = { onAddItem(phase.id, it) },
+                // the starter phase is the web's only phase; phases added here can be removed again
+                onDelete = if (phase.id == RoadmapDefaults.STARTER_ID) null else ({ onDeletePhase(phase.id) }),
             )
         }
         AddPhaseRow(defaultStart = ddayCount ?: 0, onAdd = onAddPhase)
@@ -90,8 +101,10 @@ private fun PhaseCard(
     onEditItem: (String, String) -> Unit,
     onDeleteItem: (String) -> Unit,
     onAddItem: (String) -> Unit,
+    onDelete: (() -> Unit)?,
 ) {
     val done = phase.items.count { it.done }
+    var confirmDelete by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxWidth().background(Ink.surface)
             .border(BorderStroke(if (isCurrent) Dimens.rule else Dimens.hairline, if (isCurrent) Ink.accent else Ink.line), RectangleShape),
@@ -120,8 +133,17 @@ private fun PhaseCard(
                     imeAction = ImeAction.Done, onImeAction = { if (draft.isNotBlank()) { onAddItem(draft); draft = "" } },
                     modifier = Modifier.padding(top = 6.dp),
                 )
+                if (onDelete != null) {
+                    GhostButton("단계 삭제", onClick = { confirmDelete = true }, small = true, danger = true, modifier = Modifier.padding(top = 10.dp))
+                }
             }
         }
+    }
+    if (confirmDelete && onDelete != null) {
+        ConfirmDialog(
+            title = "단계 삭제", text = "\"${phase.title}\" 단계와 그 안의 항목을 모두 삭제할까요?",
+            onConfirm = onDelete, onDismiss = { confirmDelete = false },
+        )
     }
 }
 
@@ -129,7 +151,7 @@ private fun PhaseCard(
 @Composable
 private fun RoadmapItemRow(item: RoadmapItem, onToggle: () -> Unit, onEdit: (String) -> Unit, onDelete: () -> Unit) {
     var editing by remember(item.id) { mutableStateOf(false) }
-    var draft by remember(item.id, item.text) { mutableStateOf(item.text) }
+    var draft by remember(item.id) { mutableStateOf(item.text) }
     var confirmDelete by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(
@@ -140,13 +162,10 @@ private fun RoadmapItemRow(item: RoadmapItem, onToggle: () -> Unit, onEdit: (Str
         ) { if (item.done) Icon(AppIcons.check, contentDescription = "완료", tint = Ink.bg, modifier = Modifier.size(12.dp)) }
         Spacer(Modifier.width(10.dp))
         if (editing) {
-            fun commit() {
-                editing = false
-                if (draft.isNotBlank() && draft.trim() != item.text) onEdit(draft) else draft = item.text
-            }
-            AppTextField(value = draft, onValueChange = { draft = it }, modifier = Modifier.weight(1f), imeAction = ImeAction.Done, onImeAction = { commit() })
-            Spacer(Modifier.width(6.dp))
-            GhostButton("확인", onClick = { commit() }, small = true)
+            InlineItemEditor(
+                draft = draft, onDraft = { draft = it }, original = item.text, onCommit = onEdit,
+                onClose = { editing = false }, modifier = Modifier.weight(1f),
+            )
         } else {
             Text(
                 item.text,
@@ -154,7 +173,7 @@ private fun RoadmapItemRow(item: RoadmapItem, onToggle: () -> Unit, onEdit: (Str
                     color = if (item.done) Ink.textFaint else Ink.textMuted,
                     textDecoration = if (item.done) TextDecoration.LineThrough else TextDecoration.None,
                 ),
-                modifier = Modifier.weight(1f).clickable { editing = true },
+                modifier = Modifier.weight(1f).clickable { draft = item.text; editing = true },
             )
             Text("✕", style = AppType.small.copy(color = Ink.textFaint), modifier = Modifier.clickable { confirmDelete = true }.padding(horizontal = 6.dp, vertical = 2.dp))
         }
@@ -162,6 +181,43 @@ private fun RoadmapItemRow(item: RoadmapItem, onToggle: () -> Unit, onEdit: (Str
     if (confirmDelete) {
         ConfirmDialog(title = "항목 삭제", text = "\"${item.text}\" 항목을 삭제할까요?", onConfirm = onDelete, onDismiss = { confirmDelete = false })
     }
+}
+
+/**
+ * The inline editor of a roadmap item. Like the web, which saves on blur as well as on Enter, the text is saved
+ * whenever editing ends: Enter / 확인, focus moving elsewhere, or the row leaving the screen (the phase is collapsed,
+ * another chip or tab is chosen). A blank or unchanged text keeps the old one.
+ */
+@Composable
+private fun RowScope.InlineItemEditor(
+    draft: String,
+    onDraft: (String) -> Unit,
+    original: String,
+    onCommit: (String) -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val focus = remember { FocusRequester() }
+    var hadFocus by remember { mutableStateOf(false) }
+    val latestDraft by rememberUpdatedState(draft)
+    val latestOriginal by rememberUpdatedState(original)
+    val latestCommit by rememberUpdatedState(onCommit)
+    DisposableEffect(Unit) {
+        onDispose {
+            val text = latestDraft.trim()
+            if (text.isNotEmpty() && text != latestOriginal) latestCommit(text)
+        }
+    }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    AppTextField(
+        value = draft, onValueChange = onDraft, imeAction = ImeAction.Done, onImeAction = onClose,
+        modifier = modifier.focusRequester(focus).onFocusChanged { state ->
+            if (hadFocus && !state.hasFocus) onClose()
+            hadFocus = state.hasFocus
+        },
+    )
+    Spacer(Modifier.width(6.dp))
+    GhostButton("확인", onClick = onClose, small = true)
 }
 
 /** App addition: "+ 단계 추가" opens a small inline form for title, range label and day span. */

@@ -48,7 +48,7 @@ private fun OpenedBagCardView(card: OpenedBagCard, onEdit: () -> Unit) {
     HairlineCard(Modifier.widthIn(min = 260.dp, max = 300.dp)) {
         Eyebrow(card.eyebrow)
         Text(card.item.name.ifBlank { "이름 없음" }, style = AppType.cardTitle)
-        if (card.metaLine.isNotBlank()) Text(card.metaLine, style = AppType.small)
+        InfoLines(card.infoLines)
         Spacer(Modifier.height(6.dp))
         Text(card.remainingLine, style = AppType.monoValue)
         if (card.priceText.isNotBlank()) Text(card.priceText, style = AppType.small)

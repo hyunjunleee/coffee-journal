@@ -3,6 +3,7 @@ package com.coffeejournal.ui.bean.a
 import com.coffeejournal.domain.model.BeanRecord
 import com.coffeejournal.domain.reference.ScoreTiers
 import com.coffeejournal.domain.rules.BeanRecords
+import com.coffeejournal.domain.rules.Numbers
 import com.coffeejournal.domain.rules.RoastFamily
 
 /** Pure filtering behind the 배전도 view (web renderRoastFamilyView). */
@@ -59,7 +60,7 @@ internal object CompetitionStats {
         val tier: String get() = ScoreTiers.label(score) ?: ""
     }
 
-    fun score(record: BeanRecord): Double? = record.score.trim().toDoubleOrNull()
+    fun score(record: BeanRecord): Double? = Numbers.parse(record.score)
 
     /** Records scoring 80+, one per bean (the oldest record wins), highest score first. */
     fun lots(records: List<BeanRecord>): List<Lot> {

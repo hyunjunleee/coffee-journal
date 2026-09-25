@@ -11,6 +11,7 @@ import com.coffeejournal.domain.model.CuppingType
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.RoadmapItem
 import com.coffeejournal.domain.model.RoadmapPhase
+import com.coffeejournal.domain.reference.RoadmapDefaults
 import com.coffeejournal.domain.rules.CalendarRanges
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.DdayRules
@@ -72,6 +73,8 @@ internal data class CalendarUiState(
     val openPhaseId: String?,
     val reviews: List<Entry>,
     val selectedCell: DayCell?,
+    /** All records, for the header's "N entries" (web #entry-count); null before the first load. */
+    val entryCount: Int? = null,
 ) {
     val yearMonth: YearMonth get() = controls.yearMonth
     val filter: String get() = controls.filter
@@ -87,15 +90,17 @@ class CalendarViewModel(
 
     internal val state: StateFlow<CalendarUiState> = combine(
         entries.observeAll(), blends.observeAll(), roadmapRepo.observeAll(), settings.observeDdayStart(), controls,
-    ) { e, b, r, d, c -> build(e, b, r, d, c) }
+    ) { e, b, r, d, c -> build(e, b, r, d, c).copy(entryCount = e.size) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), build(emptyList(), emptyList(), emptyList(), null, controls.value))
 
     init {
         viewModelScope.launch { roadmapRepo.ensureSeeded() }
     }
 
-    private fun build(entries: List<Entry>, blends: List<Blend>, phases: List<RoadmapPhase>, ddayStart: LocalDate?, c: CalendarControls): CalendarUiState {
+    private fun build(newestFirst: List<Entry>, blends: List<Blend>, phases: List<RoadmapPhase>, ddayStart: LocalDate?, c: CalendarControls): CalendarUiState {
         val today = Dates.today()
+        // the repository lists newest first; the web walks its records oldest first (day panel, dots, legend names)
+        val entries = newestFirst.sortedBy { it.createdAt }
         val ranges = CalendarRanges.compute(entries)
         val grid = CalendarGrid.build(c.yearMonth, entries, blends, c.filter, ddayStart, today, ranges)
         val ddayCount = ddayStart?.let { DdayRules.dayCount(it, today) }
@@ -163,6 +168,17 @@ class CalendarViewModel(
         val clean = text.trim()
         if (clean.isEmpty()) return
         updatePhase(phaseId) { p -> p.copy(items = p.items + RoadmapItem(id = Ids.newCustomId("custom-"), text = clean)) }
+    }
+
+    /** App addition: removes a phase added by hand (the starter phase stays). */
+    fun deletePhase(phaseId: String) {
+        if (phaseId == RoadmapDefaults.STARTER_ID) return
+        viewModelScope.launch {
+            val all = roadmapRepo.getAll()
+            if (all.none { it.id == phaseId }) return@launch
+            roadmapRepo.replaceAll(all.filter { it.id != phaseId })
+            controls.update { c -> if (c.openPhaseId == phaseId) c.copy(openTouched = false, openPhaseId = null) else c }
+        }
     }
 
     /** App addition: the web ships only the starter phase and has no way to add another. */

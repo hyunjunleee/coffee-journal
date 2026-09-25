@@ -18,6 +18,7 @@ import org.koin.dsl.module
 object BeanFeature : Feature {
     override val module: Module = module {
         includes(beanExtraModule)
+        single { BeanViewRequests() }
         viewModelOf(::BeanViewModel)
         viewModelOf(::ProcessMiscViewModel)
     }
