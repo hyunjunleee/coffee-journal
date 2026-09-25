@@ -5,10 +5,10 @@
 ## 빌드·검증
 ```
 export ANDROID_HOME=/opt/android-sdk
-./gradlew :androidApp:assembleDebug :shared:testDebugUnitTest --no-daemon -q
+./gradlew :androidApp:assembleDebug :shared:testDebugUnitTest :androidApp:testDebugUnitTest --no-daemon -q
 ```
 - 커밋 전 반드시 위 명령이 exit 0 이어야 한다. 경고는 허용, 오류는 불가.
-- 단위 테스트는 `shared/src/commonTest/kotlin/com/coffeejournal/<패키지>/`에 둔다(kotlin-test).
+- 단위 테스트는 `shared/src/commonTest/kotlin/com/coffeejournal/<패키지>/`에 둔다(kotlin-test). 화면 흐름·스크린샷 테스트는 `androidApp/src/test/kotlin/com/coffeejournal/android/`(Robolectric + Roborazzi, 인메모리 Room)에 둔다.
 - git 커밋: `git -c user.name=Claude -c user.email=noreply@anthropic.com commit -m "..."`.
 
 ## 패키지 소유 규칙
@@ -31,6 +31,18 @@ export ANDROID_HOME=/opt/android-sdk
 - 날짜: `domain/rules/Dates.kt`만 사용(Instant 직접 사용 금지). id: `Ids.newId()`.
 - 도메인 규칙은 `domain/rules/*`(BeanNames, Packages, BeanRecords, CalendarRanges, DdayRules, PantryRules, Prices, ScaScoring, RoastFamily, NoteCanon, CountryLookup, RegionHierarchy, RecipeSteps)를 재사용하고 중복 구현하지 않는다.
 - 참조 데이터는 `domain/reference/*`(FlavorWheel, NoteCategories, NoteSynonyms, Processes, Varieties, CoffeeCountries, WorldMapData, Champions, CafeRecipes, GenericSteps, BeanRangeColors, EquipmentTypes, RoastLevels, ScoreTiers, RoadmapDefaults, RoasteryMapPoints, ScaForm).
+
+## 공용 헬퍼 (감사 후 추가, 반드시 재사용)
+- 숫자: `Numbers.parse(text)` — `NaN`·`Infinity`·범위 초과를 "값 없음"(null)으로 돌린다. `toDoubleOrNull()` 직접 사용 금지.
+- 오늘 날짜: 화면이 오늘에 의존하면 `Dates.todayFlow()`를 `combine`해 자정에 갱신한다. 특정 날짜의 원두 범위는 `CalendarRanges.rangesOn(ranges, date)`.
+- 트랜잭션: 여러 저장소에 걸친 쓰기는 `TransactionRunner.write { … }` 한 블록으로(같은 코루틴 안의 DAO 호출이 모두 합류). 기록 저장은 여전히 `SaveEntryPipeline.save`.
+- 복원: 화면은 `RestoreRunner`(앱 스코프)를 통해서만 `BackupService.import`를 호출한다. 화면을 떠나도 복원이 중간에 취소되지 않는다.
+- 텍스트 입력: `AppTextField`는 한글 조합이 끊기지 않도록 로컬 `TextFieldValue`를 유지한다(`ImeSafeText`). 숫자만 받기 등 입력 제한은 `onValueChange` 안에서 걸러 되돌리지 말고 `inputFilter = { … }`로 넘긴다(거절 시 null 반환, 바꾼 문자열 반환 시 커서 보정). 소유자 쪽에서 거르면 거절된 글자가 화면에 남는다.
+- 날짜 입력: `DateField`(웹 `<input type="date">` 대응, "YYYY-MM-DD" 입출력, 빈 값 안내 `연도-월-일`).
+- 글리프 버튼: ×·✕ 같은 기호만 있는 동작은 `GlyphButton(glyph, label, onClick)` — 탭 영역 48dp(`MinTouchTarget`), TalkBack 라벨.
+- 키보드: 스크롤 컨테이너에 `Modifier.imeOverlapPadding()`(edge-to-edge라 창이 키보드만큼 줄지 않음; 하단 탭 높이는 제외).
+- 폼 상태 보존: 카메라 앱이 앞에 있는 동안 프로세스가 죽어도 입력이 남도록 `SavedFormState`(SavedStateHandle + JSON)로 저장.
+- 탭 간 요청: 다른 화면에서 원두 탭의 특정 서브뷰를 열 때는 `BeanViewRequests`(Koin single)에 요청을 넣고 탭을 전환한다(라우트 인자는 탭 전환 시 이전 값으로 복원되므로 쓰지 않음).
 
 ## 디자인 규약 (`ui/theme`)
 - 색·타이포: `Ink.*`, `AppType.*`, 간격 `Dimens.*`. 모서리 반경 0, 헤어라인 0.5dp, 그림자 없음.
