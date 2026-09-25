@@ -112,7 +112,11 @@ class CoverageFlowTest2 : CoverageFlowBase() {
         waitForText("(Brazil)")
         assertTrue(has(hasText("브라질")))
         waitForText("2cup 마셔봤어요", substring = true)
-        waitForText("주요 산지: Cerrado, Sul de Minas, Mogiana")
+        // web: "주요 산지: Cerrado, Sul de Minas, Mogiana"; the app makes each region a link to its dot panel
+        waitForText("주요 산지:")
+        listOf("Cerrado", "Sul de Minas", "Mogiana").forEach { waitFor(hasText(it) and hasClickAction(), "region link $it") }
+        clickNode(hasText("Cerrado") and hasClickAction())
+        waitForText("브라질 · Cerrado")
 
         // a tried region dot: e1 and e2 are Yirgacheffe records of one farm
         val yirg = CoffeeCountries.byEn.getValue("Ethiopia").regions.single { it.name == "Yirgacheffe" }
