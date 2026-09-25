@@ -49,7 +49,7 @@ data class FormSuggestions(
 )
 
 sealed interface FormEvent {
-    data class Saved(val entryId: String) : FormEvent
+    data class Saved(val entryId: String, val wasEdit: Boolean) : FormEvent
     data object NotFound : FormEvent
 }
 
@@ -162,7 +162,7 @@ class RecordFormViewModel(
                 val entry = FormMapper.toEntry(s, id, existing, finalPhotos, Dates.nowMillis())
                 pipeline.save(entry, isNew)
                 previous.filter { it !in finalPhotos }.forEach { runCatching { photos.delete(it) } }
-                _events.emit(FormEvent.Saved(id))
+                _events.emit(FormEvent.Saved(id, wasEdit = !isNew))
             } catch (e: Exception) {
                 _state.update { it.copy(saving = false, error = FormError(null, "저장하지 못했어요: ${e.message ?: "알 수 없는 오류"}")) }
             }

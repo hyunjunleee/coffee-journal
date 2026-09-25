@@ -58,7 +58,11 @@ fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cup
     LaunchedEffect(Unit) {
         vm.events.collect { ev ->
             when (ev) {
-                is FormEvent.Saved -> { nav.popBackStack(); nav.navigate(Route.EntryDetail(ev.entryId)) }
+                is FormEvent.Saved -> {
+                    // Editing came from the detail screen, which observes the record; just return to it.
+                    nav.popBackStack()
+                    if (!ev.wasEdit) nav.navigate(Route.EntryDetail(ev.entryId))
+                }
                 FormEvent.NotFound -> nav.popBackStack()
             }
         }
