@@ -34,7 +34,8 @@ class TempPhotoStore(private val dir: File) : PhotoStore {
     init { dir.mkdirs() }
     override fun pathFor(fileName: String): String = File(dir, fileName).absolutePath
     override suspend fun save(bytes: ByteArray): String {
-        val name = "p${dir.listFiles()?.size ?: 0}.jpg"
+        // unique like the real store (UUID names); a count-based name would overwrite files after a delete
+        val name = "p" + java.util.UUID.randomUUID().toString().replace("-", "") + ".jpg"
         File(dir, name).writeBytes(bytes)
         return name
     }

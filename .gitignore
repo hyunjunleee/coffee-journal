@@ -15,3 +15,4 @@ iosApp/*.xcworkspace/xcuserdata/
 # Roborazzi comparison artifacts (recorded PNGs are kept)
 androidApp/screenshots/*_compare.png
 androidApp/screenshots/*_actual.png
+.claude/worktrees/
