@@ -44,6 +44,7 @@ import com.coffeejournal.ui.calendar.components.TodayBox
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
+import com.coffeejournal.ui.theme.GlyphButton
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Hairline
@@ -175,7 +176,10 @@ private fun RoadmapItemRow(item: RoadmapItem, onToggle: () -> Unit, onEdit: (Str
                 ),
                 modifier = Modifier.weight(1f).clickable { draft = item.text; editing = true },
             )
-            Text("✕", style = AppType.small.copy(color = Ink.textFaint), modifier = Modifier.clickable { confirmDelete = true }.padding(horizontal = 6.dp, vertical = 2.dp))
+            GlyphButton(
+                "✕", label = "항목 삭제", onClick = { confirmDelete = true },
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp), style = AppType.small.copy(color = Ink.textFaint),
+            )
         }
     }
     if (confirmDelete) {

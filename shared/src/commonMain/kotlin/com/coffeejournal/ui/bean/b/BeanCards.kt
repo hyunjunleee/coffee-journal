@@ -6,9 +6,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.AlertDialog
@@ -23,16 +26,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.coffeejournal.domain.model.BeanRecord
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.MiscItem
-import com.coffeejournal.domain.rules.BeanRecords
 import com.coffeejournal.domain.rules.Dates
+import com.coffeejournal.ui.bean.a.BeanFormat
+import com.coffeejournal.ui.bean.a.WhereBadges
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Badge
 import com.coffeejournal.ui.theme.CatDot
 import com.coffeejournal.ui.theme.EmptyNote
 import com.coffeejournal.ui.theme.GhostButton
+import com.coffeejournal.ui.theme.GlyphButton
 import com.coffeejournal.ui.theme.HairlineCard
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.PrimaryButton
@@ -54,16 +60,34 @@ fun SubLabel(text: String, modifier: Modifier = Modifier) {
     Text(text, style = AppType.monoSmall, modifier = modifier.padding(top = 8.dp, bottom = 3.dp))
 }
 
-/** Web .source-bean-row: name (+ badge) on the left, a mono value on the right. */
+/** Minimum height of a tappable text row (design §8 touch targets; the rows stay compact otherwise). */
+internal val TapRowHeight = 40.dp
+
+/**
+ * Web .source-bean-row: name with its category badge inline (the badge wraps under a long name instead of squeezing
+ * it), and the web's 11px no-wrap mono value on the right. A tappable row is at least [TapRowHeight] tall.
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SourceBeanRow(name: String, right: String? = null, badge: String? = null, bold: Boolean = false, onClick: (() -> Unit)? = null, modifier: Modifier = Modifier) {
     val base = modifier.fillMaxWidth()
-    Row((if (onClick != null) base.clickable(onClick = onClick) else base).padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
-        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
-            Text(name, style = AppType.small.copy(color = Ink.text, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal), modifier = Modifier.weight(1f, fill = false))
-            if (badge != null) { Spacer(Modifier.width(6.dp)); CategoryBadge(badge) }
+    Row(
+        (if (onClick != null) base.heightIn(min = TapRowHeight).clickable(onClick = onClick) else base).padding(vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FlowRow(
+            Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(name, style = AppType.small.copy(color = Ink.text, fontWeight = if (bold) FontWeight.SemiBold else FontWeight.Normal))
+            if (badge != null) CategoryBadge(badge)
         }
-        if (right != null) { Spacer(Modifier.width(10.dp)); Text(right, style = AppType.count) }
+        if (right != null) {
+            Spacer(Modifier.width(10.dp))
+            Text(right, style = AppType.count.copy(fontSize = 11.sp), softWrap = false, maxLines = 1)
+        }
     }
 }
 
@@ -111,10 +135,13 @@ fun MiscItemCard(
     HairlineCard(modifier.padding(bottom = 8.dp).then(if (highlighted) Modifier.border(BorderStroke(1.5.dp, Ink.accent), RectangleShape) else Modifier)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (favoritable) {
-                Text(
+                GlyphButton(
                     if (item.favorite) "★" else "☆",
+                    label = if (item.favorite) "즐겨찾기 해제" else "즐겨찾기",
+                    onClick = { onToggleFavorite?.invoke() },
+                    modifier = Modifier.padding(end = 8.dp),
                     style = AppType.title.copy(color = if (item.favorite) Ink.text else Ink.textFaint),
-                    modifier = Modifier.clickable(enabled = onToggleFavorite != null) { onToggleFavorite?.invoke() }.padding(end = 8.dp),
+                    enabled = onToggleFavorite != null,
                 )
             }
             if (item.scope.isNotBlank()) { Badge(item.scope); Spacer(Modifier.width(6.dp)) }
@@ -153,9 +180,11 @@ fun RecordRow(record: BeanRecord, onClick: () -> Unit, modifier: Modifier = Modi
     }
 }
 
-/** Web categoryBreakdownLine rendered small under a list. */
+/** Web categoryBreakdownLine: the "어디서 마셨는지" label, then "[직접 내림] N종 [카페] N번 [커핑] N번". */
 @Composable
 fun BreakdownLine(records: List<BeanRecord>) {
-    val line = BeanRecords.categoryBreakdown(records)
-    if (line.isNotEmpty()) Text(line, style = AppType.faint, modifier = Modifier.padding(top = 4.dp))
+    val counts = BeanFormat.categoryCounts(records)
+    if (counts.isEmpty()) return
+    SubLabel("어디서 마셨는지")
+    WhereBadges(counts)
 }

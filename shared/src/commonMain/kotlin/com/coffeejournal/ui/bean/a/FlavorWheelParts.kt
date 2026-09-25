@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -68,10 +70,11 @@ internal fun FlavorCategoryGrid(selected: Int, onSelect: (Int) -> Unit, modifier
     val families = NoteCategories.all
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         families.chunked(2).forEach { pair ->
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // both cards of a row as tall as the taller one (web CSS grid rows stretch)
+            Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 pair.forEach { family ->
                     val idx = families.indexOf(family)
-                    SelectCard(selected = idx == selected, onClick = { onSelect(idx) }, modifier = Modifier.weight(1f)) {
+                    SelectCard(selected = idx == selected, onClick = { onSelect(idx) }, modifier = Modifier.weight(1f).fillMaxHeight()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CatDot(Ink.hex(family.colorHex))
                             Spacer(Modifier.width(6.dp))

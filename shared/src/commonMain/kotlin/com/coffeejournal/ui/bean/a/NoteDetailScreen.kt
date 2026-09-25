@@ -48,30 +48,43 @@ fun NoteDetailScreen(nav: NavHostController, kind: String, noteKey: String) {
     var openGroups by remember { mutableStateOf(setOf(0)) }
 
     Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar(title = entry?.let { "“${it.label}”와 함께 기록된 노트 조합" } ?: "노트 조합", onBack = { nav.popBackStack() })
-        if (entry == null) {
-            EmptyNote("이 노트로 기록된 원두가 아직 없어요.", Modifier.padding(Dimens.gutter))
-        } else LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, top = 12.dp, bottom = 96.dp)) {
-            combinations.forEachIndexed { index, group ->
-                val open = index in openGroups
-                item(key = "head$index") {
-                    Row(
-                        Modifier.fillMaxWidth()
-                            .clickable { openGroups = if (open) openGroups - index else openGroups + index }
-                            .padding(vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(if (open) AppIcons.chevronDown else AppIcons.chevronRight, contentDescription = null, tint = Ink.textFaint, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(8.dp))
-                        Text(group.labels.joinToString(" · "), style = AppType.body, modifier = Modifier.weight(1f))
-                        Text("${group.beanCount}개 원두", style = AppType.count)
-                    }
-                    Hairline()
+        val title = when {
+            entry != null -> "“${entry.label}”와 함께 기록된 노트 조합"
+            data.loaded -> "노트 조합"
+            else -> ""
+        }
+        ScreenTitleBar(title = title, onBack = { nav.popBackStack() })
+        when {
+            // nothing until the records have loaded, instead of a flash of the empty copy
+            !data.loaded -> Unit
+            entry == null -> EmptyNote("이 노트로 기록된 원두가 아직 없어요.", Modifier.padding(Dimens.gutter))
+            else -> NoteCombinations(nav, kind, combinations, openGroups, onToggle = { index -> openGroups = if (index in openGroups) openGroups - index else openGroups + index })
+        }
+    }
+}
+
+@Composable
+private fun NoteCombinations(nav: NavHostController, kind: String, combinations: List<NoteStats.Combination>, openGroups: Set<Int>, onToggle: (Int) -> Unit) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, top = 12.dp, bottom = 96.dp)) {
+        combinations.forEachIndexed { index, group ->
+            val open = index in openGroups
+            item(key = "head$index") {
+                Row(
+                    Modifier.fillMaxWidth()
+                        .clickable { onToggle(index) }
+                        .padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Icon(if (open) AppIcons.chevronDown else AppIcons.chevronRight, contentDescription = null, tint = Ink.textFaint, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(group.labels.joinToString(" · "), style = AppType.body, modifier = Modifier.weight(1f))
+                    Text("${group.beanCount}개 원두", style = AppType.count)
                 }
-                if (open) {
-                    items(group.records.size, key = { "r$index-$it" }) { i ->
-                        NoteContextCard(group.records[i], kind) { id -> nav.navigate(Route.EntryDetail(id)) }
-                    }
+                Hairline()
+            }
+            if (open) {
+                items(group.records.size, key = { "r$index-$it" }) { i ->
+                    NoteContextCard(group.records[i], kind) { id -> nav.navigate(Route.EntryDetail(id)) }
                 }
             }
         }
@@ -85,7 +98,8 @@ private fun NoteContextCard(record: BeanRecord, kind: String, onOpen: (String) -
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(BeanFormat.displayName(record), style = AppType.cardTitle)
+                    // weighted without fill: a long name wraps and the badge keeps its own width
+                    Text(BeanFormat.displayName(record), style = AppType.cardTitle, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(6.dp))
                     CategoryBadge(record.category)
                 }

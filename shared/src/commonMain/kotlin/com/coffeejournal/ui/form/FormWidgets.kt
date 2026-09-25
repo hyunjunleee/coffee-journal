@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
@@ -50,6 +51,7 @@ import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
+import com.coffeejournal.ui.theme.GlyphButton
 import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.Ink
 import kotlinx.coroutines.delay
@@ -304,10 +306,15 @@ internal fun TextLink(text: String, color: Color, onClick: () -> Unit, modifier:
     }
 }
 
-/** Small "✕" remove control used by rows: the glyph is unchanged, the tappable box around it is 48 dp. */
+/**
+ * Small "✕" remove control used by rows and photos: the glyph sits in the middle of a 48 dp box as before, the tap
+ * target is 48 dp and TalkBack reads [label] ("사진 삭제", "단계 삭제") as a button.
+ */
 @Composable
-internal fun RemoveButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier.size(MinTouch).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
-        Text("✕", style = AppType.small.copy(color = Ink.textFaint))
-    }
+internal fun RemoveButton(onClick: () -> Unit, label: String, modifier: Modifier = Modifier) {
+    GlyphButton(
+        "✕", label = label, onClick = onClick,
+        modifier = modifier.size(MinTouch).wrapContentSize(Alignment.Center),
+        style = AppType.small.copy(color = Ink.textFaint),
+    )
 }

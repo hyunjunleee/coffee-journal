@@ -23,9 +23,13 @@ internal object BeanFormat {
         else -> "집 추출"
     }
 
-    /** "직접 내림" / "카페 · 이름" / "커핑 · 장소" (web variety-record-kind). */
+    /**
+     * "직접 내림 · 로스터리" / "카페 · 이름" / "커핑 · 장소" (web variety-record-kind). A home brew's place is the web's
+     * `source`, the roastery in the name's trailing parenthesis ("… (프릳츠)").
+     */
     fun kindWithPlace(record: BeanRecord): String {
-        val place = record.place.trim()
+        val home = record.category.isBlank() || record.category == Category.BEAN
+        val place = (if (home) BeanNames.parseNameRoastery(record.name) else record.place).trim()
         val label = categoryLabel(record.category)
         return if (place.isNotEmpty()) "$label · $place" else label
     }
@@ -60,6 +64,20 @@ internal object BeanFormat {
         record.process.trim(),
         record.variety.trim(),
     ).filter { it.isNotEmpty() }.joinToString(" · ")
+
+    /**
+     * Web categoryBreakdownLine counts in 원두/카페/커핑 order: home brews count once per bean ("N종"), cafe and cupping
+     * visits one by one ("N번"). Categories without records are left out.
+     */
+    fun categoryCounts(records: List<BeanRecord>): List<Pair<String, Int>> {
+        val brews = records.filter { it.category.ifBlank { Category.BEAN } == Category.BEAN }.map { beanKey(it) }.toSet().size
+        val cafes = records.count { it.category == Category.CAFE }
+        val cuppings = records.count { it.category == Category.CUPPING }
+        return listOf(Category.BEAN to brews, Category.CAFE to cafes, Category.CUPPING to cuppings).filter { it.second > 0 }
+    }
+
+    /** "2종" for home brews, "3번" for cafe / cupping visits. */
+    fun countUnit(category: String, n: Int): String = "$n${if (category == Category.BEAN) "종" else "번"}"
 
     /** Web catBadgesWithPlaces: category → distinct places, in 원두/카페/커핑 order. */
     fun categoriesWithPlaces(records: List<BeanRecord>): List<Pair<String, List<String>>> {

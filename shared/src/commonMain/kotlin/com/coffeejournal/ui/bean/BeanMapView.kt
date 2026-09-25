@@ -1,8 +1,12 @@
 package com.coffeejournal.ui.bean
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -25,9 +29,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
@@ -36,7 +40,10 @@ import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.rules.CountryLookup
 import com.coffeejournal.ui.bean.b.CountryList
+import com.coffeejournal.ui.bean.b.FarmCardPositions
 import com.coffeejournal.ui.bean.b.FarmSection
+import com.coffeejournal.ui.bean.b.FlatItemLogic
+import com.coffeejournal.ui.bean.b.MapPalette
 import com.coffeejournal.ui.bean.b.MapSelectionPanel
 import com.coffeejournal.ui.bean.b.MapStats
 import com.coffeejournal.ui.bean.b.MiscItemsViewModel
@@ -60,11 +67,14 @@ private const val MAP_DESCRIPTION = "전 세계 주요 커피 생산국을 어�
 fun BeanMapView(nav: NavHostController, data: BeanData) {
     val miscVm = koinViewModel<MiscItemsViewModel>()
     val mapState = rememberWorldMapState()
-    var expandedCountry by rememberSaveable { mutableStateOf<String?>(null) }
+    // web .origin-country: each country opens and closes on its own, so two can be compared side by side
+    var expanded by rememberSaveable { mutableStateOf(listOf<String>()) }
     var farmQuery by rememberSaveable { mutableStateOf("") }
     var highlightedFarm by remember { mutableStateOf<String?>(null) }
+    var jumpTo by remember { mutableStateOf<String?>(null) }
     var panelY by remember { mutableIntStateOf(0) }
     var farmY by remember { mutableIntStateOf(0) }
+    val farmCards = remember { FarmCardPositions() }
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
@@ -72,14 +82,29 @@ fun BeanMapView(nav: NavHostController, data: BeanData) {
     val byCountry = remember(data.records) { MapStats.recordsByCountry(data.records) }
     val triedRegions = remember(stats) { stats.flatMap { (en, s) -> s.regions.keys.map { "$en|$it" } }.toSet() }
     val total = remember(data.entries) { MapStats.totalCups(data.entries) }
+    val farms = data.miscItems.ofType(MiscType.FARM)
     val openEntry: (String) -> Unit = { nav.navigate(Route.EntryDetail(it)) }
     fun showCountry(en: String) {
         mapState.selectCountry(en)
         scope.launch { scroll.animateScrollTo((panelY - with(density) { 220.dp.roundToPx() }).coerceAtLeast(0)) }
     }
+    fun jumpToFarm(farm: String) {
+        highlightedFarm = farm
+        // a card hidden by the farm search cannot be shown, so the search is cleared first
+        if (farms.any { it.name == farm } && farms.none { it.name == farm && FlatItemLogic.matchesSearch(it, farmQuery) }) farmQuery = ""
+        jumpTo = farm
+    }
     LaunchedEffect(highlightedFarm) { if (highlightedFarm != null) { delay(1600); highlightedFarm = null } }
+    LaunchedEffect(jumpTo) {
+        val farm = jumpTo ?: return@LaunchedEffect
+        // let a cleared search compose and place the card first
+        var target: Int? = null
+        repeat(3) { if (target == null) { withFrameNanos { }; target = farmCards.centreTarget(farm, scroll.value) } }
+        scroll.animateScrollTo((target ?: farmY).coerceIn(0, scroll.maxValue))
+        jumpTo = null
+    }
 
-    Column(Modifier.fillMaxSize().verticalScroll(scroll).padding(horizontal = Dimens.gutter)) {
+    Column(Modifier.fillMaxSize().onGloballyPositioned { farmCards.onViewport(it) }.verticalScroll(scroll).padding(horizontal = Dimens.gutter)) {
         Row(Modifier.padding(top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(AppIcons.map, contentDescription = null, tint = Ink.text, modifier = Modifier.size(18.dp))
             Spacer(Modifier.width(8.dp))
@@ -106,44 +131,52 @@ fun BeanMapView(nav: NavHostController, data: BeanData) {
         MapSelectionPanel(
             selectedCountry = mapState.selectedCountry, selectedRegion = mapState.selectedRegion, stats = stats, byCountry = byCountry,
             onOpenEntry = openEntry,
-            onFarmTap = { farm -> highlightedFarm = farm; scope.launch { scroll.animateScrollTo(farmY) } },
+            onFarmTap = ::jumpToFarm,
             modifier = Modifier.onGloballyPositioned { panelY = it.positionInParent().y.roundToInt() },
+            onRegionTap = { region -> mapState.selectedCountry?.let { mapState.selectRegion(it, region) } },
         )
         CountryList(
-            records = data.records, byCountry = byCountry, expanded = expandedCountry,
-            onToggle = { en -> expandedCountry = if (expandedCountry == en) null else en; mapState.selectCountry(en) },
+            records = data.records, byCountry = byCountry, expanded = expanded.toSet(),
+            onToggle = { en -> expanded = if (en in expanded) expanded - en else expanded + en; mapState.selectCountry(en) },
             onOpenEntry = openEntry,
             onUntriedTap = { showCountry(it) },
         )
         FarmSection(
-            farms = data.miscItems.ofType(MiscType.FARM), records = data.records, query = farmQuery, onQueryChange = { farmQuery = it },
+            farms = farms, records = data.records, query = farmQuery, onQueryChange = { farmQuery = it },
             onAdd = { nav.navigate(Route.FlatItemForm(type = MiscType.FARM)) },
             onEdit = { nav.navigate(Route.FlatItemForm(type = MiscType.FARM, itemId = it.id)) },
             onDelete = { miscVm.delete(it.id) },
             onCountryTap = { raw -> CountryLookup.lookup(raw)?.let { showCountry(it.en) } },
             highlightedFarm = highlightedFarm,
             modifier = Modifier.onGloballyPositioned { farmY = it.positionInParent().y.roundToInt() },
+            positions = farmCards,
         )
         Spacer(Modifier.height(96.dp))
     }
 }
 
+/** Web .map-legend (it wraps like the web's flex-wrap row). */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Legend() {
-    Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        LegendItem(Ink.mapProducer, "커피 생산국")
-        Spacer(Modifier.width(18.dp))
-        LegendItem(Ink.accent, "내가 마셔본 나라")
-        Spacer(Modifier.width(18.dp))
-        Box(Modifier.size(8.dp).background(Ink.mapDot, CircleShape))
-        Spacer(Modifier.width(6.dp))
-        Text("주요 산지", style = AppType.faint)
+    FlowRow(
+        Modifier.fillMaxWidth().padding(top = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(18.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        LegendItem("커피 생산국") { Box(Modifier.size(11.dp).background(MapPalette.producer)) }
+        LegendItem("내가 마셔본 나라") { Box(Modifier.size(11.dp).background(MapPalette.tasted)) }
+        LegendItem("주요 산지") { Box(Modifier.size(8.dp).background(MapPalette.dot, CircleShape)) }
+        LegendItem("마셔본 산지") { Box(Modifier.size(8.dp).background(MapPalette.triedDot, CircleShape).border(1.dp, MapPalette.tastedStroke, CircleShape)) }
     }
 }
 
 @Composable
-private fun LegendItem(color: Color, label: String) {
-    Box(Modifier.size(11.dp).background(color))
-    Spacer(Modifier.width(6.dp))
-    Text(label, style = AppType.faint)
+private fun LegendItem(label: String, swatch: @Composable () -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        swatch()
+        Spacer(Modifier.width(6.dp))
+        Text(label, style = AppType.faint)
+    }
 }

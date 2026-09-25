@@ -1,9 +1,7 @@
 package com.coffeejournal.ui.bean.b
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -14,9 +12,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -38,6 +36,7 @@ import com.coffeejournal.ui.theme.DateField
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GhostButton
+import com.coffeejournal.ui.theme.GlyphButton
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
@@ -81,8 +80,15 @@ fun BlendFormScreen(nav: NavHostController, blendId: String?) {
                         }
                     }
                     Spacer(Modifier.width(8.dp))
-                    AppTextField(value = row.grams, onValueChange = { vm.updateRow(i, grams = it) }, placeholder = "그램(g)", keyboardType = KeyboardType.Number, modifier = Modifier.width(92.dp))
-                    Box(Modifier.size(Dimens.touch).clickable { vm.removeRow(i) }, contentAlignment = Alignment.Center) { Text("✕", style = AppType.body.copy(color = Ink.textFaint)) }
+                    // a number field like the web's type=number: letters and a second point are not taken
+                    AppTextField(
+                        value = row.grams, onValueChange = { v -> BlendSources.gramsInput(v)?.let { vm.updateRow(i, grams = it) } },
+                        placeholder = "그램(g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.width(92.dp),
+                    )
+                    GlyphButton(
+                        "✕", label = "원두 행 삭제", onClick = { vm.removeRow(i) },
+                        modifier = Modifier.size(Dimens.touch).wrapContentSize(Alignment.Center), style = AppType.body.copy(color = Ink.textFaint),
+                    )
                 }
             }
             GhostButton("+ 원두 추가", onClick = { vm.addRow() }, small = true)

@@ -4,6 +4,7 @@ import com.coffeejournal.domain.model.BeanRecord
 import com.coffeejournal.domain.reference.Varieties
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.CountryLookup
+import com.coffeejournal.ui.bean.KoreanOrder
 
 /** Pure index/profile logic behind the 품종 view (web renderVarietyLineageExplorer / renderVarietyByCountry). */
 internal object VarietyStats {
@@ -109,8 +110,9 @@ internal object VarietyStats {
         return map.values.sortedByDescending { it.createdAt }
     }
 
+    /** Web "N origins": distinct bilingual countries, 국가 미상 counting as one. */
     fun origins(records: List<BeanRecord>): Int =
-        records.map { it.country.trim() }.filter { it.isNotEmpty() }.map { CountryLookup.bilingual(it) }.toSet().size
+        records.map { CountryLookup.bilingual(it.country) }.toSet().size
 
     /** Web isSingleVarietyRecord: exactly one variety written and it is this one ("… 외" never counts). */
     fun isSingle(record: BeanRecord, key: String): Boolean {
@@ -159,7 +161,7 @@ internal object VarietyStats {
                 map.getOrPut(country) { LinkedHashMap() }.getOrPut(display) { mutableListOf() } += r
             }
         }
-        return map.entries.sortedBy { it.key }.map { (country, rows) ->
+        return map.entries.sortedWith(compareBy(KoreanOrder) { it.key }).map { (country, rows) ->
             CountryGroup(country, rows.entries.sortedBy { it.key.lowercase() }.map { CountryRow(it.key, it.value) })
         }
     }

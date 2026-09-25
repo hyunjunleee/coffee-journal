@@ -1,17 +1,23 @@
 package com.coffeejournal.ui.bean.b
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.coffeejournal.domain.model.BeanRecord
@@ -31,6 +37,7 @@ fun MapSelectionPanel(
     onOpenEntry: (String) -> Unit,
     onFarmTap: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onRegionTap: ((String) -> Unit)? = null,
 ) {
     Column(modifier.fillMaxWidth().padding(top = 10.dp)) {
         if (selectedCountry == null) { Text("나라나 산지 점을 눌러보세요.", style = AppType.faint); return }
@@ -38,7 +45,7 @@ fun MapSelectionPanel(
         if (info == null) { Text("$selectedCountry — 커피 산지가 아니에요", style = AppType.small.copy(color = Ink.textFaint)); return }
         val countryRecords = byCountry[selectedCountry].orEmpty()
         if (selectedRegion != null) RegionPanel(info, selectedRegion, countryRecords, onOpenEntry, onFarmTap)
-        else CountryPanel(info, stats[selectedCountry], countryRecords, onOpenEntry, onFarmTap)
+        else CountryPanel(info, stats[selectedCountry], countryRecords, onOpenEntry, onFarmTap, onRegionTap)
     }
 }
 
@@ -53,7 +60,14 @@ private fun PanelTitle(flag: String, title: String, suffix: String = "") {
 }
 
 @Composable
-private fun CountryPanel(info: CoffeeCountries.Country, stat: CountryStat?, records: List<BeanRecord>, onOpenEntry: (String) -> Unit, onFarmTap: (String) -> Unit) {
+private fun CountryPanel(
+    info: CoffeeCountries.Country,
+    stat: CountryStat?,
+    records: List<BeanRecord>,
+    onOpenEntry: (String) -> Unit,
+    onFarmTap: (String) -> Unit,
+    onRegionTap: ((String) -> Unit)?,
+) {
     PanelTitle(info.flag, info.ko, "(${info.en})")
     if (records.isNotEmpty()) {
         val regions = stat?.regions.orEmpty()
@@ -61,7 +75,10 @@ private fun CountryPanel(info: CoffeeCountries.Country, stat: CountryStat?, reco
         val suffix = if (regions.isNotEmpty()) " (${regions.values.joinToString(", ") { it.label }})" else ""
         Text("$prefix${records.size}cup 마셔봤어요$suffix", style = AppType.small.copy(color = Ink.accent), modifier = Modifier.padding(top = 4.dp))
     }
-    if (info.regions.isNotEmpty()) Text("주요 산지: ${info.regions.joinToString(", ") { it.name }}", style = AppType.faint, modifier = Modifier.padding(top = 4.dp))
+    if (info.regions.isNotEmpty()) {
+        if (onRegionTap == null) Text("주요 산지: ${info.regions.joinToString(", ") { it.name }}", style = AppType.faint, modifier = Modifier.padding(top = 4.dp))
+        else RegionLinks(info.regions.map { it.name }, onRegionTap)
+    }
     if (records.isNotEmpty()) {
         MapStats.groupByRegionThenFarm(records).forEach { group ->
             Row(Modifier.padding(top = 6.dp), verticalAlignment = Alignment.Bottom) {
@@ -89,6 +106,23 @@ private fun RegionPanel(info: CoffeeCountries.Country, region: String, countryRe
     Column(Modifier.padding(top = 6.dp)) {
         farms.forEach { farm -> FarmGroup(farm, showCount = true, onOpenEntry, onFarmTap) }
         BreakdownLine(matching)
+    }
+}
+
+/**
+ * "주요 산지:" with each region tappable (its dot panel). At the fitted zoom a small country is covered by its own
+ * dots, so these names are the sure way from the country panel to a region.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RegionLinks(names: List<String>, onTap: (String) -> Unit) {
+    FlowRow(Modifier.padding(top = 2.dp), itemVerticalAlignment = Alignment.CenterVertically) {
+        Text("주요 산지:", style = AppType.faint, modifier = Modifier.padding(end = 2.dp))
+        names.forEach { name ->
+            Box(Modifier.heightIn(min = TapRowHeight).clickable(role = Role.Button) { onTap(name) }.padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+                Text(name, style = AppType.faint.copy(color = Ink.textMuted, textDecoration = TextDecoration.Underline))
+            }
+        }
     }
 }
 
@@ -120,7 +154,7 @@ fun VisitRows(visits: List<BeanRecord>, onOpenEntry: (String) -> Unit) {
     s.others.forEach { v ->
         val rest = listOf(v.place.trim(), v.process.trim(), v.variety.trim()).filter { it.isNotEmpty() }.joinToString("") { " · $it" }
         Row(
-            Modifier.fillMaxWidth().clickable { onOpenEntry(v.entryId) }.padding(start = 20.dp, top = 2.dp, bottom = 2.dp),
+            Modifier.fillMaxWidth().heightIn(min = TapRowHeight).clickable { onOpenEntry(v.entryId) }.padding(start = 20.dp, top = 2.dp, bottom = 2.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(Dates.ymdCompact(v.createdAt), style = AppType.faint)

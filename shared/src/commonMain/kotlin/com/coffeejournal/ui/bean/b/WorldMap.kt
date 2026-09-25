@@ -4,9 +4,13 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateCentroid
+import androidx.compose.foundation.gestures.calculateCentroidSize
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.rememberTransformableState
-import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -29,11 +33,13 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.withTransform
+import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.coffeejournal.domain.reference.CoffeeCountries
@@ -42,6 +48,7 @@ import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Ink
+import kotlin.math.abs
 
 /** Zoom / pan and the current selection of the coffee map; survives configuration changes. */
 class WorldMapState(scale: Float = 1f, pan: Offset = Offset.Zero, selectedCountry: String? = null, selectedRegion: String? = null) {
@@ -56,6 +63,14 @@ class WorldMapState(scale: Float = 1f, pan: Offset = Offset.Zero, selectedCountr
     fun selectRegion(en: String, region: String) { selectedCountry = en; selectedRegion = region }
     fun resetZoom() { scale = 1f; pan = Offset.Zero }
 
+    /** One pinch / pan step: [centroid] is in canvas px; the map point under the fingers stays under them. */
+    fun transform(centroid: Offset, panChange: Offset, zoomChange: Float) {
+        val size = canvasSize
+        val newScale = (scale * zoomChange).coerceIn(MIN_SCALE, MAX_SCALE)
+        pan = WorldMapGeometry.zoomPan(pan, scale, newScale, centroid, panChange, WorldMapGeometry.fitScale(size.width, size.height), size.width, size.height)
+        scale = newScale
+    }
+
     companion object {
         val Saver = listSaver<WorldMapState, Any?>(
             save = { listOf(it.scale, it.pan.x, it.pan.y, it.selectedCountry, it.selectedRegion) },
@@ -67,13 +82,31 @@ class WorldMapState(scale: Float = 1f, pan: Offset = Offset.Zero, selectedCountr
 @Composable
 fun rememberWorldMapState(): WorldMapState = rememberSaveable(saver = WorldMapState.Saver) { WorldMapState() }
 
-private val VISITED_STROKE = Color(0xFFF0DCB8)
+/**
+ * Coffee map colours, shared by the canvas and the legend. The app keeps its dark producer green; tasted countries
+ * get a warm coffee tone instead of the near-black ink, which could hardly be told from that green (about 1.4:1).
+ */
+object MapPalette {
+    val producer: Color = Ink.mapProducer
+    /** The web's coffee accent #B58968 deepened a little: at least 3:1 against the producer green, the page and other land. */
+    val tasted: Color = Color(0xFFA87B58)
+    val tastedStroke: Color = Color(0xFFF0DCB8)
+    val otherLand: Color = Ink.surfaceRaised
+    /** 주요 산지 dots (the web copy calls them 연두색 점). */
+    val dot: Color = Ink.mapDot
+    /** Dots of regions already tasted: the web's dark accent fill with the light ring. */
+    val triedDot: Color = Ink.accent
+}
+
 private const val MIN_SCALE = 1f
 private const val MAX_SCALE = 5f
 
+/** Radius of a drawn region dot in canvas px at the total scale [m]; taps count as on the dot within this radius. */
+private fun Density.dotRadiusPx(m: Float): Float = maxOf(WorldMapGeometry.REGION_DOT_RADIUS * m, 2.5.dp.toPx())
+
 /**
  * The world map: 175 polygons from [WorldMapData] fitted into the canvas, producers in dark green, tasted countries
- * in the accent colour, 60 region dots, the two tropics, tap to select and pinch to zoom.
+ * in [MapPalette.tasted], 60 region dots, the two tropics, tap to select and pinch to zoom around the fingers.
  * [triedRegions] holds "En|region" keys in lower case.
  */
 @Composable
@@ -99,14 +132,6 @@ fun WorldMapCanvas(
     }
     val producers = remember { CoffeeCountries.byEn.keys }
     val textMeasurer = rememberTextMeasurer()
-    val density = LocalDensity.current
-    val transformable = rememberTransformableState { zoom, panChange, _ ->
-        val size = state.canvasSize
-        val newScale = (state.scale * zoom).coerceIn(MIN_SCALE, MAX_SCALE)
-        val m = WorldMapGeometry.fitScale(size.width, size.height) * newScale
-        state.scale = newScale
-        state.pan = WorldMapGeometry.clampPan(state.pan + panChange, m, size.width, size.height)
-    }
     Box(modifier.fillMaxWidth()) {
         Canvas(
             Modifier
@@ -122,13 +147,14 @@ fun WorldMapCanvas(
                         val m = WorldMapGeometry.fitScale(size.width, size.height) * state.scale
                         val origin = Offset(size.width / 2f, size.height / 2f) + state.pan
                         val v = WorldMapGeometry.toView(pos, m, origin)
-                        val tapRadius = maxOf(WorldMapGeometry.REGION_TAP_RADIUS, with(density) { 14.dp.toPx() } / m)
-                        val region = WorldMapGeometry.hitRegion(v, tapRadius)
-                        if (region != null) onRegionTap(region)
-                        else WorldMapGeometry.hitCountry(polygons, v)?.let { onCountryTap(it.name) }
+                        when (val hit = WorldMapGeometry.resolveTap(polygons, v, dotRadiusPx(m) / m, 14.dp.toPx() / m)) {
+                            is MapTap.Region -> onRegionTap(hit.hit)
+                            is MapTap.Country -> onCountryTap(hit.name)
+                            null -> Unit
+                        }
                     }
                 }
-                .transformable(transformable, canPan = { state.scale > MIN_SCALE }, lockRotationOnZoomPan = true),
+                .pointerInput(state) { detectMapTransform(isZoomed = { state.scale > MIN_SCALE }, onTransform = state::transform) },
         ) {
             val w = size.width; val h = size.height
             val m = WorldMapGeometry.fitScale(w, h) * state.scale
@@ -139,9 +165,9 @@ fun WorldMapCanvas(
             withTransform({ translate(origin.x - center.x * m, origin.y - center.y * m); scale(m, m, Offset.Zero) }) {
                 polygons.forEachIndexed { i, poly ->
                     val isVisited = poly.name in visited
-                    val fill = when { isVisited -> Ink.accent; poly.name in producers -> Ink.mapProducer; else -> Ink.surfaceRaised }
+                    val fill = when { isVisited -> MapPalette.tasted; poly.name in producers -> MapPalette.producer; else -> MapPalette.otherLand }
                     drawPath(paths[i], fill)
-                    drawPath(paths[i], if (isVisited) VISITED_STROKE else Ink.line, style = Stroke(hair))
+                    drawPath(paths[i], if (isVisited) MapPalette.tastedStroke else Ink.line, style = Stroke(hair))
                 }
                 if (selectedIndex >= 0) drawPath(paths[selectedIndex], Ink.mapDot, style = Stroke(1.5.dp.toPx() / m))
             }
@@ -155,21 +181,52 @@ fun WorldMapCanvas(
                 val layout = textMeasurer.measure(label, labelStyle)
                 drawText(layout, topLeft = Offset(maxOf(0f, a.x) + 4.dp.toPx(), a.y - layout.size.height - 1.dp.toPx()))
             }
-            // Region dots on top of everything.
-            val r = maxOf(WorldMapGeometry.REGION_DOT_RADIUS * m, 2.5.dp.toPx())
+            // Region dots on top of everything: tasted ones dark with a light ring, the others 연두색.
+            val r = dotRadiusPx(m)
             CoffeeCountries.all.forEach { c ->
                 c.regions.forEach { reg ->
                     val p = WorldMapGeometry.toCanvas(Offset(reg.x, reg.y), m, origin)
                     if (p.x < -r || p.x > w + r || p.y < -r || p.y > h + r) return@forEach
                     val tried = "${c.en}|${reg.name.lowercase()}" in triedRegions
-                    drawCircle(Ink.mapDot, r, p)
-                    drawCircle(if (tried) Ink.accent else Ink.surface, r, p, style = Stroke(if (tried) 1.4.dp.toPx() else 0.6.dp.toPx()))
+                    drawCircle(if (tried) MapPalette.triedDot else MapPalette.dot, r, p)
+                    drawCircle(if (tried) MapPalette.tastedStroke else Ink.surface, r, p, style = Stroke(if (tried) 1.dp.toPx() else 0.6.dp.toPx()))
                     if (state.selectedCountry == c.en && state.selectedRegion == reg.name) drawCircle(Ink.text, r + 3.dp.toPx(), p, style = Stroke(1.dp.toPx()))
                 }
             }
         }
         if (state.scale > MIN_SCALE) {
             GhostButton("전체 보기", onClick = { state.resetZoom() }, small = true, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).background(Ink.surface))
+        }
+    }
+}
+
+/**
+ * Pinch zoom around the fingers' centroid and, once zoomed in, one-finger panning. At the fitted zoom a one-finger
+ * drag is left alone, so the page keeps scrolling over the map; taps are left to the tap detector until the fingers
+ * move past the touch slop.
+ */
+private suspend fun PointerInputScope.detectMapTransform(isZoomed: () -> Boolean, onTransform: (centroid: Offset, pan: Offset, zoom: Float) -> Unit) {
+    awaitEachGesture {
+        awaitFirstDown(requireUnconsumed = false)
+        var zoom = 1f
+        var pan = Offset.Zero
+        var pastSlop = false
+        val slop = viewConfiguration.touchSlop
+        while (true) {
+            val event = awaitPointerEvent()
+            if (event.changes.none { it.pressed } || event.changes.any { it.isConsumed }) break
+            if (event.changes.count { it.pressed } < 2 && !isZoomed()) continue
+            val zoomChange = event.calculateZoom()
+            val panChange = event.calculatePan()
+            if (!pastSlop) {
+                zoom *= zoomChange
+                pan += panChange
+                pastSlop = abs(1f - zoom) * event.calculateCentroidSize(useCurrent = false) > slop || pan.getDistance() > slop
+            }
+            if (pastSlop) {
+                if (zoomChange != 1f || panChange != Offset.Zero) onTransform(event.calculateCentroid(useCurrent = false), panChange, zoomChange)
+                event.changes.forEach { if (it.positionChanged()) it.consume() }
+            }
         }
     }
 }

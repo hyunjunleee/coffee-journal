@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -23,7 +22,6 @@ import com.coffeejournal.ui.bean.b.StatusSplitList
 import com.coffeejournal.ui.bean.b.SubLabel
 import com.coffeejournal.ui.bean.b.ofType
 import com.coffeejournal.ui.nav.Route
-import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.SectionLabel
@@ -58,7 +56,5 @@ private fun SelectionInfo(matching: List<BeanRecord>) {
         SubLabel("원두")
         beans.forEach { (name, cat) -> SourceBeanRow(name, badge = cat) }
     }
-    SubLabel("어디서 마셨는지")
-    Text(FlatItemLogic.places(matching).joinToString(" · "), style = AppType.faint)
     BreakdownLine(matching)
 }

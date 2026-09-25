@@ -355,7 +355,7 @@ class MoreFlowTest : FlowTestBase() {
         waitForText("1/1")
         assertTrue(runBlocking { koinGet<RoadmapRepository>().getAll().single().items.single().done })
 
-        clickText("✕")
+        clickNode(hasContentDescription("항목 삭제") and hasClickAction()) // platform-10: the ✕ is a labelled button
         clickNode(dialogButton("삭제"))
         waitForText("0/0")
     }

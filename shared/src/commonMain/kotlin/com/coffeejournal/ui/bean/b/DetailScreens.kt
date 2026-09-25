@@ -37,7 +37,8 @@ fun CountryDetailScreen(nav: NavHostController, en: String) {
     val country = CoffeeCountries.byEn[en]
     Column(Modifier.fillMaxSize().background(Ink.bg)) {
         ScreenTitleBar(country?.let { "${it.flag} ${it.ko}" } ?: en, onBack = { nav.popBackStack() })
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
+        // nothing until the records have loaded, instead of a flash of the empty copy
+        if (data.loaded) Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             MapSelectionPanel(en, null, stats, byCountry, onOpenEntry = { nav.navigate(Route.EntryDetail(it)) }, onFarmTap = {})
             if (country != null) {
                 val entry = MapStats.countryEntry(country, byCountry[en].orEmpty())
@@ -62,7 +63,7 @@ fun RoasteryDetailScreen(nav: NavHostController, name: String) {
     val recs = remember(data.records, name) { FlatItemLogic.roasteryRecords(data.records, name).sortedByDescending { it.createdAt } }
     Column(Modifier.fillMaxSize().background(Ink.bg)) {
         ScreenTitleBar(name, onBack = { nav.popBackStack() })
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
+        if (data.loaded) Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             Spacer(Modifier.height(12.dp))
             if (item?.location?.isNotBlank() == true) Text(item.location, style = AppType.small)
             if (item?.notes?.isNotBlank() == true) Text(item.notes, style = AppType.bodyMuted, modifier = Modifier.padding(top = 4.dp))

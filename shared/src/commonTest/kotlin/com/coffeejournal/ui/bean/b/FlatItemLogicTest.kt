@@ -7,6 +7,7 @@ import com.coffeejournal.domain.model.MiscStatus
 import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.rules.BeanRecords
+import com.coffeejournal.ui.bean.a.BeanFormat
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -28,7 +29,8 @@ class FlatItemLogicTest {
         val spans = FlatItemLogic.beanSpans(libre)
         assertEquals(listOf("벤사", "케냐 (리브레, 노르딕)"), spans.map { it.name })
         assertEquals(1 * day, spans[0].start); assertEquals(5 * day, spans[0].end)
-        assertEquals(listOf("집 추출", "듀잇"), FlatItemLogic.places(libre))
+        // beanB-5: the web breakdown counts a repeated home brew once ("1종") and each cafe visit ("1번")
+        assertEquals(listOf(Category.BEAN to 1, Category.CAFE to 1), BeanFormat.categoryCounts(libre))
         assertTrue(FlatItemLogic.roasteryRecords(records, "").isEmpty())
     }
 

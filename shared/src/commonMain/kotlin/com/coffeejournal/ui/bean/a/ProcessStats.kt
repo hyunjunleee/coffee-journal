@@ -5,6 +5,7 @@ import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.reference.Processes
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.CountryLookup
+import com.coffeejournal.ui.bean.KoreanOrder
 
 /** Pure matching and aggregation behind the 가공 방식 view (web processRecordMatchesName & friends). */
 internal object ProcessStats {
@@ -65,7 +66,7 @@ internal object ProcessStats {
             .forEach { groups.getOrPut(it.name) { mutableListOf() } }
         return groups.entries
             .map { (label, list) -> SearchGroup(label, list.sortedByDescending { it.createdAt }) }
-            .sortedWith(compareByDescending<SearchGroup> { it.records.size }.thenBy { it.label })
+            .sortedWith(compareByDescending<SearchGroup> { it.records.size }.thenBy(KoreanOrder) { it.label })
     }
 
     data class Breakdown(
@@ -111,7 +112,7 @@ internal object ProcessStats {
     fun honeyGroups(matching: List<BeanRecord>): List<Pair<String, List<BeanRecord>>> =
         matching.groupBy { honeySubtype(it) }
             .map { (k, v) -> k to v.sortedByDescending { it.createdAt } }
-            .sortedWith(compareByDescending<Pair<String, List<BeanRecord>>> { it.second.size }.thenBy { it.first })
+            .sortedWith(compareByDescending<Pair<String, List<BeanRecord>>> { it.second.size }.thenBy(KoreanOrder) { it.first })
 
     data class BrewGroup(val displayName: String, val visits: List<BeanRecord>)
 

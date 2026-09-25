@@ -102,7 +102,7 @@ private fun StepRow(step: StepForm, isLast: Boolean, onChange: (StepForm) -> Uni
                 Text("대기", style = AppType.faint, modifier = Modifier.width(WaterWidth).padding(start = 8.dp))
             }
             Spacer(Modifier.weight(1f))
-            RemoveButton(onRemove)
+            RemoveButton(onRemove, label = "단계 삭제")
         }
         Spacer(Modifier.height(6.dp))
         CompactField(step.note, { onChange(step.copy(note = it)) }, Modifier.fillMaxWidth(), placeholder = "메모 (뜸 / 1차 푸어 등)")

@@ -48,6 +48,26 @@ object BlendSources {
         }
     }
 
+    /**
+     * Web entryBlendCardHtml "상업 블렌드 · {roastery || source}": the roastery field, else the roastery in the name's
+     * trailing parenthesis ("하우스 블렌드 (프릳츠)"); without either, no dangling "·".
+     */
+    fun commercialLine(entry: Entry): String {
+        val shop = entry.roastery.trim().ifEmpty { BeanNames.parseNameRoastery(entry.name).trim() }
+        return if (shop.isEmpty()) "상업 블렌드" else "상업 블렌드 · $shop"
+    }
+
+    /**
+     * Web `<input type="number" step="0.1">` for grams: digits with at most one decimal point (a comma counts as the
+     * point). Returns the text to keep, or null when [typed] is not a number being typed and the field keeps its value.
+     */
+    fun gramsInput(typed: String): String? {
+        val t = typed.trim().replace(',', '.')
+        return if (GRAMS_TYPING.matches(t)) t else null
+    }
+
+    private val GRAMS_TYPING = Regex("\\d*\\.?\\d*")
+
     fun customTitle(blend: Blend): String =
         blend.name.trim().ifEmpty { blend.beans.joinToString(" + ") { it.name }.ifEmpty { "이름 없는 블렌드" } }
 

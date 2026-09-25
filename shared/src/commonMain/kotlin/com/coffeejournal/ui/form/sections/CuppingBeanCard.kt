@@ -51,7 +51,7 @@ internal fun CuppingBeanCard(
                 value = bean.name, onValueChange = { onChange(bean.copy(name = it)) }, modifier = Modifier.weight(1f),
                 placeholder = "원두 이름 (예: 에티오피아 예가체프)", focusRequester = nameFocus, error = error,
             )
-            RemoveButton(onRemove, Modifier.padding(top = 4.dp))
+            RemoveButton(onRemove, label = "원두 삭제", modifier = Modifier.padding(top = 4.dp))
         }
         Spacer(Modifier.height(8.dp))
         Seg(
