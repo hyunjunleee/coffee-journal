@@ -1,7 +1,7 @@
 package com.coffeejournal.android
 
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ApplicationProvider
@@ -36,11 +36,11 @@ class ScreenshotTest {
         compose.setContent { App() }
         compose.waitForIdle()
         compose.onRoot().captureRoboImage("screenshots/01-home.png")
-        compose.onNodeWithText("커피 달력").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("tab-calendar").performClick(); compose.waitForIdle()
         compose.onRoot().captureRoboImage("screenshots/02-calendar.png")
-        compose.onNodeWithText("원두").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("tab-bean").performClick(); compose.waitForIdle()
         compose.onRoot().captureRoboImage("screenshots/03-bean.png")
-        compose.onNodeWithText("기타").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("tab-misc").performClick(); compose.waitForIdle()
         compose.onRoot().captureRoboImage("screenshots/04-misc.png")
     }
 }

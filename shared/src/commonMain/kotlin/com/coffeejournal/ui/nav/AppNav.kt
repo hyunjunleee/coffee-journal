@@ -23,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -36,13 +37,13 @@ import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.Ink
 
-data class TabSpec(val route: Route, val label: String, val icon: ImageVector, val routeName: String)
+data class TabSpec(val route: Route, val label: String, val icon: ImageVector, val routeName: String, val tag: String)
 
 val tabs = listOf(
-    TabSpec(Route.Extract, "새로운 추출", AppIcons.cup, Route.Extract::class.qualifiedName!!),
-    TabSpec(Route.Calendar, "커피 달력", AppIcons.calendar, Route.Calendar::class.qualifiedName!!),
-    TabSpec(Route.Bean, "원두", AppIcons.bean, Route.Bean::class.qualifiedName!!),
-    TabSpec(Route.Misc, "기타", AppIcons.misc, Route.Misc::class.qualifiedName!!),
+    TabSpec(Route.Extract, "새로운 추출", AppIcons.cup, Route.Extract::class.qualifiedName!!, "tab-extract"),
+    TabSpec(Route.Calendar, "커피 달력", AppIcons.calendar, Route.Calendar::class.qualifiedName!!, "tab-calendar"),
+    TabSpec(Route.Bean, "원두", AppIcons.bean, Route.Bean::class.qualifiedName!!, "tab-bean"),
+    TabSpec(Route.Misc, "기타", AppIcons.misc, Route.Misc::class.qualifiedName!!, "tab-misc"),
 )
 
 @Composable
@@ -81,7 +82,7 @@ private fun BottomBar(currentRoute: String?, onSelect: (Route) -> Unit) {
             tabs.forEach { tab ->
                 val selected = currentRoute?.startsWith(tab.routeName) == true
                 Column(
-                    Modifier.weight(1f).clickable { onSelect(tab.route) }.padding(top = 10.dp, bottom = 8.dp),
+                    Modifier.weight(1f).testTag(tab.tag).clickable { onSelect(tab.route) }.padding(top = 10.dp, bottom = 8.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
                 ) {
                     Icon(tab.icon, contentDescription = tab.label, tint = if (selected) Ink.text else Ink.textFaint, modifier = Modifier.size(19.dp))
