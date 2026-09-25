@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -56,7 +57,7 @@ fun AppNav() {
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = { if (onTab) BottomBar(currentRoute) { route -> nav.navigateTab(route) } },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
+        Box(Modifier.fillMaxSize().padding(padding).windowInsetsPadding(WindowInsets.statusBars)) {
             NavHost(navController = nav, startDestination = Route.Extract) {
                 appGraph(nav)
             }
