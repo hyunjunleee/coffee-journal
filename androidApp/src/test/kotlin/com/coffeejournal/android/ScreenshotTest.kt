@@ -31,16 +31,21 @@ class ScreenshotTest {
         SampleData.seed()
     }
 
+    /** Room flows run on background dispatchers; give them real time to emit before capturing. */
+    private fun settle() {
+        repeat(6) { Thread.sleep(250); compose.waitForIdle() }
+    }
+
     @Test
     fun tabs_render() {
         compose.setContent { App() }
-        compose.waitForIdle()
+        settle()
         compose.onRoot().captureRoboImage("screenshots/01-home.png")
-        compose.onNodeWithTag("tab-calendar").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("tab-calendar").performClick(); settle()
         compose.onRoot().captureRoboImage("screenshots/02-calendar.png")
-        compose.onNodeWithTag("tab-bean").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("tab-bean").performClick(); settle()
         compose.onRoot().captureRoboImage("screenshots/03-bean.png")
-        compose.onNodeWithTag("tab-misc").performClick(); compose.waitForIdle()
+        compose.onNodeWithTag("tab-misc").performClick(); settle()
         compose.onRoot().captureRoboImage("screenshots/04-misc.png")
     }
 }
