@@ -28,9 +28,10 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
-import com.coffeejournal.ui.form.imeOverlapPadding
+import com.coffeejournal.ui.theme.imeOverlapPadding
 import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
+import com.coffeejournal.ui.theme.BlockBackWhile
 import com.coffeejournal.ui.theme.Chip
 import com.coffeejournal.ui.theme.DateField
 import com.coffeejournal.ui.theme.Dimens
@@ -54,8 +55,9 @@ fun BlendFormScreen(nav: NavHostController, blendId: String?) {
     val canSave = s.loaded && !s.saving && BlendSources.validRows(s.rows).isNotEmpty()
     // one pop per back / 취소 / successful save, even when tapped again during the exit transition
     val leave = dropUnlessResumed { nav.popBackStack() }
+    BlockBackWhile(s.saving)
     Column(Modifier.fillMaxSize().background(Ink.bg)) {
-        ScreenTitleBar(if (blendId == null) "블렌드 기록 추가" else "블렌드 기록 수정", onBack = leave)
+        ScreenTitleBar(if (blendId == null) "블렌드 기록 추가" else "블렌드 기록 수정", onBack = { if (!s.saving) leave() })
         Column(Modifier.weight(1f).imeOverlapPadding().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             Spacer(Modifier.height(16.dp))
             AppTextField(value = s.name, onValueChange = vm::setName, label = "블렌드 이름 (선택)", placeholder = "예: 에티오피아+콜롬비아 디카페인", enabled = s.loaded)
@@ -75,7 +77,8 @@ fun BlendFormScreen(nav: NavHostController, blendId: String?) {
                             val q = row.name.trim().lowercase()
                             val matches = suggestions.filter { it != row.name && (q.isEmpty() || it.lowercase().contains(q)) }.take(6)
                             if (matches.isNotEmpty()) FlowRow(Modifier.padding(top = 6.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                matches.forEach { name -> Chip(name, onClick = { vm.updateRow(i, name = name) }) }
+                                // a suggestion fills the row: a button, not an on/off choice
+                                matches.forEach { name -> Chip(name, onClick = { vm.updateRow(i, name = name) }, toggle = false) }
                             }
                         }
                     }
@@ -96,7 +99,7 @@ fun BlendFormScreen(nav: NavHostController, blendId: String?) {
             AppTextField(value = s.notes, onValueChange = vm::setNotes, label = "메모", placeholder = "맛이 어땠는지, 비율을 어떻게 바꿔볼지 등", singleLine = false, minLines = 3)
             Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryButton(if (blendId == null) "저장" else "수정 저장", enabled = canSave, onClick = { vm.save(leave) })
-                GhostButton("취소", onClick = leave)
+                GhostButton("취소", onClick = leave, enabled = !s.saving)
             }
             Spacer(Modifier.height(96.dp))
         }

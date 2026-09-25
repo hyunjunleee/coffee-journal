@@ -25,9 +25,10 @@ import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.PackageType
 import com.coffeejournal.domain.reference.RoastLevels
-import com.coffeejournal.ui.form.imeOverlapPadding
+import com.coffeejournal.ui.theme.imeOverlapPadding
 import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
+import com.coffeejournal.ui.theme.BlockBackWhile
 import com.coffeejournal.ui.theme.Chip
 import com.coffeejournal.ui.theme.ChipInput
 import com.coffeejournal.ui.theme.DateField
@@ -35,6 +36,7 @@ import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.HintText
+import com.coffeejournal.ui.theme.InputFilters
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
@@ -55,8 +57,10 @@ fun PantryEditorScreen(nav: NavHostController, itemId: String?) {
     // one pop per back / 취소 even when tapped again during the exit transition
     val leave = dropUnlessResumed { nav.popBackStack() }
 
+    val saving = form.saving && !form.saved
+    BlockBackWhile(saving)
     Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar(title = "원두 보관함", onBack = leave)
+        ScreenTitleBar(title = "원두 보관함", onBack = { if (!saving) leave() })
         if (!form.loaded) return
         Column(
             Modifier.fillMaxSize().imeOverlapPadding().verticalScroll(rememberScrollState())
@@ -69,7 +73,7 @@ fun PantryEditorScreen(nav: NavHostController, itemId: String?) {
                 FieldLabel("원두 형태")
                 Seg(PACKAGE_OPTIONS, form.packageType, { v -> vm.update { copy(packageType = v) } }, allowClear = false, labels = PACKAGE_LABELS)
             }
-            AppTextField(form.weight, { v -> vm.update { copy(weight = v) } }, label = "봉투 용량 (g)", placeholder = "예: 200", keyboardType = KeyboardType.Number)
+            AppTextField(form.weight, { v -> vm.update { copy(weight = v) } }, label = "봉투 용량 (g)", placeholder = "예: 200", keyboardType = KeyboardType.Number, inputFilter = InputFilters::decimal)
             AppTextField(
                 form.price, vm::setPrice, label = "구매 가격 (원)", placeholder = "예: 18,000", keyboardType = KeyboardType.Number,
                 modifier = Modifier.onFocusChanged { if (!it.hasFocus) vm.formatPrice() },
@@ -101,7 +105,7 @@ fun PantryEditorScreen(nav: NavHostController, itemId: String?) {
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton(if (form.isEdit) "수정 저장" else "저장", onClick = vm::save, enabled = !form.saving, modifier = Modifier.weight(1f))
-                GhostButton("취소", onClick = leave, modifier = Modifier.weight(1f))
+                GhostButton("취소", onClick = leave, enabled = !saving, modifier = Modifier.weight(1f))
             }
         }
     }

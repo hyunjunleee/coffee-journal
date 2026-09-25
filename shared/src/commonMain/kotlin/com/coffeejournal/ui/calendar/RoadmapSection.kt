@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,9 +33,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.RoadmapItem
 import com.coffeejournal.domain.model.RoadmapPhase
@@ -49,6 +55,7 @@ import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.MinTouchTarget
 import com.coffeejournal.ui.theme.PrimaryButton
 
 /** Web renderRoadmap: D-day indicator, collapsible phase cards, checkable/editable items, add row. */
@@ -154,14 +161,21 @@ private fun RoadmapItemRow(item: RoadmapItem, onToggle: () -> Unit, onEdit: (Str
     var editing by remember(item.id) { mutableStateOf(false) }
     var draft by remember(item.id) { mutableStateOf(item.text) }
     var confirmDelete by remember { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        // an 18 dp box in a 48 dp tap area (design §8) that reaches into the card padding, so the box stays at the
+        // card's content edge; TalkBack reads "<item>, checkbox, checked / not checked"
         Box(
-            Modifier.size(18.dp).background(if (item.done) Ink.accent else Ink.surface)
-                .border(BorderStroke(Dimens.hairline, if (item.done) Ink.accent else Ink.line), RectangleShape)
-                .clickable(onClick = onToggle),
+            Modifier.bleedStart(CheckboxBleed).size(MinTouchTarget)
+                .toggleable(value = item.done, role = Role.Checkbox, onValueChange = { onToggle() })
+                .semantics { contentDescription = item.text },
             contentAlignment = Alignment.Center,
-        ) { if (item.done) Icon(AppIcons.check, contentDescription = "완료", tint = Ink.bg, modifier = Modifier.size(12.dp)) }
-        Spacer(Modifier.width(10.dp))
+        ) {
+            Box(
+                Modifier.size(18.dp).background(if (item.done) Ink.accent else Ink.surface)
+                    .border(BorderStroke(Dimens.hairline, if (item.done) Ink.accent else Ink.line), RectangleShape),
+                contentAlignment = Alignment.Center,
+            ) { if (item.done) Icon(AppIcons.check, contentDescription = null, tint = Ink.bg, modifier = Modifier.size(12.dp)) }
+        }
         if (editing) {
             InlineItemEditor(
                 draft = draft, onDraft = { draft = it }, original = item.text, onCommit = onEdit,
@@ -174,7 +188,7 @@ private fun RoadmapItemRow(item: RoadmapItem, onToggle: () -> Unit, onEdit: (Str
                     color = if (item.done) Ink.textFaint else Ink.textMuted,
                     textDecoration = if (item.done) TextDecoration.LineThrough else TextDecoration.None,
                 ),
-                modifier = Modifier.weight(1f).clickable { draft = item.text; editing = true },
+                modifier = Modifier.weight(1f).clickable(onClickLabel = "수정") { draft = item.text; editing = true },
             )
             GlyphButton(
                 "✕", label = "항목 삭제", onClick = { confirmDelete = true },
@@ -185,6 +199,16 @@ private fun RoadmapItemRow(item: RoadmapItem, onToggle: () -> Unit, onEdit: (Str
     if (confirmDelete) {
         ConfirmDialog(title = "항목 삭제", text = "\"${item.text}\" 항목을 삭제할까요?", onConfirm = onDelete, onDismiss = { confirmDelete = false })
     }
+}
+
+/** How far the check box's tap area reaches left of the row: (48 − 18) / 2, so the box sits at the row's start. */
+private val CheckboxBleed = 15.dp
+
+/** Lays the node out [bleed] to the left of where it would go, taking that much less room in the row. */
+private fun Modifier.bleedStart(bleed: Dp): Modifier = layout { measurable, constraints ->
+    val p = measurable.measure(constraints)
+    val b = bleed.roundToPx()
+    layout(p.width - b, p.height) { p.placeRelative(-b, 0) }
 }
 
 /**

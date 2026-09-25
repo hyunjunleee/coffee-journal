@@ -27,6 +27,7 @@ import com.coffeejournal.ui.form.FormTextField
 import com.coffeejournal.ui.form.RemoveButton
 import com.coffeejournal.ui.form.SliderRow
 import com.coffeejournal.ui.form.TwoUp
+import com.coffeejournal.ui.theme.InputFilters
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.ChipInput
 import com.coffeejournal.ui.theme.FieldLabel
@@ -95,7 +96,7 @@ private fun CuppingBeanGrid(bean: CuppingBeanForm, suggestions: FormSuggestions,
                 onFocusChanged = { focused -> if (!focused && bean.price.isNotBlank()) onChange(bean.copy(price = Prices.formatInput(bean.price))) },
             )
         },
-        { m -> FormTextField(bean.rank, { onChange(bean.copy(rank = it)) }, m, placeholder = "나의 순위", keyboardType = KeyboardType.Number) },
+        { m -> FormTextField(bean.rank, { onChange(bean.copy(rank = it)) }, m, placeholder = "나의 순위", keyboardType = KeyboardType.Number, inputFilter = InputFilters::decimal) },
     )
 }
 

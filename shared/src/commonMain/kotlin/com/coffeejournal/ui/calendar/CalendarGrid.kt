@@ -12,6 +12,7 @@ import com.coffeejournal.domain.rules.DdayRules
 import com.coffeejournal.domain.rules.Packages
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 import kotlinx.datetime.number
 
 /** Calendar filter values (web calFilter): 전체 or one of the record categories. */
@@ -23,7 +24,7 @@ internal object CalFilter {
     val all = listOf(ALL, CUPPING, CAFE, BEAN)
 }
 
-internal data class YearMonth(val year: Int, val month: Int) {
+data class YearMonth(val year: Int, val month: Int) {
     val label: String get() = "${year}년 ${month}월"
     val first: LocalDate get() = LocalDate(year, month, 1)
     val nextFirst: LocalDate get() = if (month == 12) LocalDate(year + 1, 1, 1) else LocalDate(year, month + 1, 1)
@@ -39,7 +40,7 @@ internal data class YearMonth(val year: Int, val month: Int) {
 }
 
 /** Everything one calendar square needs to draw itself (web renderCalendar per-day block). */
-internal data class DayCell(
+data class DayCell(
     val date: LocalDate,
     val entries: List<Entry>,
     val blends: List<Blend>,
@@ -61,7 +62,7 @@ internal data class DayCell(
     val opensDirectly: Boolean get() = entries.size == 1 && blends.isEmpty()
 }
 
-internal data class MonthGrid(
+data class MonthGrid(
     val yearMonth: YearMonth,
     /** Empty squares before the 1st so that Sunday is the first column. */
     val leadingBlanks: Int,
@@ -105,6 +106,11 @@ internal object CalendarGrid {
         return MonthGrid(yearMonth, Dates.sundayFirstIndex(yearMonth.first.dayOfWeek), cells, visible)
     }
 
+    /**
+     * One square. The bean ranges are matched by local calendar day in [zone] ([CalendarRanges.rangesOn]), not by
+     * "start of day + 24 h": a 23- or 25-hour day at a daylight-saving change would otherwise lose a record made in
+     * its last hour, or pick up one made just after midnight.
+     */
     fun buildCell(
         date: LocalDate,
         dayEntries: List<Entry>,
@@ -112,14 +118,13 @@ internal object CalendarGrid {
         ranges: List<BeanRange>,
         ddayStart: LocalDate?,
         today: LocalDate,
+        zone: TimeZone = Dates.systemZone,
     ): DayCell {
-        val dayStart = Dates.startOfDayMillis(date)
-        val dayEnd = dayStart + Dates.DAY_MS - 1
         // several ranges may overlap one day; the web draws only the first (earliest) one
-        val range = ranges.firstOrNull { dayStart <= it.end && dayEnd >= it.start }
+        val range = CalendarRanges.rangesOn(ranges, date, zone).firstOrNull()
         val dow = date.dayOfWeek
-        val capLeft = range != null && (dayStart <= range.start || dow == DayOfWeek.SUNDAY)
-        val capRight = range != null && (dayEnd >= range.end || dow == DayOfWeek.SATURDAY)
+        val capLeft = range != null && (Dates.toLocalDate(range.start, zone) >= date || dow == DayOfWeek.SUNDAY)
+        val capRight = range != null && (Dates.toLocalDate(range.end, zone) <= date || dow == DayOfWeek.SATURDAY)
         val categories = LinkedHashSet(dayEntries.map(::category))
         if (dayBlends.isNotEmpty()) categories += Category.BEAN
         val cupCount = dayEntries.count { Packages.isBrew(it) } + dayBlends.size

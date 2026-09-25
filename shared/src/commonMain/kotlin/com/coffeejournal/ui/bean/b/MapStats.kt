@@ -138,6 +138,16 @@ object MapStats {
     }
 
     /** Visited countries per zone, most coffees first then Korean name. */
+    /**
+     * The world map's TalkBack label: which countries are coloured as tasted, and where the same information can be
+     * reached without the canvas (the country list and the producers still to try, both below the map).
+     */
+    fun mapDescription(visited: Set<String>): String {
+        val names = visited.map { en -> CoffeeCountries.byEn[en]?.ko ?: en }.sorted()
+        return if (names.isEmpty()) "커피 지도. 아직 마셔본 나라가 없어요. 커피 생산국은 지도 아래 '경험할 생산국' 목록에 있어요."
+        else "커피 지도. 마셔본 나라 ${names.size}곳: ${names.joinToString(", ")}. 나라별 기록은 지도 아래 '경험해본 산지' 목록에 있어요."
+    }
+
     fun zoneSections(byCountry: Map<String, List<BeanRecord>>): List<ZoneSection> =
         CoffeeCountries.zoneOrder.mapNotNull { zone ->
             val countries = byCountry.keys.filter { CountryLookup.zoneOf(it) == zone }

@@ -411,9 +411,18 @@ internal object FormMapper {
 
     /** Web updateStepsSummary: with a log present, 총 추출시간 always mirrors the computed value. */
     fun withStepsTime(state: FormState): FormState {
-        val steps = state.steps.map { it.toStep() }.filter { !it.isEmpty }
-        if (steps.isEmpty()) return state
-        val computed = RecipeSteps.formatSec(RecipeSteps.summary(steps).totalTimeSec) ?: return state
+        val computed = stepsTime(state) ?: return state
         return if (computed == state.time) state else state.copy(time = computed)
+    }
+
+    /**
+     * The 총 추출시간 the step log decides (web updateStepsSummary overwrites f-time on every input while the steps
+     * give a time), or null when the field is free text. The time field uses it as its input filter, so a keystroke
+     * the step log would undo is not shown either.
+     */
+    fun stepsTime(state: FormState): String? {
+        val steps = state.steps.map { it.toStep() }.filter { !it.isEmpty }
+        if (steps.isEmpty()) return null
+        return RecipeSteps.formatSec(RecipeSteps.summary(steps).totalTimeSec)
     }
 }

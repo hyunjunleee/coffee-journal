@@ -15,14 +15,20 @@ import com.coffeejournal.domain.reference.RoadmapDefaults
 import com.coffeejournal.domain.rules.CalendarRanges
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.DdayRules
+import com.coffeejournal.domain.rules.BeanRange
 import com.coffeejournal.domain.rules.Ids
+import com.coffeejournal.ui.theme.deriveOffMain
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.LocalDate
 
 /** Top chips of the tab: four calendar filters plus the study and classes views. */
@@ -48,7 +54,7 @@ internal object ListScope {
     val all = listOf(MONTH, ALL)
 }
 
-internal data class CalendarControls(
+data class CalendarControls(
     val yearMonth: YearMonth,
     val tab: String = CalTabs.ALL,
     val filter: String = CalFilter.ALL,
@@ -61,7 +67,7 @@ internal data class CalendarControls(
     val selectedDate: LocalDate? = null,
 )
 
-internal data class CalendarUiState(
+data class CalendarUiState(
     val controls: CalendarControls,
     val grid: MonthGrid,
     val todayBean: String?,
@@ -80,29 +86,50 @@ internal data class CalendarUiState(
     val filter: String get() = controls.filter
 }
 
+/**
+ * The 커피 달력 tab. The month grid, ranges and lists are derived off the main thread with the newest input winning
+ * (gap #10); the date comes from [today], which moves on at midnight, so the today cell and the D-day follow it
+ * while the tab stays open (gap #14). Roadmap edits are read-modify-write of a whole phase; they run one at a time
+ * and re-read the phase inside the lock, so rapid taps never undo each other (gap #11).
+ */
 class CalendarViewModel(
     entries: EntryRepository,
     blends: BlendRepository,
     private val roadmapRepo: RoadmapRepository,
     settings: SettingsRepository,
+    today: Flow<LocalDate> = Dates.todayFlow(),
 ) : ViewModel() {
     private val controls = MutableStateFlow(CalendarControls(YearMonth.of(Dates.today())))
 
-    internal val state: StateFlow<CalendarUiState> = combine(
-        entries.observeAll(), blends.observeAll(), roadmapRepo.observeAll(), settings.observeDdayStart(), controls,
-    ) { e, b, r, d, c -> build(e, b, r, d, c).copy(entryCount = e.size) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), build(emptyList(), emptyList(), emptyList(), null, controls.value))
+    /** Records oldest first with their bean ranges; recomputed only when the records change. */
+    private class Prepared(val entries: List<Entry>, val ranges: List<BeanRange>)
+    private class Inputs(val prepared: Prepared, val blends: List<Blend>, val phases: List<RoadmapPhase>, val ddayStart: LocalDate?, val controls: CalendarControls, val today: LocalDate)
 
-    init {
-        viewModelScope.launch { roadmapRepo.ensureSeeded() }
+    // the repository lists newest first; the web walks its records oldest first (day panel, dots, legend names)
+    private val prepared = entries.observeAll().deriveOffMain { newestFirst ->
+        val sorted = newestFirst.sortedBy { it.createdAt }
+        Prepared(sorted, CalendarRanges.compute(sorted))
     }
 
-    private fun build(newestFirst: List<Entry>, blends: List<Blend>, phases: List<RoadmapPhase>, ddayStart: LocalDate?, c: CalendarControls): CalendarUiState {
-        val today = Dates.today()
-        // the repository lists newest first; the web walks its records oldest first (day panel, dots, legend names)
-        val entries = newestFirst.sortedBy { it.createdAt }
-        val ranges = CalendarRanges.compute(entries)
-        val grid = CalendarGrid.build(c.yearMonth, entries, blends, c.filter, ddayStart, today, ranges)
+    val state: StateFlow<CalendarUiState> = combine(
+        prepared, blends.observeAll(), roadmapRepo.observeAll(), settings.observeDdayStart(),
+        combine(controls, today.distinctUntilChanged()) { c, d -> c to d },
+    ) { p, b, r, d, (c, day) -> Inputs(p, b, r, d, c, day) }
+        .deriveOffMain { build(it.prepared, it.blends, it.phases, it.ddayStart, it.controls, it.today, entryCount = it.prepared.entries.size) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), build(Prepared(emptyList(), emptyList()), emptyList(), emptyList(), null, controls.value, Dates.today(), entryCount = null))
+
+    /** One roadmap write at a time (see [updatePhase]). */
+    private val roadmapLock = Mutex()
+
+    init {
+        viewModelScope.launch { roadmapLock.withLock { roadmapRepo.ensureSeeded() } }
+    }
+
+    private fun build(
+        p: Prepared, blends: List<Blend>, phases: List<RoadmapPhase>, ddayStart: LocalDate?, c: CalendarControls, today: LocalDate, entryCount: Int?,
+    ): CalendarUiState {
+        val entries = p.entries
+        val grid = CalendarGrid.build(c.yearMonth, entries, blends, c.filter, ddayStart, today, p.ranges)
         val ddayCount = ddayStart?.let { DdayRules.dayCount(it, today) }
         val current = CalendarGrid.currentPhase(phases, ddayCount)
         val open = if (c.openTouched) c.openPhaseId else current?.id
@@ -118,6 +145,7 @@ class CalendarViewModel(
             openPhaseId = open,
             reviews = CalendarGrid.cuppingReviews(entries),
             selectedCell = c.selectedDate?.let { date -> grid.cells.firstOrNull { it.date == date }?.takeIf { it.hasContent } },
+            entryCount = entryCount,
         )
     }
 
@@ -144,10 +172,17 @@ class CalendarViewModel(
         c.copy(openTouched = true, openPhaseId = if (currentlyOpen == phaseId) null else phaseId)
     }
 
+    /**
+     * Read-modify-write of one phase. Every roadmap write takes [roadmapLock] and reads the phase inside it, so two
+     * quick taps (toggle one item, then another; add one, toggle another) both land instead of the second one writing
+     * back the phase as it was before the first.
+     */
     private fun updatePhase(phaseId: String, transform: (RoadmapPhase) -> RoadmapPhase) {
         viewModelScope.launch {
-            val phase = roadmapRepo.getAll().firstOrNull { it.id == phaseId } ?: return@launch
-            roadmapRepo.upsert(transform(phase))
+            roadmapLock.withLock {
+                val phase = roadmapRepo.getAll().firstOrNull { it.id == phaseId } ?: return@withLock
+                roadmapRepo.upsert(transform(phase))
+            }
         }
     }
 
@@ -174,9 +209,11 @@ class CalendarViewModel(
     fun deletePhase(phaseId: String) {
         if (phaseId == RoadmapDefaults.STARTER_ID) return
         viewModelScope.launch {
-            val all = roadmapRepo.getAll()
-            if (all.none { it.id == phaseId }) return@launch
-            roadmapRepo.replaceAll(all.filter { it.id != phaseId })
+            roadmapLock.withLock {
+                val all = roadmapRepo.getAll()
+                if (all.none { it.id == phaseId }) return@withLock
+                roadmapRepo.replaceAll(all.filter { it.id != phaseId })
+            }
             controls.update { c -> if (c.openPhaseId == phaseId) c.copy(openTouched = false, openPhaseId = null) else c }
         }
     }
@@ -186,14 +223,16 @@ class CalendarViewModel(
         val cleanTitle = title.trim()
         if (cleanTitle.isEmpty()) return
         viewModelScope.launch {
-            val all = roadmapRepo.getAll()
             val id = Ids.newCustomId("phase-")
-            roadmapRepo.upsert(
-                RoadmapPhase(
-                    id = id, position = (all.maxOfOrNull { it.position } ?: -1) + 1, title = cleanTitle, range = range.trim(),
-                    dayStart = minOf(dayStart, dayEnd), dayEnd = maxOf(dayStart, dayEnd),
+            roadmapLock.withLock {
+                val all = roadmapRepo.getAll()
+                roadmapRepo.upsert(
+                    RoadmapPhase(
+                        id = id, position = (all.maxOfOrNull { it.position } ?: -1) + 1, title = cleanTitle, range = range.trim(),
+                        dayStart = minOf(dayStart, dayEnd), dayEnd = maxOf(dayStart, dayEnd),
+                    )
                 )
-            )
+            }
             controls.update { it.copy(openTouched = true, openPhaseId = id) }
         }
     }

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -42,6 +43,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -53,12 +57,18 @@ import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GlyphButton
 import com.coffeejournal.ui.theme.HintText
+import com.coffeejournal.ui.theme.ImeSafeText
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.fontScaled
+import com.coffeejournal.ui.theme.rememberImeSafeText
+import com.coffeejournal.ui.theme.shownWhen
 import kotlinx.coroutines.delay
 
 /**
  * Square outlined field like [com.coffeejournal.ui.theme.AppTextField], plus focus tracking, a focus requester,
- * an error line and a hint. (Candidate for promotion into the theme.)
+ * an error line and a hint. (Candidate for promotion into the theme.) Typing is IME-safe like AppTextField: the field
+ * keeps its own text, cursor and composition while the owner's echo catches up, and [inputFilter] accepts, rewrites or
+ * rejects each edit before it is shown (see [ImeSafeText.onEdit]).
  */
 @Composable
 internal fun FormTextField(
@@ -75,19 +85,24 @@ internal fun FormTextField(
     error: String? = null,
     hint: String? = null,
     trailing: (@Composable () -> Unit)? = null,
+    inputFilter: ((String) -> String?)? = null,
 ) {
+    val sync = rememberImeSafeText(value)
     // onFocusChanged fires once on attach with "not focused"; only report a blur after a real focus.
     var hadFocus by remember { mutableStateOf(false) }
+    var focused by remember { mutableStateOf(false) }
     Column(modifier) {
         if (label != null) FieldLabel(label)
         var fieldModifier: Modifier = Modifier.fillMaxWidth()
         if (focusRequester != null) fieldModifier = fieldModifier.focusRequester(focusRequester)
-        if (onFocusChanged != null) fieldModifier = fieldModifier.onFocusChanged { st ->
+        fieldModifier = fieldModifier.onFocusChanged { st ->
+            focused = st.isFocused
+            if (onFocusChanged == null) return@onFocusChanged
             if (st.isFocused) { hadFocus = true; onFocusChanged(true) } else if (hadFocus) { hadFocus = false; onFocusChanged(false) }
         }
         OutlinedTextField(
-            value = value,
-            onValueChange = onValueChange,
+            value = sync.value.shownWhen(focused),
+            onValueChange = { edited -> sync.onEdit(edited, inputFilter)?.let(onValueChange) },
             modifier = fieldModifier,
             // a wrapping placeholder would make a one-line field taller than its neighbours in a two-column row
             placeholder = {
@@ -134,6 +149,7 @@ internal fun AutocompleteField(
     error: String? = null,
     hint: String? = null,
     maxSuggestions: Int = 6,
+    inputFilter: ((String) -> String?)? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     var showList by remember { mutableStateOf(false) }
@@ -149,7 +165,7 @@ internal fun AutocompleteField(
     Column(modifier) {
         FormTextField(
             value = value, onValueChange = onValueChange, label = label, placeholder = placeholder, keyboardType = keyboardType,
-            focusRequester = focusRequester, error = error, hint = hint,
+            focusRequester = focusRequester, error = error, hint = hint, inputFilter = inputFilter,
             onFocusChanged = { f -> focused = f; onFocusChanged?.invoke(f) },
         )
         if (showList && matches.isNotEmpty()) {
@@ -166,7 +182,7 @@ internal fun AutocompleteField(
     }
 }
 
-/** Small bordered input for dense rows (steps, blend components). */
+/** Small bordered input for dense rows (steps, blend components); IME-safe with an optional [inputFilter] like [FormTextField]. */
 @Composable
 internal fun CompactField(
     value: String,
@@ -176,13 +192,17 @@ internal fun CompactField(
     keyboardType: KeyboardType = KeyboardType.Text,
     focusRequester: FocusRequester? = null,
     textAlign: TextAlign = TextAlign.Start,
+    inputFilter: ((String) -> String?)? = null,
 ) {
+    val sync = rememberImeSafeText(value)
+    var focused by remember { mutableStateOf(false) }
     // the box stays 36 dp tall; the surrounding layout reserves a 48 dp touch target
     var m = modifier.minimumInteractiveComponentSize().heightIn(min = 36.dp).background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
     if (focusRequester != null) m = m.focusRequester(focusRequester)
+    m = m.onFocusChanged { focused = it.isFocused }
     BasicTextField(
-        value = value,
-        onValueChange = onValueChange,
+        value = sync.value.shownWhen(focused),
+        onValueChange = { edited -> sync.onEdit(edited, inputFilter)?.let(onValueChange) },
         modifier = m,
         singleLine = true,
         textStyle = AppType.small.copy(color = Ink.text, textAlign = textAlign),
@@ -190,7 +210,7 @@ internal fun CompactField(
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Next),
         decorationBox = { inner ->
             Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), contentAlignment = if (textAlign == TextAlign.Center) Alignment.Center else Alignment.CenterStart) {
-                if (value.isEmpty()) Text(placeholder, style = AppType.small.copy(color = Ink.textFaint), maxLines = 1)
+                if (sync.value.text.isEmpty()) Text(placeholder, style = AppType.small.copy(color = Ink.textFaint), maxLines = 1)
                 inner()
             }
         },
@@ -226,7 +246,8 @@ internal fun SliderRow(
 ) {
     val stepsCount = (((max - min) / step) - 1).toInt().coerceAtLeast(0)
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text(label, style = if (secondary) AppType.faint else AppType.small, modifier = Modifier.width(112.dp))
+        // the label and readout columns grow with the font, so "Sweetness" and "10.00" stay whole
+        Text(label, style = if (secondary) AppType.faint else AppType.small, modifier = Modifier.width(112.dp.fontScaled()))
         Slider(
             value = (value ?: min).toFloat(),
             onValueChange = { v -> onChange(snap(v.toDouble(), min, step)) },
@@ -238,7 +259,7 @@ internal fun SliderRow(
                 activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent,
             ),
         )
-        Text(readout, style = AppType.monoValue, modifier = Modifier.width(44.dp), textAlign = TextAlign.End)
+        Text(readout, style = AppType.monoValue, softWrap = false, modifier = Modifier.widthIn(min = 44.dp), textAlign = TextAlign.End)
     }
 }
 
@@ -252,7 +273,13 @@ private fun snap(v: Double, min: Double, step: Double): Double {
 @Composable
 internal fun Collapsible(title: String, open: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier, body: @Composable ColumnScope.() -> Unit) {
     Column(modifier.fillMaxWidth().border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)) {
-        Row(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(horizontal = 12.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(
+            Modifier.fillMaxWidth()
+                .clickable(onClickLabel = if (open) "접기" else "펼치기", role = Role.Button, onClick = onToggle)
+                .semantics { stateDescription = if (open) "펼쳐짐" else "접힘" }
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             Text(title, style = AppType.body, modifier = Modifier.weight(1f))
             Icon(if (open) AppIcons.chevronDown else AppIcons.chevronRight, contentDescription = null, tint = Ink.textMuted, modifier = Modifier.size(16.dp))
         }

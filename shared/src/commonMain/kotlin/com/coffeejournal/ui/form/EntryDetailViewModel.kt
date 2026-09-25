@@ -13,6 +13,8 @@ import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.ui.extract.ExtractGrouping
+import com.coffeejournal.ui.theme.deriveOffMain
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -43,9 +45,10 @@ class EntryDetailViewModel(
         val bestKeys: List<String> = emptyList(),
     )
 
-    private var deleting = false
+    @Volatile private var deleting = false
 
-    val state: StateFlow<UiState> = combine(entries.observeAll(), beanMeta.observeBest()) { all, best ->
+    // the sibling scan normalises every record's name, so it runs off the main thread (gap #10)
+    val state: StateFlow<UiState> = combine(entries.observeAll(), beanMeta.observeBest()) { all, best -> all to best }.deriveOffMain { (all, best) ->
         val en = all.firstOrNull { it.id == entryId }
         if (en == null) UiState(loading = deleting, entry = null)
         else {

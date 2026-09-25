@@ -82,6 +82,8 @@ fun BeanNotesView(nav: NavHostController, data: BeanData) {
                         Chip(
                             text = "${info.label} ${info.beanCount}",
                             onClick = { nav.navigate(Route.NoteDetail(kind = kind, noteKey = info.key)) },
+                            // opens the note's page: a button, not an on/off choice
+                            toggle = false,
                         )
                     }
                 }

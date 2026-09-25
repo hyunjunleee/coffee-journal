@@ -27,12 +27,13 @@ import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import coil3.compose.AsyncImage
 import com.coffeejournal.domain.model.MiscStatus
-import com.coffeejournal.ui.form.imeOverlapPadding
+import com.coffeejournal.ui.theme.imeOverlapPadding
 import com.coffeejournal.ui.platform.rememberCameraCapture
 import com.coffeejournal.ui.platform.rememberImagePicker
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
+import com.coffeejournal.ui.theme.BlockBackWhile
 import com.coffeejournal.ui.theme.GlyphButton
 import com.coffeejournal.ui.theme.DateField
 import com.coffeejournal.ui.theme.Dimens
@@ -55,8 +56,10 @@ fun MiscFormScreen(nav: NavHostController, type: String, itemId: String?) {
     // one pop per back / 취소 even when tapped again during the exit transition
     val leave = dropUnlessResumed { nav.popBackStack() }
 
+    val saving = state.saving && !state.done
+    BlockBackWhile(saving)
     Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar(if (state.isEdit) "$title 수정" else "$title 추가", onBack = leave)
+        ScreenTitleBar(if (state.isEdit) "$title 수정" else "$title 추가", onBack = { if (!saving) leave() })
         Column(
             Modifier.fillMaxSize().imeOverlapPadding().verticalScroll(rememberScrollState())
                 .padding(horizontal = Dimens.gutter).padding(top = 14.dp, bottom = 96.dp),
@@ -86,7 +89,7 @@ fun MiscFormScreen(nav: NavHostController, type: String, itemId: String?) {
             Spacer(Modifier.height(22.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton(if (state.isEdit) "수정 저장" else "저장", enabled = state.canSave, onClick = vm::save)
-                GhostButton("취소", onClick = leave)
+                GhostButton("취소", onClick = leave, enabled = !saving)
             }
         }
     }

@@ -61,12 +61,7 @@ object BlendSources {
      * Web `<input type="number" step="0.1">` for grams: digits with at most one decimal point (a comma counts as the
      * point). Returns the text to keep, or null when [typed] is not a number being typed and the field keeps its value.
      */
-    fun gramsInput(typed: String): String? {
-        val t = typed.trim().replace(',', '.')
-        return if (GRAMS_TYPING.matches(t)) t else null
-    }
-
-    private val GRAMS_TYPING = Regex("\\d*\\.?\\d*")
+    fun gramsInput(typed: String): String? = com.coffeejournal.ui.theme.InputFilters.decimal(typed)
 
     fun customTitle(blend: Blend): String =
         blend.name.trim().ifEmpty { blend.beans.joinToString(" + ") { it.name }.ifEmpty { "이름 없는 블렌드" } }

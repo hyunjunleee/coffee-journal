@@ -1,14 +1,13 @@
 package com.coffeejournal.ui.form.sections
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -31,6 +30,7 @@ import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.PrimaryButton
 
 /** "레시피로 시작": 챔피언 / 카페 / 내 레시피 panels (web #form-recipe-launchers). */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun RecipeLauncherSection(
     open: RecipeLauncher?,
@@ -45,7 +45,8 @@ internal fun RecipeLauncherSection(
     Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
         Text("레시피로 시작", style = AppType.sectionLabel)
         Spacer(Modifier.height(8.dp))
-        Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // wraps instead of scrolling, so all three stay in sight on a narrow screen or with a large font
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             GhostButton("🏆 챔피언 레시피", small = true, onClick = { onToggle(RecipeLauncher.CHAMPIONS) })
             GhostButton("☕ 카페 레시피", small = true, onClick = { onToggle(RecipeLauncher.CAFE) })
             GhostButton("⭐ 내 레시피", small = true, onClick = { onToggle(RecipeLauncher.MINE) })

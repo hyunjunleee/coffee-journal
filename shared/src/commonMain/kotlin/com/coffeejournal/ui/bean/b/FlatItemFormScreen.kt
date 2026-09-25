@@ -19,8 +19,9 @@ import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.MiscStatus
 import com.coffeejournal.domain.model.Scope
-import com.coffeejournal.ui.form.imeOverlapPadding
+import com.coffeejournal.ui.theme.imeOverlapPadding
 import com.coffeejournal.ui.theme.AppTextField
+import com.coffeejournal.ui.theme.BlockBackWhile
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GhostButton
@@ -39,8 +40,9 @@ fun FlatItemFormScreen(nav: NavHostController, type: String, itemId: String?) {
     val spec = vm.spec
     // one pop per back / 취소 / successful save, even when tapped again during the exit transition
     val leave = dropUnlessResumed { nav.popBackStack() }
+    BlockBackWhile(s.saving)
     Column(Modifier.fillMaxSize().background(Ink.bg)) {
-        ScreenTitleBar("${spec.label} ${if (itemId == null) "추가" else "수정"}", onBack = leave)
+        ScreenTitleBar("${spec.label} ${if (itemId == null) "추가" else "수정"}", onBack = { if (!s.saving) leave() })
         Column(Modifier.weight(1f).imeOverlapPadding().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             Spacer(Modifier.height(16.dp))
             AppTextField(value = s.name, onValueChange = vm::setName, label = "이름", placeholder = spec.namePlaceholder, enabled = s.loaded)
@@ -60,7 +62,7 @@ fun FlatItemFormScreen(nav: NavHostController, type: String, itemId: String?) {
             AppTextField(value = s.notes, onValueChange = vm::setNotes, label = "메모 (선택)", placeholder = spec.notesPlaceholder, singleLine = false, minLines = 3)
             Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryButton(if (itemId == null) "저장" else "수정 저장", enabled = s.loaded && !s.saving && s.name.isNotBlank(), onClick = { vm.save(leave) })
-                GhostButton("취소", onClick = leave)
+                GhostButton("취소", onClick = leave, enabled = !s.saving)
             }
             Spacer(Modifier.height(96.dp))
         }

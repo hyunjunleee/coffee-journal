@@ -11,7 +11,7 @@ import com.coffeejournal.domain.model.CoffeeClass
 import com.coffeejournal.domain.model.Video
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
-import com.coffeejournal.ui.form.SavedFormState
+import com.coffeejournal.ui.theme.SavedFormState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow

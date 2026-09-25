@@ -109,7 +109,8 @@ private fun NotesSuggestRow(expected: List<String>, actual: List<String>, onAdd:
         Text("봉투 노트에서 추천:", style = AppType.faint, modifier = Modifier.padding(top = 6.dp))
         expected.forEach { note ->
             val added = note.lowercase() in lower
-            Chip(text = note, prefix = if (added) "✓ " else "+ ", selected = added, onClick = if (added) null else ({ onAdd(note) }))
+            // "+ 오렌지" adds the note (a button); once added it is only a ✓ mark
+            Chip(text = note, prefix = if (added) "✓ " else "+ ", selected = added, onClick = if (added) null else ({ onAdd(note) }), toggle = false)
         }
     }
 }

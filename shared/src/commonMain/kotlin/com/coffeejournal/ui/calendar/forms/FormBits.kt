@@ -16,30 +16,32 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.coffeejournal.ui.form.imeOverlapPadding
+import com.coffeejournal.ui.theme.imeOverlapPadding
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.BlockBackWhile
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
 
 /**
  * Title bar, scrolling fields, then [저장][취소] (web .form-actions). The scroll area ends at the keyboard, so the
- * focused field stays above it; 저장 is disabled while [saving].
+ * focused field stays above it; while [saving], 저장 is disabled and back (system, title bar, 취소) waits.
  */
 @Composable
 internal fun FormScaffold(title: String, onBack: () -> Unit, onSave: () -> Unit, saving: Boolean, content: @Composable ColumnScope.() -> Unit) {
+    BlockBackWhile(saving)
     Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar(title = title, onBack = onBack)
+        ScreenTitleBar(title = title, onBack = { if (!saving) onBack() })
         Column(Modifier.weight(1f).imeOverlapPadding().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter).padding(top = 12.dp)) {
             content()
             Spacer(Modifier.height(24.dp))
             Row {
                 PrimaryButton("저장", onClick = onSave, enabled = !saving, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                GhostButton("취소", onClick = onBack, modifier = Modifier.weight(1f))
+                GhostButton("취소", onClick = onBack, enabled = !saving, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(96.dp))
         }

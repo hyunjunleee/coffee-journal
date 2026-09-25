@@ -25,6 +25,8 @@ import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.PantryRules
+import com.coffeejournal.ui.theme.deriveOffMain
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -87,14 +89,19 @@ class RecordFormViewModel(
     val events: SharedFlow<FormEvent> = _events
 
     private var existing: Entry? = null
-    private var allEntries: List<Entry> = emptyList()
+    @Volatile private var allEntries: List<Entry> = emptyList()
 
+    /** Built off the main thread (gap #10): it flattens every record. */
     val suggestions: StateFlow<FormSuggestions> = combine(
         entries.observeAll(), pantry.observeAll(), misc.observeAll(), myRecipes.observeAll(),
-    ) { ens, items, miscItems, recipes ->
-        allEntries = ens
-        buildSuggestions(ens, items, miscItems, recipes)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FormSuggestions())
+    ) { ens, items, miscItems, recipes -> SuggestionSources(ens, items, miscItems, recipes) }
+        .deriveOffMain { src ->
+            allEntries = src.entries
+            buildSuggestions(src.entries, src.pantry, src.misc, src.recipes)
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), FormSuggestions())
+
+    private class SuggestionSources(val entries: List<Entry>, val pantry: List<PantryItem>, val misc: List<MiscItem>, val recipes: List<MyRecipe>)
 
     init {
         if (savedState != null) {

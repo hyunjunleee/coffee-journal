@@ -7,6 +7,7 @@ import com.coffeejournal.data.repo.EntryRepository
 import com.coffeejournal.data.repo.MiscRepository
 import com.coffeejournal.data.repo.PantryRepository
 import com.coffeejournal.domain.rules.BeanRecords
+import com.coffeejournal.ui.theme.deriveOffMain
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -41,18 +42,12 @@ class BeanViewModel(
     blends: BlendRepository,
     pantry: PantryRepository,
 ) : ViewModel() {
+    /** Flattened off the main thread, newest input winning (gap #10). */
     val data: StateFlow<BeanData> = combine(
         entries.observeAll(), misc.observeAll(), blends.observeAll(), pantry.observeAll(),
-    ) { entryList, miscItems, blendList, pantryItems ->
-        BeanData(
-            loaded = true,
-            entries = entryList,
-            records = BeanRecords.flatten(entryList),
-            miscItems = miscItems,
-            blends = blendList,
-            pantry = pantryItems,
-        )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BeanData())
+    ) { entryList, miscItems, blendList, pantryItems -> BeanData(loaded = true, entries = entryList, miscItems = miscItems, blends = blendList, pantry = pantryItems) }
+        .deriveOffMain { it.copy(records = BeanRecords.flatten(it.entries)) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BeanData())
 
     private val _selectedView = MutableStateFlow(BeanViews.DEFAULT)
     val selectedView: StateFlow<String> = _selectedView.asStateFlow()

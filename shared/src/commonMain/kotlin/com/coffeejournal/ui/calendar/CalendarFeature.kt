@@ -19,7 +19,7 @@ import org.koin.dsl.module
 /** 커피 달력 tab: calendar, study (books/videos), classes and the roadmap, plus the three study forms. */
 object CalendarFeature : Feature {
     override val module = module {
-        viewModelOf(::CalendarViewModel)
+        viewModel { CalendarViewModel(get(), get(), get(), get()) }
         viewModelOf(::StudyViewModel)
         viewModelOf(::ClassesViewModel)
         // the last get() is the destination's SavedStateHandle (typed input survives process death)

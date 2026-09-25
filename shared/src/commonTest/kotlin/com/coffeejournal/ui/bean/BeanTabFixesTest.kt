@@ -1,5 +1,6 @@
 package com.coffeejournal.ui.bean
 
+import com.coffeejournal.ui.theme.SubTabScroll
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

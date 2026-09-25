@@ -25,7 +25,9 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
@@ -41,8 +43,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
@@ -60,14 +65,26 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontWeight
+import kotlin.math.roundToInt
 
 /** Small mono uppercase-ish label above a group of fields (web .section-label). */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun SectionLabel(text: String, modifier: Modifier = Modifier, hint: String? = null) {
-    Row(modifier.padding(top = 18.dp, bottom = 8.dp), verticalAlignment = Alignment.Bottom) {
+    // the hint moves under the label when both do not fit on one line (narrow screens, large fonts)
+    FlowRow(modifier.padding(top = 18.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), itemVerticalAlignment = Alignment.Bottom) {
         Text(text, style = AppType.sectionLabel)
-        if (hint != null) { Spacer(Modifier.width(6.dp)); Text(hint, style = AppType.faint) }
+        if (hint != null) Text(hint, style = AppType.faint)
     }
 }
 
@@ -115,7 +132,11 @@ fun GhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
     }
 }
 
-/** Underlined chip row used for sub tabs (web .cal-subtabs). */
+/**
+ * Chip row used for sub tabs (web .cal-subtabs). When [scrollable], the row scrolls so the selected chip is on
+ * screen: at once on first composition (a default chip may sit past the edge), animated after a tap or when the
+ * selection changes from outside. [special] chips keep an accent outline (web .cal-subtab-special).
+ */
 @Composable
 fun SubTabs(
     items: List<String>,
@@ -125,28 +146,78 @@ fun SubTabs(
     dots: Map<String, Color> = emptyMap(),
     labels: Map<String, String> = emptyMap(),
     scrollable: Boolean = true,
+    special: Set<String> = emptySet(),
 ) {
-    val rowModifier = if (scrollable) modifier.horizontalScroll(rememberScrollState()) else modifier
+    val scroll = rememberScrollState()
+    val chips = remember { mutableStateMapOf<String, IntRange>() }
+    var viewport by remember { mutableIntStateOf(0) }
+    val peek = with(LocalDensity.current) { 28.dp.roundToPx() }
+    val shown = remember { SubTabFirstScroll() }
+    val bounds = chips[selected]
+    if (scrollable) LaunchedEffect(selected, bounds, viewport) {
+        if (bounds == null || viewport == 0) return@LaunchedEffect
+        val target = SubTabScroll.target(bounds.first, bounds.last, viewport, scroll.value, scroll.maxValue, peek)
+        if (target != scroll.value) { if (shown.done) scroll.animateScrollTo(target) else scroll.scrollTo(target) }
+        shown.done = true
+    }
+    val rowModifier = if (scrollable) modifier.onSizeChanged { viewport = it.width }.horizontalScroll(scroll) else modifier
     // TalkBack reads each item as a tab with its selected state (design §8)
     Row(rowModifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items.forEach { item ->
             val on = item == selected
+            val accent = item in special
+            val border = when {
+                on -> BorderStroke(Dimens.hairline, Ink.accent)
+                accent -> BorderStroke(1.5.dp, Ink.accent)
+                else -> BorderStroke(Dimens.hairline, Ink.line)
+            }
             Row(
                 Modifier
-                    .border(BorderStroke(Dimens.hairline, if (on) Ink.accent else Ink.line), RectangleShape)
+                    .onPlaced { c -> val x = c.positionInParent().x.roundToInt(); chips[item] = x..(x + c.size.width) }
+                    .border(border, RectangleShape)
                     .background(if (on) Ink.accent else Color.Transparent)
                     .selectable(selected = on, role = Role.Tab, onClick = { onSelect(item) })
                     .padding(horizontal = 11.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 dots[item]?.let { c -> Box(Modifier.size(7.dp).background(c)); Spacer(Modifier.width(6.dp)) }
-                Text(labels[item] ?: item, style = AppType.small.copy(color = if (on) Ink.bg else Ink.textMuted))
+                Text(
+                    labels[item] ?: item,
+                    style = AppType.small.copy(
+                        color = when { on -> Ink.bg; accent -> Ink.accent; else -> Ink.textMuted },
+                        fontWeight = if (accent) FontWeight.SemiBold else AppType.small.fontWeight,
+                    ),
+                )
             }
         }
     }
 }
 
-/** Square segmented control; tapping the active option again clears it when [allowClear]. */
+private class SubTabFirstScroll { var done = false }
+
+/** Where a sub-tab row scrolls to so the selected chip is fully visible. */
+object SubTabScroll {
+    /**
+     * The scroll value that shows the chip spanning [start]..[end] (row content px) in a [viewport] px wide window,
+     * leaving [peek] px of the neighbouring chip visible so the row still reads as scrollable. A chip already fully
+     * visible keeps the current scroll.
+     */
+    fun target(start: Int, end: Int, viewport: Int, current: Int, max: Int, peek: Int): Int {
+        val target = when {
+            start < current -> start - peek
+            end > current + viewport -> end - viewport + peek
+            else -> current
+        }
+        return target.coerceIn(0, maxOf(0, max))
+    }
+}
+
+/**
+ * Square segmented control; tapping the active option again clears it when [allowClear]. Laid out like the web's
+ * `.seg` (options `flex: 1` with `white-space: nowrap`, the row `flex-wrap: wrap`): the options share the width equally
+ * while every label fits on one line, a longer label keeps its own width, and when they cannot all fit (a narrow
+ * screen, a large font) the options continue on another row instead of breaking a word such as "미디엄 라이트".
+ */
 @Composable
 fun Seg(
     options: List<String>,
@@ -157,22 +228,88 @@ fun Seg(
     labels: Map<String, String> = emptyMap(),
 ) {
     // one choice out of several: radio buttons with a selected state for TalkBack (design §8)
-    Row(modifier.fillMaxWidth().border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape).selectableGroup()) {
-        options.forEachIndexed { i, opt ->
-            val on = opt == value
-            Box(
-                Modifier
-                    .weight(1f)
-                    .heightIn(min = 40.dp)
-                    .background(if (on) Ink.accent else Ink.surface)
-                    .selectable(selected = on, role = Role.RadioButton, onClick = { onChange(if (on && allowClear) "" else opt) })
-                    .padding(horizontal = 6.dp, vertical = 9.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(labels[opt] ?: opt, style = AppType.small.copy(color = if (on) Ink.bg else Ink.text), textAlign = TextAlign.Center)
+    Layout(
+        modifier = modifier.fillMaxWidth().border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape).selectableGroup(),
+        content = {
+            options.forEach { opt ->
+                val on = opt == value
+                Box(
+                    Modifier
+                        .heightIn(min = 40.dp)
+                        .background(if (on) Ink.accent else Ink.surface)
+                        // separators: every option draws its left and top edge; on the outer edges they fall on the border
+                        .drawBehind {
+                            val t = Dimens.hairline.toPx()
+                            drawRect(Ink.line, size = androidx.compose.ui.geometry.Size(t, size.height))
+                            drawRect(Ink.line, size = androidx.compose.ui.geometry.Size(size.width, t))
+                        }
+                        .selectable(selected = on, role = Role.RadioButton, onClick = { onChange(if (on && allowClear) "" else opt) })
+                        .padding(horizontal = 6.dp, vertical = 9.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(labels[opt] ?: opt, style = AppType.small.copy(color = if (on) Ink.bg else Ink.text), textAlign = TextAlign.Center)
+                }
             }
-            if (i < options.lastIndex) Box(Modifier.width(Dimens.hairline).heightIn(min = 40.dp).background(Ink.line))
+        },
+    ) { measurables, constraints ->
+        val oneLine = measurables.map { it.maxIntrinsicWidth(Constraints.Infinity) }
+        val total = if (constraints.hasBoundedWidth) constraints.maxWidth else oneLine.sum()
+        val rows = SegLayout.rows(oneLine, total)
+        val widths = IntArray(measurables.size)
+        rows.forEach { row -> SegLayout.widths(row.map { oneLine[it] }, total).forEachIndexed { k, w -> widths[row[k]] = w } }
+        val heights = rows.map { row -> row.maxOf { i -> measurables[i].minIntrinsicHeight(widths[i]) } }
+        val rowOf = IntArray(measurables.size).also { r -> rows.forEachIndexed { ri, row -> row.forEach { r[it] = ri } } }
+        val placeables = measurables.mapIndexed { i, m -> m.measure(Constraints.fixed(widths[i], heights[rowOf[i]])) }
+        layout(total, heights.sum()) {
+            var y = 0
+            rows.forEachIndexed { ri, row ->
+                var x = 0
+                row.forEach { i -> placeables[i].place(x, y); x += widths[i] }
+                y += heights[ri]
+            }
         }
+    }
+}
+
+/** The web `.seg` flex layout in pixels, for [Seg]. */
+object SegLayout {
+    /** Options in order, a new row whenever the next one-line width no longer fits in [total]. */
+    fun rows(oneLine: List<Int>, total: Int): List<List<Int>> {
+        val rows = mutableListOf<MutableList<Int>>()
+        var used = 0
+        oneLine.forEachIndexed { i, w ->
+            if (rows.isEmpty() || (used + w > total && rows.last().isNotEmpty())) { rows += mutableListOf(i); used = w } else { rows.last() += i; used += w }
+        }
+        return rows
+    }
+
+    /**
+     * Widths of one row filling [total] like `flex: 1` with a one-line minimum: equal shares, except that an option
+     * wider than its share keeps its own width and the others share the rest. Always sums to [total].
+     */
+    fun widths(oneLine: List<Int>, total: Int): List<Int> {
+        val n = oneLine.size
+        if (n == 0) return emptyList()
+        val frozen = BooleanArray(n)
+        var remaining = total
+        var open = n
+        while (open > 0) {
+            val share = remaining / open
+            val wide = (0 until n).filter { !frozen[it] && oneLine[it] > share }
+            if (wide.isEmpty()) break
+            wide.forEach { frozen[it] = true; remaining -= oneLine[it]; open-- }
+        }
+        val result = IntArray(n) { if (frozen[it]) oneLine[it] else 0 }
+        if (open > 0) {
+            val share = remaining / open
+            var extra = remaining - share * open
+            for (i in 0 until n) if (!frozen[i]) { result[i] = share + if (extra > 0) 1 else 0; if (extra > 0) extra-- }
+        } else {
+            // every option is wider than an equal share: the row is exactly full or one option is wider than the row
+            val sum = result.sum()
+            if (sum > total) { val over = sum - total; result[result.indices.maxBy { result[it] }] -= over } else result[n - 1] += total - sum
+        }
+        return result.toList()
     }
 }
 
@@ -294,12 +431,35 @@ class ImeSafeText(initial: String) {
     private companion object { const val MAX_PENDING = 64 }
 }
 
+/**
+ * What a field shows: its own value while it has focus; otherwise the same text with the cursor at the start. A
+ * one-line field scrolls to its cursor even without focus, so a text too long for the box would show only its end
+ * ("…, Worka Chelbesa") after typing or when a value arrives from outside.
+ */
+fun TextFieldValue.shownWhen(focused: Boolean): TextFieldValue =
+    if (focused || (selection == TextRange.Zero && composition == null)) this else TextFieldValue(annotatedString, TextRange.Zero)
+
 /** An [ImeSafeText] for a field whose text is owned by [value]. Use it with the TextFieldValue overload of a text field. */
 @Composable
 fun rememberImeSafeText(value: String): ImeSafeText {
     val sync = remember { ImeSafeText(value) }
     sync.syncExternal(value)
     return sync
+}
+
+/** Ready-made `inputFilter`s for [AppTextField] and the form fields. */
+object InputFilters {
+    /**
+     * The web's `type=number` fields: a non-negative decimal as it is being typed ("", "10", "10.", "10.5"), a comma
+     * taken as the point. Anything else — letters, a second point, a minus, a pasted "NaN" — is rejected (null), so
+     * the field keeps its previous text.
+     */
+    fun decimal(typed: String): String? {
+        val t = typed.trim().replace(',', '.')
+        return if (DECIMAL_TYPING.matches(t)) t else null
+    }
+
+    private val DECIMAL_TYPING = Regex("\\d*\\.?\\d*")
 }
 
 /** Square outlined text field with the archive palette. Typing is IME-safe (see [ImeSafeText]). */
@@ -343,12 +503,13 @@ private fun AppTextFieldValue(
     enabled: Boolean,
     trailing: (@Composable () -> Unit)?,
 ) {
+    var focused by remember { mutableStateOf(false) }
     Column(modifier) {
         if (label != null) FieldLabel(label)
         OutlinedTextField(
-            value = value,
+            value = value.shownWhen(focused),
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
             // a wrapping placeholder would make a one-line field taller than its neighbours
             placeholder = {
                 Text(
@@ -527,20 +688,51 @@ fun GlyphButton(
     }
 }
 
+/**
+ * One line of text that shrinks (down to [minFontSize]) instead of wrapping or being cut when the space is narrow or
+ * the font scale large; for short labels whose line break would read badly ("[ 새로운 추 / 출 ]").
+ */
+@Composable
+fun FitText(text: String, style: TextStyle, modifier: Modifier = Modifier, minFontSize: TextUnit = 8.sp, textAlign: TextAlign? = null) {
+    BasicText(
+        text, modifier = modifier, style = if (textAlign != null) style.copy(textAlign = textAlign) else style,
+        maxLines = 1, softWrap = false, overflow = TextOverflow.Clip,
+        autoSize = TextAutoSize.StepBased(minFontSize = minFontSize, maxFontSize = style.fontSize, stepSize = 0.5.sp),
+    )
+}
+
+/**
+ * [this] width for text in a fixed column, grown with the font scale (at most [cap] times) so a mono value such as
+ * "0:00" or "10.00" does not break in two at large font sizes.
+ */
+@Composable
+fun Dp.fontScaled(cap: Float = 1.6f): Dp = this * LocalDensity.current.fontScale.coerceIn(1f, cap)
+
 /** Top header shared by all tabs: title, tagline and a right-hand count. */
 @Composable
 fun TopHeader(title: String, tagline: String, right: String?, modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth().padding(horizontal = Dimens.gutter).padding(top = 20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
+            // one line each, a little smaller when needed (the web drops to 20px on phones): "coffee_journ / al" was worse
             Column(Modifier.weight(1f)) {
-                Text(title, style = AppType.headerTitle)
-                Text(tagline, style = AppType.tagline)
+                FitText(title, style = AppType.headerTitle, minFontSize = 8.sp)
+                FitText(tagline, style = AppType.tagline, minFontSize = 5.sp)
             }
-            if (right != null) Text(right, style = AppType.count)
+            if (right != null) Text(right, style = AppType.count, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 8.dp))
         }
         Spacer(Modifier.height(12.dp))
         Hairline(color = Ink.text, thickness = Dimens.heavyRule)
     }
+}
+
+/**
+ * While [busy] (a form's save is running) system back does nothing, so the screen is not left halfway through the
+ * save; the screen closes itself when the save finishes. Title-bar back and 취소 should be held back the same way.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+fun BlockBackWhile(busy: Boolean) {
+    BackHandler(enabled = busy) { }
 }
 
 /** Sticky-looking screen title row used by sub screens (back arrow + title + optional action). */

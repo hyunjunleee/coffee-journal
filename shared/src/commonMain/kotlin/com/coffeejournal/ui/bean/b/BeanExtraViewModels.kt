@@ -10,6 +10,7 @@ import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.rules.BeanRecords
+import com.coffeejournal.ui.theme.deriveOffMain
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.ui.bean.BeanData
@@ -18,7 +19,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,9 +35,9 @@ class BlendsViewModel(private val blends: BlendRepository) : ViewModel() {
 
 /** Live BeanData for the stand-alone detail routes (country / roastery) that are opened outside the tab. */
 class BeanExtraDataViewModel(entries: EntryRepository, misc: MiscRepository, blends: BlendRepository) : ViewModel() {
-    val data: StateFlow<BeanData> = combine(entries.observeAll(), misc.observeAll(), blends.observeAll()) { e, m, b ->
-        BeanData(loaded = true, entries = e, records = BeanRecords.flatten(e), miscItems = m, blends = b)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BeanData())
+    val data: StateFlow<BeanData> = combine(entries.observeAll(), misc.observeAll(), blends.observeAll()) { e, m, b -> BeanData(loaded = true, entries = e, miscItems = m, blends = b) }
+        .deriveOffMain { it.copy(records = BeanRecords.flatten(it.entries)) }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BeanData())
 }
 
 /** Shared add/edit form for source / selection / farm / process misc items (web makeFlatListTab form). */
@@ -78,7 +78,8 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
         _state.update { it.copy(saving = true) }
         viewModelScope.launch {
             try {
-                val base = s.existing ?: MiscItem(id = newId, type = type, name = name, createdAt = Dates.nowMillis())
+                // the row as it is now: its favourite mark may have changed since the form was loaded (gap #11)
+                val base = s.existing?.let { misc.getById(it.id) ?: it } ?: MiscItem(id = newId, type = type, name = name, createdAt = Dates.nowMillis())
                 misc.upsert(
                     base.copy(
                         name = name, notes = s.notes.trim(),
@@ -111,7 +112,7 @@ class BlendFormViewModel(private val blendId: String?, private val blends: Blend
     private val newId = Ids.newId()
     val state: StateFlow<State> = _state
     val suggestions: StateFlow<List<String>> = entries.observeAll()
-        .map { e -> BlendSources.recentBeanNames(BeanRecords.flatten(e)) }
+        .deriveOffMain { e -> BlendSources.recentBeanNames(BeanRecords.flatten(e)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     init {

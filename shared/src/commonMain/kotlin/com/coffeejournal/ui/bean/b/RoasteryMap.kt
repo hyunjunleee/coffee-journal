@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
@@ -31,6 +32,10 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -67,12 +72,14 @@ fun RoasteryMapCard(
             Modifier.fillMaxWidth().height(300.dp)
                 .background(Brush.linearGradient(listOf(Ink.surface, Ink.surfaceRaised)))
                 .border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
-                .drawBehind { drawBlobs(domestic) },
+                .drawBehind { drawBlobs(domestic) }
+                // the drawn shape means nothing to TalkBack; the pins inside are buttons, the full list is below
+                .semantics { contentDescription = FlatItemLogic.roasteryMapDescription(domestic, model) },
         ) {
             Text(
                 if (domestic) "KOREA" else "WORLD",
                 style = AppType.count.copy(fontSize = 30.sp, letterSpacing = 0.2.em, color = Ink.textFaint.copy(alpha = 0.35f)),
-                modifier = Modifier.align(Alignment.Center),
+                modifier = Modifier.align(Alignment.Center).clearAndSetSemantics { },
             )
             PinLayer(model.pins, selected, onSelect)
         }
@@ -134,7 +141,8 @@ private fun PinLayer(pins: List<RoasteryPin>, selected: String?, onSelect: (Stri
                 Box(
                     Modifier
                         .heightIn(min = Dimens.touch)
-                        .clickable(interactionSource = press, indication = null) { onSelect(if (active) null else pin.item.name) }
+                        .selectable(selected = active, interactionSource = press, indication = null, role = Role.Button) { onSelect(if (active) null else pin.item.name) }
+                        .semantics { contentDescription = "${pin.item.name}, ${pin.count}잔" }
                         .padding(horizontal = 2.dp),
                     contentAlignment = Alignment.Center,
                 ) {

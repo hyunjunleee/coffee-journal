@@ -1,4 +1,4 @@
-package com.coffeejournal.ui.form
+package com.coffeejournal.ui.theme
 
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -1,7 +1,7 @@
 package com.coffeejournal.ui.bean.a
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
@@ -77,7 +78,8 @@ private fun HoneyDetail(breakdown: ProcessStats.Breakdown, onOpen: (String) -> U
                 Spacer(Modifier.height(6.dp))
                 groups.forEach { (sub, records) ->
                     val on = sub == selectedSub
-                    Column(Modifier.fillMaxWidth().background(if (on) Ink.accentSoft else Ink.surface).clickable { selectedSub = if (on) "" else sub }) {
+                    // one subtype at a time: TalkBack reads each row with its selected state
+                    Column(Modifier.fillMaxWidth().background(if (on) Ink.accentSoft else Ink.surface).selectable(selected = on, role = Role.Tab) { selectedSub = if (on) "" else sub }) {
                         Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 9.dp), verticalAlignment = Alignment.CenterVertically) {
                             Text(sub, style = AppType.body, modifier = Modifier.weight(1f))
                             Text("${records.size}번 ›", style = AppType.count)

@@ -37,6 +37,8 @@ import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.Density
@@ -117,6 +119,7 @@ fun WorldMapCanvas(
     onCountryTap: (String) -> Unit,
     onRegionTap: (RegionHit) -> Unit,
     modifier: Modifier = Modifier,
+    description: String = MapStats.mapDescription(visited),
 ) {
     val polygons = remember { WorldMapGeometry.parseAll() }
     val paths = remember(polygons) {
@@ -140,6 +143,8 @@ fun WorldMapCanvas(
                 .background(Ink.surface)
                 .border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
                 .clipToBounds()
+                // TalkBack cannot tap a polygon; it reads what the map shows and points to the lists below it
+                .semantics { contentDescription = description }
                 .onSizeChanged { state.canvasSize = Size(it.width.toFloat(), it.height.toFloat()) }
                 .pointerInput(polygons) {
                     detectTapGestures { pos ->

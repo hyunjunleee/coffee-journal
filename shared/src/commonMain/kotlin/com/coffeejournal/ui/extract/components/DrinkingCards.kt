@@ -2,6 +2,8 @@ package com.coffeejournal.ui.extract.components
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -92,13 +94,14 @@ fun Eyebrow(text: String) {
 
 /** "로스터리 X" style lines (web .bean-info-line). */
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 fun InfoLines(lines: List<InfoLine>, modifier: Modifier = Modifier) {
     if (lines.isEmpty()) return
     Column(modifier) {
         lines.forEach { line ->
-            Row {
+            // a value too long to follow its label goes under it whole ("Nordic Approach", not "Approac / h")
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(line.label, style = AppType.monoSmall)
-                Spacer(Modifier.width(6.dp))
                 Text(line.value, style = AppType.small.copy(color = Ink.text))
             }
         }

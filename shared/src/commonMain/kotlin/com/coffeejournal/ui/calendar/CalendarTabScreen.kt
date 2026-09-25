@@ -20,7 +20,7 @@ import com.coffeejournal.ui.calendar.components.MonthGridView
 import com.coffeejournal.ui.calendar.components.MonthHeader
 import com.coffeejournal.ui.calendar.components.RangeLegend
 import com.coffeejournal.ui.calendar.components.TodayBox
-import com.coffeejournal.ui.form.imeOverlapPadding
+import com.coffeejournal.ui.theme.imeOverlapPadding
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.nav.navigateTab
 import com.coffeejournal.ui.theme.Dimens
