@@ -2,6 +2,7 @@ package com.coffeejournal.ui.bean.b
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -23,12 +24,12 @@ import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.Ink
 
-/** Web #coffee-country-list: visited countries per zone as an accordion, then the producers still to try. */
+/** Web #coffee-country-list: visited countries per zone as an accordion (each opens on its own), then the producers still to try. */
 @Composable
 fun CountryList(
     records: List<BeanRecord>,
     byCountry: Map<String, List<BeanRecord>>,
-    expanded: String?,
+    expanded: Set<String>,
     onToggle: (String) -> Unit,
     onOpenEntry: (String) -> Unit,
     onUntriedTap: (String) -> Unit,
@@ -47,7 +48,7 @@ fun CountryList(
         MapStats.zoneSections(byCountry).forEach { zone ->
             Text(zone.english.uppercase(), style = AppType.sectionLabel, modifier = Modifier.padding(top = 13.dp, bottom = 2.dp))
             zone.countries.forEach { entry ->
-                CountryAccordion(entry, expanded == entry.country.en, onToggle = { onToggle(entry.country.en) }, onOpenEntry = onOpenEntry)
+                CountryAccordion(entry, entry.country.en in expanded, onToggle = { onToggle(entry.country.en) }, onOpenEntry = onOpenEntry)
                 Hairline()
             }
         }
@@ -95,9 +96,11 @@ private fun UntriedSection(visited: Set<String>, onTap: (String) -> Unit) {
     Hairline(color = Ink.text, thickness = 1.dp)
     zones.forEach { (english, countries) ->
         Text(english.uppercase(), style = AppType.sectionLabel, modifier = Modifier.padding(top = 13.dp, bottom = 4.dp))
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             countries.forEach { c ->
-                Text("○ ${c.flag} ${c.ko} ${c.en}", style = AppType.faint, modifier = Modifier.clickable { onTap(c.en) }.padding(vertical = 3.dp))
+                Box(Modifier.heightIn(min = TapRowHeight).clickable { onTap(c.en) }, contentAlignment = Alignment.CenterStart) {
+                    Text("○ ${c.flag} ${c.ko} ${c.en}", style = AppType.faint)
+                }
             }
         }
     }

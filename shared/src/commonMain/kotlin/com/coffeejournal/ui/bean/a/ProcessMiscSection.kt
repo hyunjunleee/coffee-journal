@@ -8,14 +8,20 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.BeanRecord
 import com.coffeejournal.domain.model.MiscItem
@@ -43,15 +49,26 @@ internal fun ProcessMiscSection(
     var name by rememberSaveable { mutableStateOf("") }
     var notes by rememberSaveable { mutableStateOf("") }
     var pendingDelete by remember { mutableStateOf<MiscItem?>(null) }
+    val formView = remember { BringIntoViewRequester() }
+    val nameFocus = remember { FocusRequester() }
 
     fun closeForm() { formOpen = false; editingId = null; name = ""; notes = "" }
+
+    // The form opens at the top of the section, possibly above the screen when 수정 was tapped on a lower card:
+    // bring it into view and focus the name, like the web's openForm → nameInput.focus().
+    LaunchedEffect(formOpen, editingId) {
+        if (!formOpen) return@LaunchedEffect
+        withFrameNanos { }
+        formView.bringIntoView()
+        runCatching { nameFocus.requestFocus() }
+    }
 
     Column(Modifier.fillMaxWidth()) {
         if (!formOpen) {
             PrimaryButton("+ 추가", onClick = { formOpen = true })
         } else {
-            HairlineCard {
-                AppTextField(value = name, onValueChange = { name = it }, label = "이름", placeholder = "예: 내추럴")
+            HairlineCard(Modifier.bringIntoViewRequester(formView)) {
+                AppTextField(value = name, onValueChange = { name = it }, label = "이름", placeholder = "예: 내추럴", modifier = Modifier.focusRequester(nameFocus))
                 Spacer(Modifier.height(10.dp))
                 AppTextField(value = notes, onValueChange = { notes = it }, label = "메모 (선택)", placeholder = "특징, 어떤 원두에서 봤는지 등", singleLine = false, minLines = 2)
                 Spacer(Modifier.height(12.dp))

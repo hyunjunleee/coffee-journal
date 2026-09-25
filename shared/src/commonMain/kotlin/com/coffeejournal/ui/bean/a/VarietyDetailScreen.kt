@@ -51,8 +51,9 @@ fun VarietyDetailScreen(nav: NavHostController, varietyKey: String) {
     val name = VarietyStats.label(group)
 
     Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar(title = name, onBack = { nav.popBackStack() })
-        LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, top = 16.dp, bottom = 96.dp)) {
+        ScreenTitleBar(title = if (data.loaded) name else Varieties.displayNames[varietyKey].orEmpty(), onBack = { nav.popBackStack() })
+        // nothing until the records have loaded, instead of a flash of "0 cups" and the empty copy
+        if (data.loaded) LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, top = 16.dp, bottom = 96.dp)) {
             item {
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
                     Column(Modifier.weight(1f)) {
@@ -91,7 +92,7 @@ fun VarietyDetailScreen(nav: NavHostController, varietyKey: String) {
                 items(rg.records.size, key = { i -> rg.title + "|" + rg.records[i].entryId + "|" + rg.records[i].name + "|" + i }) { i ->
                     val r = rg.records[i]
                     val meta = listOf(
-                        r.country.trim().takeIf { it.isNotEmpty() }?.let { CountryLookup.bilingual(it) } ?: "",
+                        CountryLookup.bilingual(r.country), // web formatCountryBilingual: 국가 미상 when blank
                         r.region.trim(), r.process.trim(),
                     ).filter { it.isNotEmpty() }.joinToString(" · ")
                     RecordRow(

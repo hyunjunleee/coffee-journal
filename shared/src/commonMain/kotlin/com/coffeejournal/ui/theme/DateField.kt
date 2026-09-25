@@ -5,7 +5,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -14,6 +13,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,8 +28,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.rules.Dates
 import kotlinx.datetime.LocalDate
@@ -96,11 +94,12 @@ fun PickerBox(
             modifier = Modifier.weight(1f).padding(vertical = 12.dp),
         )
         if (onClear != null) {
-            // a full 48dp target; the × itself stays small
-            Box(
-                Modifier.size(48.dp).clickable(role = Role.Button, onClick = onClear).semantics { contentDescription = clearLabel },
-                contentAlignment = Alignment.Center,
-            ) { Text("×", style = AppType.body.copy(color = Ink.textFaint)) }
+            // the × stays small in the middle of the 48dp end slot; the whole slot takes the tap
+            GlyphButton(
+                "×", label = clearLabel, onClick = onClear,
+                modifier = Modifier.size(MinTouchTarget).wrapContentSize(Alignment.Center),
+                style = AppType.body.copy(color = Ink.textFaint),
+            )
         } else {
             Spacer(Modifier.width(14.dp))
         }

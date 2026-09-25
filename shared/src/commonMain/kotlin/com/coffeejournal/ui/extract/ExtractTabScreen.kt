@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -36,6 +35,7 @@ import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
+import com.coffeejournal.ui.theme.GlyphButton
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.EmptyNote
 import com.coffeejournal.ui.theme.FieldLabel
@@ -136,7 +136,9 @@ private fun FilterBlock(controls: ExtractControls, onFilter: (String) -> Unit, o
         FieldLabel("원두 이름 검색")
         AppTextField(
             value = controls.query, onValueChange = onQuery, placeholder = "예: 벤사, 게이샤, 리브레",
-            trailing = if (controls.query.isNotBlank()) ({ Text("×", style = AppType.body.copy(color = Ink.textFaint), modifier = Modifier.clickable { onQuery("") }.padding(8.dp)) }) else null,
+            trailing = if (controls.query.isNotBlank()) ({
+                GlyphButton("×", label = "검색어 지우기", onClick = { onQuery("") }, modifier = Modifier.padding(8.dp), style = AppType.body.copy(color = Ink.textFaint))
+            }) else null,
         )
     }
 }

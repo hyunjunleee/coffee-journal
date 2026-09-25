@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -23,6 +24,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.BeanRecord
@@ -34,6 +38,7 @@ import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.HairlineCard
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.MinTouchTarget
 
 /** Web .cat-badge: 직접 내림 / 카페 / 커핑 in the category colour. */
 @Composable
@@ -67,7 +72,8 @@ internal fun RecordLine(record: BeanRecord, meta: String, onClick: () -> Unit) {
         Row(Modifier.fillMaxWidth().padding(vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(BeanFormat.displayName(record), style = AppType.body)
+                    // weighted without fill: a long name wraps and the badge keeps its own width
+                    Text(BeanFormat.displayName(record), style = AppType.body, modifier = Modifier.weight(1f, fill = false))
                     Spacer(Modifier.width(6.dp))
                     CategoryBadge(record.category)
                 }
@@ -86,7 +92,11 @@ internal fun SearchField(value: String, onValueChange: (String) -> Unit, placeho
         value = value, onValueChange = onValueChange, modifier = modifier, label = label, placeholder = placeholder,
         trailing = {
             if (value.isNotEmpty()) {
-                Icon(AppIcons.close, contentDescription = "지우기", tint = Ink.textFaint, modifier = Modifier.size(16.dp).clickable { onValueChange("") })
+                // the icon stays 16dp; the tap target around it is the full 48dp trailing slot
+                Box(
+                    Modifier.size(MinTouchTarget).clickable(role = Role.Button, onClick = { onValueChange("") }).semantics { contentDescription = "지우기" },
+                    contentAlignment = Alignment.Center,
+                ) { Icon(AppIcons.close, contentDescription = null, tint = Ink.textFaint, modifier = Modifier.size(16.dp)) }
             } else Icon(AppIcons.search, contentDescription = null, tint = Ink.textFaint, modifier = Modifier.size(16.dp))
         },
     )

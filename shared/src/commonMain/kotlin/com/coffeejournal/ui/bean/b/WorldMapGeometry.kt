@@ -19,6 +19,12 @@ class MapPolygon(val name: String, val rings: List<List<Offset>>) {
 
 data class RegionHit(val country: CoffeeCountries.Country, val region: CoffeeCountries.Region)
 
+/** What a tap on the coffee map selects. */
+sealed interface MapTap {
+    data class Region(val hit: RegionHit) : MapTap
+    data class Country(val name: String) : MapTap
+}
+
 /** Pure geometry for the coffee map: SVG path parsing, hit testing and coordinate helpers. */
 object WorldMapGeometry {
     const val REGION_DOT_RADIUS = 2.2f
@@ -70,15 +76,41 @@ object WorldMapGeometry {
     fun hitCountry(polygons: List<MapPolygon>, p: Offset): MapPolygon? =
         polygons.filter { it.contains(p) }.minByOrNull { it.area }
 
-    /** The nearest region dot within [radius] viewBox units, if any. */
-    fun hitRegion(p: Offset, radius: Float = REGION_TAP_RADIUS): RegionHit? {
+    /**
+     * Like the web, where a dot catches only taps on its own circle and the country path gets every other tap: on land
+     * a dot wins only within [dotRadius] (the dot as drawn, in viewBox units) and only when it belongs to the country
+     * under the finger or is drawn over it, so a neighbour's dot near the border does not take the tap; otherwise the
+     * country does. In the sea the nearest dot within [seaSlop] is taken, so coastal and island dots stay reachable.
+     */
+    fun resolveTap(polygons: List<MapPolygon>, p: Offset, dotRadius: Float, seaSlop: Float): MapTap? {
+        val country = hitCountry(polygons, p) ?: return hitRegion(p, seaSlop)?.let { MapTap.Region(it) }
+        val dot = hitRegion(p, dotRadius) { c, r -> c.en == country.name || country.contains(Offset(r.x, r.y)) }
+        return if (dot != null) MapTap.Region(dot) else MapTap.Country(country.name)
+    }
+
+    /**
+     * Pan after one pinch step: the viewBox point under [centroid] (canvas px) stays under the fingers while the scale
+     * goes from [oldScale] to [newScale]; then the fingers' own movement [panChange] is added and the pan clamped.
+     */
+    fun zoomPan(pan: Offset, oldScale: Float, newScale: Float, centroid: Offset, panChange: Offset, fit: Float, canvasW: Float, canvasH: Float): Offset {
+        val c = centroid - Offset(canvasW / 2f, canvasH / 2f)
+        val r = if (oldScale > 0f) newScale / oldScale else 1f
+        return clampPan((pan - c) * r + c + panChange, fit * newScale, canvasW, canvasH)
+    }
+
+    /** The nearest region dot within [radius] viewBox units (among those [accept] lets through), if any. */
+    fun hitRegion(
+        p: Offset,
+        radius: Float = REGION_TAP_RADIUS,
+        accept: (CoffeeCountries.Country, CoffeeCountries.Region) -> Boolean = { _, _ -> true },
+    ): RegionHit? {
         var best: RegionHit? = null
         var bestDist = radius * radius
         CoffeeCountries.all.forEach { c ->
             c.regions.forEach { r ->
                 val dx = r.x - p.x; val dy = r.y - p.y
                 val d2 = dx * dx + dy * dy
-                if (d2 <= bestDist) { bestDist = d2; best = RegionHit(c, r) }
+                if (d2 <= bestDist && accept(c, r)) { bestDist = d2; best = RegionHit(c, r) }
             }
         }
         return best

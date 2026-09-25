@@ -2,6 +2,7 @@ package com.coffeejournal.ui.bean.a
 
 import com.coffeejournal.domain.model.BeanRecord
 import com.coffeejournal.domain.rules.NoteCanon
+import com.coffeejournal.ui.bean.KoreanOrder
 
 /** Pure aggregation behind the 커피 노트 view (web renderNoteCloud / renderNoteDetail). */
 internal object NoteStats {
@@ -49,7 +50,7 @@ internal object NoteStats {
         return out.mapValues { (key, v) -> CloudEntry(key, v.first, v.second.first, v.second.second) }
     }
 
-    /** Search over label, both note fields, bean name and place; sort by unique beans or 가나다. */
+    /** Search over label, both note fields, bean name and place; sort by unique beans or 가나다 (web localeCompare 'ko'). */
     fun filterAndSort(entries: Collection<CloudEntry>, query: String, sort: String): List<CloudEntry> {
         val q = query.trim().lowercase()
         val filtered = entries.filter { info ->
@@ -60,7 +61,7 @@ internal object NoteStats {
                     .filter { it.isNotBlank() }.joinToString(" ").lowercase().contains(q)
             }
         }
-        return if (sort == SORT_ALPHA) filtered.sortedBy { it.label } else filtered.sortedByDescending { it.beanCount }
+        return if (sort == SORT_ALPHA) filtered.sortedWith(compareBy(KoreanOrder) { it.label }) else filtered.sortedByDescending { it.beanCount }
     }
 
     /** Web renderNoteDetail: group the linked records by their full note combination, most records first. */

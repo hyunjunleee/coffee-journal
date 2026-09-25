@@ -8,6 +8,7 @@ import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.reference.RoasteryMapPoints
 import com.coffeejournal.domain.rules.BeanNames
+import com.coffeejournal.ui.bean.KoreanOrder
 
 /** Web sourceBeansInfo row: one bean bought at a roastery with its first and last date. */
 data class BeanSpan(val name: String, val start: Long, val end: Long, val category: String)
@@ -74,10 +75,6 @@ object FlatItemLogic {
         return out.map { it.key to it.value }
     }
 
-    /** Where the beans were had: cafe names, cupping places, 집 추출 for brews. */
-    fun places(records: List<BeanRecord>): List<String> =
-        records.map { r -> if (r.category == Category.BEAN || r.category.isBlank()) "집 추출" else r.place.trim().ifEmpty { r.category } }.distinct()
-
     fun sortItems(items: List<MiscItem>, favoritable: Boolean): List<MiscItem> =
         if (favoritable) items.sortedWith(compareByDescending<MiscItem> { it.favorite }.thenByDescending { it.createdAt })
         else items.sortedByDescending { it.createdAt }
@@ -94,7 +91,7 @@ object FlatItemLogic {
     /** Web renderRoasteryMap: scoped roasteries sorted by record count, pins for the located ones. */
     fun roasteryMap(items: List<MiscItem>, records: List<BeanRecord>, scope: String): RoasteryMapModel {
         val scoped = items.filter { it.type == MiscType.SOURCE && it.scope == scope }
-            .sortedWith(compareByDescending<MiscItem> { roasteryRecords(records, it.name).size }.thenBy { it.name })
+            .sortedWith(compareByDescending<MiscItem> { roasteryRecords(records, it.name).size }.thenBy(KoreanOrder) { it.name })
         val located = scoped.filter { it.location.isNotBlank() }
         val domestic = scope == Scope.DOMESTIC
         val pins = located.mapIndexed { i, m ->

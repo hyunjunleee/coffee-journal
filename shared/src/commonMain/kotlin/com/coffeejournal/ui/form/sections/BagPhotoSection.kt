@@ -56,7 +56,7 @@ private fun PhotoSlotRow(slot: PhotoSlot, label: String, model: Any?, onPick: (B
             Box(Modifier.size(96.dp).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)) {
                 AsyncImage(model = model, contentDescription = label, modifier = Modifier.size(96.dp), contentScale = ContentScale.Crop)
             }
-            RemoveButton(onRemove)
+            RemoveButton(onRemove, label = "사진 삭제")
             Spacer(Modifier.width(8.dp))
             GhostButton("사진 변경", small = true, onClick = pick)
         } else {

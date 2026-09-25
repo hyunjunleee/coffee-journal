@@ -7,6 +7,7 @@ import com.coffeejournal.domain.reference.CoffeeCountries
 import com.coffeejournal.domain.rules.CountryLookup
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.RegionHierarchy
+import com.coffeejournal.ui.bean.KoreanOrder
 
 data class RegionStat(val label: String, val count: Int, val subs: Map<String, Int>)
 
@@ -74,7 +75,7 @@ object MapStats {
     private fun regionOrder(a: String, b: String): Int = when {
         a == UNKNOWN_REGION -> 1
         b == UNKNOWN_REGION -> -1
-        else -> a.compareTo(b)
+        else -> KoreanOrder.compare(a, b)
     }
 
     /** Country panel: primary region → farm → visits, unknown region last. */

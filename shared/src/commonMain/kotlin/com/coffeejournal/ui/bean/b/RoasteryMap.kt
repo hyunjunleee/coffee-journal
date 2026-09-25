@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,10 +13,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -115,24 +120,36 @@ private fun androidx.compose.ui.graphics.drawscope.DrawScope.drawBlobs(domestic:
     }
 }
 
-/** Places each pin chip centred on its percent coordinate, clamped inside the canvas. */
+/**
+ * Places each pin chip centred on its percent coordinate, clamped inside the canvas. The chip keeps its small look;
+ * a transparent box around it takes the taps, so the target is [Dimens.touch] tall (the ripple stays on the chip).
+ */
 @Composable
 private fun PinLayer(pins: List<RoasteryPin>, selected: String?, onSelect: (String?) -> Unit) {
     Layout(
         content = {
             pins.forEach { pin ->
                 val active = pin.item.name == selected
-                Row(
+                val press = remember { MutableInteractionSource() }
+                Box(
                     Modifier
-                        .background(if (active) Ink.text else Ink.surface)
-                        .border(BorderStroke(1.dp, Ink.text), RectangleShape)
-                        .clickable { onSelect(if (active) null else pin.item.name) }
-                        .padding(horizontal = 8.dp, vertical = 5.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .heightIn(min = Dimens.touch)
+                        .clickable(interactionSource = press, indication = null) { onSelect(if (active) null else pin.item.name) }
+                        .padding(horizontal = 2.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
-                    Text(pin.item.name, style = AppType.small.copy(color = if (active) Ink.surface else Ink.text, fontWeight = FontWeight.Medium, fontSize = 11.sp), maxLines = 1)
-                    Spacer(Modifier.width(4.dp))
-                    Text(pin.count.toString(), style = AppType.monoSmall.copy(color = if (active) Ink.surface else Ink.textMuted, fontSize = 9.sp))
+                    Row(
+                        Modifier
+                            .background(if (active) Ink.text else Ink.surface)
+                            .border(BorderStroke(1.dp, Ink.text), RectangleShape)
+                            .indication(press, ripple())
+                            .padding(horizontal = 8.dp, vertical = 5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(pin.item.name, style = AppType.small.copy(color = if (active) Ink.surface else Ink.text, fontWeight = FontWeight.Medium, fontSize = 11.sp), maxLines = 1)
+                        Spacer(Modifier.width(4.dp))
+                        Text(pin.count.toString(), style = AppType.monoSmall.copy(color = if (active) Ink.surface else Ink.textMuted, fontSize = 9.sp))
+                    }
                 }
             }
         },
@@ -161,7 +178,5 @@ fun SourceBeansInfo(matching: List<BeanRecord>) {
         val start = Dates.ymdCompact(b.start); val end = Dates.ymdCompact(b.end)
         SourceBeanRow(b.name, right = if (start == end) start else "$start ~ $end", badge = b.category)
     }
-    SubLabel("어디서 마셨는지")
-    Text(FlatItemLogic.places(matching).joinToString(" · "), style = AppType.faint)
     BreakdownLine(matching)
 }

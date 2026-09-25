@@ -3,9 +3,11 @@ package com.coffeejournal.ui.bean
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -76,10 +78,11 @@ fun BeanProcessView(nav: NavHostController, data: BeanData) {
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Processes.main4.chunked(2).forEach { pair ->
-                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // both cards of a row as tall as the taller one (web CSS grid rows stretch)
+                        Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             pair.forEach { p ->
                                 val tried = remember(data.records) { ProcessStats.isTried(data.records, p) }
-                                SelectCard(selected = tried, onClick = { openProcess(p) }, modifier = Modifier.weight(1f)) {
+                                SelectCard(selected = tried, onClick = { openProcess(p) }, modifier = Modifier.weight(1f).fillMaxHeight()) {
                                     Text(p.name, style = AppType.cardTitle)
                                     Text(p.en ?: "", style = AppType.faint)
                                     if (tried) Text("✓ 마셔봄", style = AppType.monoSmall.copy(color = Ink.good), modifier = Modifier.padding(top = 6.dp))

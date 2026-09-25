@@ -48,7 +48,8 @@ fun BeanSpecialtyView(nav: NavHostController, data: BeanData) {
         if (lots.isEmpty()) {
             item { EmptyNote("아직 대회 컵 점수 80점 이상으로 기록한 원두가 없어요.") }
         } else {
-            items(lots, key = { it.record.entryId + "|" + it.record.name }) { lot ->
+            // lots are one per bean key, so the key is unique (several cupping beans can share an entryId)
+            items(lots, key = { BeanFormat.beanKey(it.record) }) { lot ->
                 val record = lot.record
                 HairlineCard(onClick = { nav.navigate(Route.EntryDetail(BeanFormat.openEntryId(record))) }) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp), itemVerticalAlignment = Alignment.CenterVertically) {

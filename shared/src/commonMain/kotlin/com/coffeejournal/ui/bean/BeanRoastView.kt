@@ -79,7 +79,7 @@ fun BeanRoastView(nav: NavHostController, data: BeanData) {
         } else {
             items(records, key = { RoastStats.dedupeKey(it) }) { record ->
                 val meta = listOf(
-                    record.country.trim().takeIf { it.isNotEmpty() }?.let { CountryLookup.bilingual(it) } ?: "",
+                    CountryLookup.bilingual(record.country), // web formatCountryBilingual: 국가 미상 when blank
                     record.region.trim(), record.variety.trim(), record.roast.trim(),
                 ).filter { it.isNotEmpty() }.joinToString(" · ")
                 RecordRow(

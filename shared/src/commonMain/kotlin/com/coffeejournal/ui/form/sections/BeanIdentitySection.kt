@@ -113,6 +113,7 @@ private fun BlendRows(state: FormState, suggestions: FormSuggestions, blendFocus
                 )
                 RemoveButton(
                     onClick = { update { s -> val rest = s.blendRows.filterIndexed { i, _ -> i != index }; s.copy(blendRows = rest.ifEmpty { listOf(BlendRowForm()) }) } },
+                    label = "원두 행 삭제",
                     modifier = Modifier.padding(top = 4.dp),
                 )
             }

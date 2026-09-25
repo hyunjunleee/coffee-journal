@@ -1,7 +1,6 @@
 package com.coffeejournal.ui.misc
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,19 +11,16 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
@@ -37,6 +33,7 @@ import com.coffeejournal.ui.platform.rememberImagePicker
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
+import com.coffeejournal.ui.theme.GlyphButton
 import com.coffeejournal.ui.theme.DateField
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
@@ -112,15 +109,12 @@ private fun PhotoSlotRow(index: Int, slot: PhotoSlot?, emptyLabel: String, photo
                     contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
-                // 24dp mark, 48dp touch target (design §8)
-                Box(
-                    Modifier.align(Alignment.TopEnd).size(48.dp)
-                        .clickable(role = Role.Button, onClick = onRemove)
-                        .semantics { contentDescription = if (index == 0) "대표 사진 삭제" else "사진 2 삭제" },
-                    contentAlignment = Alignment.TopEnd,
-                ) {
-                    Box(Modifier.size(24.dp).background(Ink.accent), contentAlignment = Alignment.Center) { Text("✕", style = AppType.small.copy(color = Ink.bg)) }
-                }
+                // 24dp mark, 48dp touch target around it (design §8)
+                GlyphButton(
+                    "✕", label = if (index == 0) "대표 사진 삭제" else "사진 2 삭제", onClick = onRemove,
+                    modifier = Modifier.align(Alignment.TopEnd).size(24.dp).background(Ink.accent).wrapContentSize(Alignment.Center),
+                    style = AppType.small.copy(color = Ink.bg),
+                )
             }
             Spacer(Modifier.width(10.dp))
             GhostButton("사진 변경", small = true, onClick = pick)

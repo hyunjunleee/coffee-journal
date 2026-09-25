@@ -11,7 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -44,6 +44,8 @@ fun ProcessDetailScreen(nav: NavHostController, name: String, seg: String?) {
     Column(Modifier.fillMaxSize()) {
         ScreenTitleBar(title = name, onBack = { nav.popBackStack() })
         when {
+            // nothing until the records have loaded, instead of a flash of the empty copy
+            !data.loaded -> Unit
             breakdown.matching.isEmpty() -> LazyColumn(contentPadding = PaddingValues(Dimens.gutter)) {
                 item {
                     DetailCard(title = name) {
@@ -87,7 +89,8 @@ private fun HoneyDetail(breakdown: ProcessStats.Breakdown, onOpen: (String) -> U
         }
         if (selected != null) {
             item { DetailLabel("${selected.first}로 마신 기록", Modifier.padding(top = 6.dp)) }
-            items(selected.second, key = { it.entryId + "|" + it.name + "|" + it.createdAt }) { record ->
+            // the index keeps keys unique: beans of one cupping session share entryId and createdAt, and names may repeat
+            itemsIndexed(selected.second, key = { i, r -> "${r.entryId}|${r.name}|$i" }) { _, record ->
                 val meta = listOf(BeanFormat.categoryLabel(record.category), record.place.trim(), record.country.trim())
                     .filter { it.isNotEmpty() }.joinToString(" · ")
                 RecordLine(record, meta) { onOpen(BeanFormat.openEntryId(record)) }

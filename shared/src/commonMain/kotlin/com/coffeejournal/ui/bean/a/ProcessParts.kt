@@ -15,10 +15,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.coffeejournal.domain.model.BeanRecord
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.reference.Processes
-import com.coffeejournal.domain.rules.BeanRecords
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Ink
 
@@ -29,10 +27,10 @@ internal fun ProcessBreakdownBody(breakdown: ProcessStats.Breakdown, onOpen: (St
         CountColumn("국가별로 마셔본 횟수", breakdown.countries)
         CountColumn("품종별로 마셔본 횟수", breakdown.varieties)
         if (breakdown.subs.isNotEmpty()) CountColumn("세부 종류별로 마셔본 횟수", breakdown.subs)
-        val where = BeanRecords.categoryBreakdown(breakdown.matching)
+        val where = BeanFormat.categoryCounts(breakdown.matching)
         if (where.isNotEmpty()) {
             DetailLabel("어디서 마셨는지")
-            WhereBadges(breakdown.matching)
+            WhereBadges(where)
         }
         val brews = ProcessStats.brewGroups(breakdown.matching)
         if (brews.isNotEmpty()) {
@@ -56,19 +54,16 @@ private fun CountColumn(label: String, list: List<Pair<String, Int>>) {
     else list.forEach { (name, count) -> CountRow(name, "${count}번") }
 }
 
-/** Web categoryBreakdownLine: "직접 내림 N종 · 카페 N번 · 커핑 N번" rendered as badges + counts. */
+/** Web categoryBreakdownLine: "[직접 내림] N종 [카페] N번 [커핑] N번" as badges + counts ([BeanFormat.categoryCounts]). */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun WhereBadges(matching: List<BeanRecord>) {
-    val brews = matching.filter { it.category.ifBlank { Category.BEAN } == Category.BEAN }.map { BeanFormat.beanKey(it) }.toSet().size
-    val cafes = matching.count { it.category == Category.CAFE }
-    val cuppings = matching.count { it.category == Category.CUPPING }
-    FlowRow(Modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        listOf(Category.BEAN to brews, Category.CAFE to cafes, Category.CUPPING to cuppings).filter { it.second > 0 }.forEach { (cat, n) ->
+internal fun WhereBadges(counts: List<Pair<String, Int>>, modifier: Modifier = Modifier) {
+    FlowRow(modifier.padding(vertical = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        counts.forEach { (cat, n) ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 CategoryBadge(cat)
                 Spacer(Modifier.width(4.dp))
-                Text("$n${if (cat == Category.BEAN) "종" else "번"}", style = AppType.small.copy(color = Ink.text))
+                Text(BeanFormat.countUnit(cat, n), style = AppType.small.copy(color = Ink.text))
             }
         }
     }
