@@ -85,6 +85,8 @@ class NonFiniteNumbersTest {
         assertNull(ScaScoring.total(mapOf("flavor" to Double.NaN)))
         assertEquals("–", ScaScoring.format2(Double.NaN))
         assertEquals("–", ScaScoring.format1(Double.NEGATIVE_INFINITY))
-        ScaForm.attrs.forEach { assertEquals("–", ScaScoring.readout(it, Double.NaN)) }
+        // web `val = attrValues[key] || 0`: NaN counts as 0 — a dash on the 6-10 rows, "0.00" on the 0-10 rows
+        ScaForm.attrs.forEach { assertEquals(if (it.min == 0.0) "0.00" else "–", ScaScoring.readout(it, Double.NaN)) }
+        ScaForm.intensities.forEach { assertEquals("–", ScaScoring.readout(it, Double.POSITIVE_INFINITY)) }
     }
 }

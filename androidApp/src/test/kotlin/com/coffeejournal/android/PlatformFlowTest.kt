@@ -193,6 +193,25 @@ class PlatformFlowTest : FlowTestBase() {
         waitFor(preview, "picked photo attached")
     }
 
+    /**
+     * gap #13: BitmapFactory reads HEIC only from API 28. On API 27 a picked HEIC (an iPhone photo shared over) is
+     * refused with the web's message instead of being stored as an undecodable ".jpg".
+     */
+    @Test
+    @Config(sdk = [27])
+    fun platform05b_photoPickerOnApi27_refusesHeic() {
+        openEquipmentForm()
+        clickText("대표 사진")
+        val pick = shadow.nextStartedActivityForResult
+        // an ISO-BMFF HEIC header: ftyp box with the 'heic' brand
+        val heic = byteArrayOf(0, 0, 0, 24, 102, 116, 121, 112, 104, 101, 105, 99, 0, 0, 0, 0, 109, 105, 102, 49, 104, 101, 105, 99) + ByteArray(512) { 7 }
+        val file = File(context.cacheDir, "IMG_0001.HEIC").apply { writeBytes(heic) }
+        deliver(pick, Intent().setData(Uri.fromFile(file)))
+        waitForToast("사진 형식을 인식하지 못했어요. 다른 사진으로 시도해보시겠어요?")
+        assertFalse("nothing attached", has(preview))
+        assertTrue("no photo file stored", File(context.cacheDir, "photos").listFiles().orEmpty().isEmpty())
+    }
+
     /** platform-9: no photo picker app → a short message, the form stays. */
     @Test
     fun platform06_photoPickerMissing_showsMessageInsteadOfCrashing() {

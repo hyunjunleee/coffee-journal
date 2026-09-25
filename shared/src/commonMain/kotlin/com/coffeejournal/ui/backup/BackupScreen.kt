@@ -49,7 +49,7 @@ fun BackupScreen(nav: NavHostController) {
     val vm = koinViewModel<BackupViewModel>()
     val state by vm.state.collectAsStateWithLifecycle()
     val saver = rememberJsonSaver { ok -> vm.onSaveResult(ok) }
-    val opener = rememberJsonOpener { text -> vm.onFileLoaded(text) }
+    val opener = rememberJsonOpener { file -> vm.onFileOpened(file) }
     LaunchedEffect(state.saveRequested) {
         val result = state.export
         if (state.saveRequested && result != null) {

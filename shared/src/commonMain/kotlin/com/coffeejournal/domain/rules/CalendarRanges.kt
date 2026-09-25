@@ -2,6 +2,8 @@ package com.coffeejournal.domain.rules
 
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.reference.BeanRangeColors
+import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 
 /** A continuous stretch of days on which the same bean was brewed (web computeBeanRanges). */
 data class BeanRange(val name: String, val start: Long, val end: Long, val count: Int, val colorHex: String)
@@ -36,13 +38,17 @@ object CalendarRanges {
         return ranges.sortedBy { it.start }.mapIndexed { i, r -> r.copy(colorHex = palette[i % palette.size]) }
     }
 
-    /** Ranges intersecting the given day (start of day millis). */
-    fun rangesOn(ranges: List<BeanRange>, dayStartMillis: Long): List<BeanRange> {
+    /** Ranges intersecting the given day (start of day millis in [zone]). */
+    fun rangesOn(ranges: List<BeanRange>, dayStartMillis: Long, zone: TimeZone = Dates.systemZone): List<BeanRange> {
         val dayEnd = dayStartMillis + Dates.DAY_MS - 1
         return ranges.filter { r ->
-            val rs = Dates.startOfDayMillis(Dates.toLocalDate(r.start))
-            val re = Dates.startOfDayMillis(Dates.toLocalDate(r.end)) + Dates.DAY_MS - 1
+            val rs = Dates.startOfDayMillis(Dates.toLocalDate(r.start, zone), zone)
+            val re = Dates.startOfDayMillis(Dates.toLocalDate(r.end, zone), zone) + Dates.DAY_MS - 1
             rs <= dayEnd && re >= dayStartMillis
         }
     }
+
+    /** Ranges covering the local calendar [day] in [zone]. */
+    fun rangesOn(ranges: List<BeanRange>, day: LocalDate, zone: TimeZone = Dates.systemZone): List<BeanRange> =
+        ranges.filter { r -> Dates.toLocalDate(r.start, zone) <= day && Dates.toLocalDate(r.end, zone) >= day }
 }

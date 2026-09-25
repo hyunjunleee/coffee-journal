@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ backup rules. Only the journal itself travels: the Room database (with its WAL file, which can hold
+  recent writes not yet checkpointed) and the photo files. Everything under cacheDir (camera captures, the staged
+  "save as" payload, shared backup files) is never included. Cloud backup has a 25 MB quota per app: once the
+  database plus photos grow past it, Android skips the whole cloud backup (device-to-device transfer has no quota),
+  which is why the in-app JSON backup stays the primary way to move data.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="coffee_journal.db" />
+        <include domain="database" path="coffee_journal.db-wal" />
+        <include domain="file" path="photos/" />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="coffee_journal.db" />
+        <include domain="database" path="coffee_journal.db-wal" />
+        <include domain="file" path="photos/" />
+    </device-transfer>
+</data-extraction-rules>

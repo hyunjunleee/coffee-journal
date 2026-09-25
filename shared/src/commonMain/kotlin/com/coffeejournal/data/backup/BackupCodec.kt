@@ -24,7 +24,6 @@ import com.coffeejournal.domain.model.Video
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
-import com.coffeejournal.domain.rules.Numbers
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -223,26 +222,34 @@ class BackupCodec {
 
     // ───────────────────────── decode ─────────────────────────
 
+    /**
+     * Parses a whole backup before anything is written. Values are read leniently (numbers as strings, legacy field
+     * names, nulls), but a file whose structure is wrong — not JSON, no `data` object, a collection that is not a list,
+     * a record whose `createdAt` is not a time, `steps` that are not a list, scores that are not numbers — is refused
+     * with a [BackupFormatException] naming the first problem, so a damaged file never imports halfway.
+     */
     fun decode(text: String): BackupSnapshot {
-        val root = runCatching { json.parseToJsonElement(text) }.getOrNull() as? JsonObject
+        val parsed = runCatching { json.parseToJsonElement(text) }.getOrNull()
             ?: throw BackupFormatException("백업 파일 형식이 아니에요. (JSON을 읽을 수 없어요)")
-        val data = root["data"] as? JsonObject ?: throw BackupFormatException("백업 파일 형식이 아니에요. (data 필드가 없어요)")
-        val rawData = root["rawData"] as? JsonObject
+        // web: `if (!backup || !backup.data) throw …` — a JSON array or a bare value has no data field either
+        val root = parsed as? JsonObject ?: throw BackupFormatException(NO_DATA)
+        val data = root["data"] as? JsonObject ?: throw BackupFormatException(NO_DATA)
+        val rawData = root.objOrNull("rawData", "rawData")
         val present = buildSet {
             BackupKeys.all.forEach { key -> if (key != BackupKeys.DDAY && data[key].let { it != null && it !is JsonNull }) add(key) }
             if (rawData?.get(BackupKeys.DDAY).let { it != null && it !is JsonNull }) add(BackupKeys.DDAY)
         }
-        val entries = data.arr(BackupKeys.ENTRIES).mapNotNull { (it as? JsonObject)?.let(::decodeEntry) }
+        val entries = data.objects(BackupKeys.ENTRIES, BackupKeys.ENTRIES).map { (o, where) -> WebMigrations.apply(decodeEntry(o, where)) }
         val miscPhotos = mutableListOf<PhotoBlob>()
-        val miscItems = data.arr(BackupKeys.MISC).mapNotNull { (it as? JsonObject)?.let { o -> decodeMisc(o, miscPhotos) } }
-        val summaries = (data[BackupKeys.SUMMARIES] as? JsonObject)?.mapNotNull { (key, v) ->
+        val miscItems = data.objects(BackupKeys.MISC, BackupKeys.MISC).mapNotNull { (o, where) -> decodeMisc(o, miscPhotos, where) }
+        val summaries = data.objOrNull(BackupKeys.SUMMARIES, BackupKeys.SUMMARIES)?.mapNotNull { (key, v) ->
             when (v) {
                 is JsonObject -> v.str("text").takeIf { it.isNotBlank() }?.let { BeanSummary(key, it, v.millis("generatedAt", 0L)) }
                 is JsonPrimitive -> v.takeUnless { it is JsonNull }?.content?.takeIf { it.isNotBlank() }?.let { BeanSummary(key, it, 0L) }
                 else -> null
             }
         } ?: emptyList()
-        val best = (data[BackupKeys.BEST] as? JsonObject)?.mapNotNull { (key, v) ->
+        val best = data.objOrNull(BackupKeys.BEST, BackupKeys.BEST)?.mapNotNull { (key, v) ->
             val id = when (v) {
                 is JsonObject -> v.str("entryId")
                 is JsonPrimitive -> if (v is JsonNull) "" else v.content
@@ -250,21 +257,21 @@ class BackupCodec {
             }
             id.takeIf { it.isNotBlank() }?.let { BestRecipe(key, it) }
         } ?: emptyList()
-        val settings = (data[BackupKeys.SETTINGS] as? JsonObject)?.mapNotNull { (k, v) ->
+        val settings = data.objOrNull(BackupKeys.SETTINGS, BackupKeys.SETTINGS)?.mapNotNull { (k, v) ->
             (v as? JsonPrimitive)?.takeUnless { it is JsonNull }?.let { k to it.content }
         }?.toMap() ?: emptyMap()
         return BackupSnapshot(
             entries = entries,
-            photos = decodeEntryPhotos(root["photos"] as? JsonObject),
+            photos = decodeEntryPhotos(root.objOrNull("photos", "photos")),
             miscItems = miscItems,
             miscPhotos = miscPhotos,
-            blends = data.arr(BackupKeys.BLENDS).mapNotNull { (it as? JsonObject)?.let(::decodeBlend) },
-            classes = data.arr(BackupKeys.CLASSES).mapNotNull { (it as? JsonObject)?.let(::decodeClass) },
-            roadmap = data.arr(BackupKeys.ROADMAP).mapIndexedNotNull { i, it -> (it as? JsonObject)?.let { o -> decodePhase(o, i) } },
-            myRecipes = data.arr(BackupKeys.MY_RECIPES).mapNotNull { (it as? JsonObject)?.let(::decodeRecipe) },
-            books = data.arr(BackupKeys.BOOKS).mapNotNull { (it as? JsonObject)?.let(::decodeBook) },
-            videos = data.arr(BackupKeys.VIDEOS).mapNotNull { (it as? JsonObject)?.let(::decodeVideo) },
-            pantryItems = data.arr(BackupKeys.PANTRY).mapNotNull { (it as? JsonObject)?.let(::decodePantry) },
+            blends = data.objects(BackupKeys.BLENDS, BackupKeys.BLENDS).map { (o, where) -> decodeBlend(o, where) },
+            classes = data.objects(BackupKeys.CLASSES, BackupKeys.CLASSES).map { (o, where) -> decodeClass(o, where) },
+            roadmap = data.objects(BackupKeys.ROADMAP, BackupKeys.ROADMAP).mapIndexed { i, (o, _) -> decodePhase(o, i) },
+            myRecipes = data.objects(BackupKeys.MY_RECIPES, BackupKeys.MY_RECIPES).map { (o, where) -> decodeRecipe(o, where) },
+            books = data.objects(BackupKeys.BOOKS, BackupKeys.BOOKS).map { (o, where) -> decodeBook(o, where) },
+            videos = data.objects(BackupKeys.VIDEOS, BackupKeys.VIDEOS).map { (o, where) -> decodeVideo(o, where) },
+            pantryItems = data.objects(BackupKeys.PANTRY, BackupKeys.PANTRY).map { (o, where) -> decodePantry(o, where) },
             beanSummaries = summaries,
             bestRecipes = best,
             settings = settings,
@@ -274,7 +281,7 @@ class BackupCodec {
         )
     }
 
-    private fun decodeEntry(o: JsonObject): Entry {
+    private fun decodeEntry(o: JsonObject, where: String): Entry {
         val id = o.str("id").ifBlank { Ids.newId() }
         val category = o.str("category").ifBlank { Category.BEAN }
         val packageType = when {
@@ -285,11 +292,11 @@ class BackupCodec {
         }
         val actualNotes = firstNonBlank(o.str("actualNotes"), o.str("tastingNotes"), o.str("coffeeNotes"), o.str("myNotes"), o.str("note"))
         val farmProducer = o.str("farmProducer").ifBlank { BeanNames.formatFarmProducer(o.str("farm"), o.str("producer")) }
-        val details = o.arr("cuppingBeanDetails").mapNotNull { (it as? JsonObject)?.let(::decodeCuppingBean) }.filter { it.name.isNotBlank() }
+        val details = o.objects("cuppingBeanDetails", "${where}의 cuppingBeanDetails").map { (b, w) -> decodeCuppingBean(b, w) }.filter { it.name.isNotBlank() }
         val cuppingBeans = details.ifEmpty { legacyCuppingBeans(o) }
-        val recipeRef = (o["recipeRef"] as? JsonObject)?.let { r ->
+        val recipeRef = o.objOrNull("recipeRef", "${where}의 recipeRef")?.let { r ->
             val name = r.str("name")
-            val steps = r.arr("steps").mapNotNull { (it as? JsonObject)?.let(::decodeStep) }
+            val steps = r.objects("steps", "${where}의 recipeRef.steps").map { (s, _) -> decodeStep(s) }
             if (name.isBlank() && steps.isEmpty()) null else RecipeRef(name, steps)
         }
         val legacy = buildJsonObject {
@@ -302,10 +309,10 @@ class BackupCodec {
         }.takeIf { it.isNotEmpty() }
         return Entry(
             id = id,
-            createdAt = o.millis("createdAt", Dates.nowMillis()),
+            createdAt = o.createdAt(where),
             category = category,
             beanMode = o.str("beanMode").ifBlank { BeanMode.SINGLE },
-            blendComponents = o.arr("blendComponents").mapNotNull { (it as? JsonObject)?.let(::decodeBlendComponent) },
+            blendComponents = o.objects("blendComponents", "${where}의 blendComponents").mapNotNull { (c, _) -> decodeBlendComponent(c) },
             name = o.str("name"),
             country = o.str("country"),
             region = o.str("region"),
@@ -342,10 +349,10 @@ class BackupCodec {
             cuppingType = o.str("cuppingType"),
             cuppingPlace = o.str("cuppingPlace"),
             cuppingBeans = cuppingBeans,
-            steps = o.arr("steps").mapNotNull { (it as? JsonObject)?.let(::decodeStep) },
+            steps = o.objects("steps", "${where}의 steps").map { (s, _) -> decodeStep(s) },
             recipeRef = recipeRef,
-            attributes = o.dblMap("attributes"),
-            attributeNotes = o.strMap("attributeNotes"),
+            attributes = o.scores("attributes", "${where}의 attributes"),
+            attributeNotes = o.objOrNull("attributeNotes", "${where}의 attributeNotes")?.strValues() ?: emptyMap(),
             tags = o.strList("tags"),
             bagPhotos = emptyList(),
             groundsPhoto = null,
@@ -353,7 +360,7 @@ class BackupCodec {
         )
     }
 
-    private fun decodeCuppingBean(o: JsonObject): CuppingBean {
+    private fun decodeCuppingBean(o: JsonObject, where: String): CuppingBean {
         val rawActual = o.str("actualNotes")
         val memoPresent = o["memo"].let { it != null && it !is JsonNull }
         val rawMemo = o.str("memo")
@@ -365,7 +372,7 @@ class BackupCodec {
             process = o.str("process"), roast = o.str("roast"), expectedNotes = o.str("expectedNotes"),
             actualNotes = rawActual.ifBlank { if (!memoPresent) note else "" },
             evaluation = o.strMap("evaluation"),
-            evaluationScores = o.dblMap("evaluationScores"),
+            evaluationScores = o.scores("evaluationScores", "${where}의 evaluationScores"),
             memo = rawMemo.ifBlank { if (rawActual.isNotBlank()) note else "" },
             beanMode = if (o.str("beanMode") == BeanMode.BLEND) BeanMode.BLEND else BeanMode.SINGLE,
             blendComponentsText = o.str("blendComponentsText"),
@@ -388,7 +395,7 @@ class BackupCodec {
     private fun decodeStep(o: JsonObject) = RecipeStep(time = o.str("time"), water = o.str("water"), wait = o.str("wait"), note = o.str("note"))
     private fun decodeBlendComponent(o: JsonObject): BlendComponent? = o.str("name").takeIf { it.isNotBlank() || o.str("grams").isNotBlank() }?.let { BlendComponent(it, o.str("grams")) }
 
-    private fun decodeMisc(o: JsonObject, photosOut: MutableList<PhotoBlob>): MiscItem? {
+    private fun decodeMisc(o: JsonObject, photosOut: MutableList<PhotoBlob>, where: String): MiscItem? {
         // web loadMiscItems (script3.js 5177-5178) shows legacy 'equipment' items as kettles; storage may still hold the old type
         val type = o.str("type").let { if (it == LEGACY_EQUIPMENT) MiscType.KETTLE else it }
         if (type.isBlank()) return null
@@ -398,18 +405,18 @@ class BackupCodec {
         return MiscItem(
             id = id, type = type, name = o.str("name"), notes = o.str("notes"), since = o.str("since"), status = o.str("status"),
             scope = o.str("scope"), location = o.str("location"), favorite = o.bool("favorite"), photos = emptyList(),
-            createdAt = o.millis("createdAt", Dates.nowMillis()),
+            createdAt = o.createdAt(where),
         )
     }
 
-    private fun decodeBlend(o: JsonObject) = Blend(
+    private fun decodeBlend(o: JsonObject, where: String) = Blend(
         id = o.str("id").ifBlank { Ids.newId() }, name = o.str("name"), date = o.str("date"),
-        beans = o.arr("beans").mapNotNull { (it as? JsonObject)?.let(::decodeBlendComponent) }, notes = o.str("notes"),
-        createdAt = o.millis("createdAt", Dates.nowMillis()),
+        beans = o.objects("beans", "${where}의 beans").mapNotNull { (c, _) -> decodeBlendComponent(c) }, notes = o.str("notes"),
+        createdAt = o.createdAt(where),
     )
 
-    private fun decodeClass(o: JsonObject) = CoffeeClass(
-        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.millis("createdAt", Dates.nowMillis()), title = o.str("title"),
+    private fun decodeClass(o: JsonObject, where: String) = CoffeeClass(
+        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.createdAt(where), title = o.str("title"),
         classType = o.str("classType").ifBlank { "oneday" }, date = o.str("date"), startDate = o.str("startDate"), endDate = o.str("endDate"), notes = o.str("notes"),
     )
 
@@ -422,29 +429,29 @@ class BackupCodec {
         )
     }
 
-    private fun decodeRecipe(o: JsonObject) = MyRecipe(
+    private fun decodeRecipe(o: JsonObject, where: String) = MyRecipe(
         id = o.str("id").ifBlank { Ids.newId() }, name = o.str("name"), fromEntryId = o.str("fromEntryId").takeIf { it.isNotBlank() },
         beanName = o.str("beanName"), rating = o.int("rating", 0), dose = o.str("dose"), water = o.str("water"), temp = o.str("temp"),
         dripper = o.str("dripper"), filter = o.str("filter"), grind = o.str("grind"), time = o.str("time"),
-        steps = o.arr("steps").mapNotNull { (it as? JsonObject)?.let(::decodeStep) }, createdAt = o.millis("createdAt", Dates.nowMillis()),
+        steps = o.objects("steps", "${where}의 steps").map { (s, _) -> decodeStep(s) }, createdAt = o.createdAt(where),
     )
 
-    private fun decodeBook(o: JsonObject) = Book(
-        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.millis("createdAt", Dates.nowMillis()), title = o.str("title"), author = o.str("author"),
+    private fun decodeBook(o: JsonObject, where: String) = Book(
+        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.createdAt(where), title = o.str("title"), author = o.str("author"),
         status = o.str("status").ifBlank { "읽는 중" }, startDate = o.str("startDate"), endDate = o.str("endDate"), rating = o.int("rating", 0), notes = o.str("notes"),
     )
 
-    private fun decodeVideo(o: JsonObject) = Video(
-        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.millis("createdAt", Dates.nowMillis()), title = o.str("title"),
+    private fun decodeVideo(o: JsonObject, where: String) = Video(
+        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.createdAt(where), title = o.str("title"),
         channel = o.str("channel"), url = o.str("url"), notes = o.str("notes"),
     )
 
-    private fun decodePantry(o: JsonObject) = PantryItem(
+    private fun decodePantry(o: JsonObject, where: String) = PantryItem(
         id = o.str("id").ifBlank { Ids.newId() }, name = o.str("name"), roastery = o.str("roastery"), packageType = o.str("packageType").ifBlank { PackageType.STANDARD },
         weight = o.str("weight"), price = o.str("price"), roastLevel = o.str("roastLevel"), roastDate = o.str("roastDate"), purchaseDate = o.str("purchaseDate"),
         peakStart = o.str("peakStart"), peakEnd = o.str("peakEnd"), expectedNotes = o.str("expectedNotes"), notes = o.str("notes"),
         status = o.str("status").ifBlank { PantryItem.STATUS_UNOPENED }, openedAt = o.millisOrNull("openedAt"),
-        createdAt = o.millis("createdAt", Dates.nowMillis()), sourceEntryId = o.str("sourceEntryId"),
+        createdAt = o.createdAt(where), sourceEntryId = o.str("sourceEntryId"),
     )
 
     private fun decodeEntryPhotos(photos: JsonObject?): List<PhotoBlob> {
@@ -499,17 +506,78 @@ class BackupCodec {
         }
     }
 
-    /** Numbers are read leniently, but "NaN", "Infinity" and "1e999" count as missing. */
+    /**
+     * Numbers are read leniently, but "NaN", "Infinity" and "1e999" count as missing. A time string is read as an
+     * instant when it names its offset ("…Z", "+09:00"), otherwise as device-local time.
+     */
     private fun JsonObject.longOrNull(key: String): Long? {
         val p = this[key] as? JsonPrimitive ?: return null
         if (p is JsonNull) return null
         val c = p.content.trim()
         c.toLongOrNull()?.let { return it }
         c.toDoubleOrNull()?.let { d -> return if (d.isFinite()) d.toLong() else null }
-        Dates.parseDateTimeInput(c.take(16))?.let { return it }
-        Dates.parseIsoDate(c)?.let { return Dates.startOfDayMillis(it) }
-        return null
+        return BackupDates.parseIso8601(c)
     }
+
+    /**
+     * `createdAt` of a record or item: missing, blank or a non-finite / out-of-range number falls back to now (as
+     * before), but a value that is not a number or a time at all ("abc", an object) means the file is damaged.
+     */
+    private fun JsonObject.createdAt(where: String): Long {
+        val v = this["createdAt"]
+        if (v != null && v !is JsonNull) {
+            val p = v as? JsonPrimitive ?: throw malformed("${where}의 createdAt이 날짜가 아니에요")
+            val c = p.content.trim()
+            if (c.isNotEmpty() && c.toDoubleOrNull() == null && longOrNull("createdAt") == null) {
+                throw malformed("${where}의 createdAt이 날짜가 아니에요: ${c.take(30)}")
+            }
+        }
+        return millis("createdAt", Dates.nowMillis())
+    }
+
+    /**
+     * The JSON objects of the list at [key], each with its position for error messages ("entries 3번째"). Missing or
+     * null means an empty list and null elements are skipped; anything else that is not a list of objects is refused.
+     */
+    private fun JsonObject.objects(key: String, where: String): List<Pair<JsonObject, String>> {
+        val v = this[key] ?: return emptyList()
+        if (v is JsonNull) return emptyList()
+        val list = v as? JsonArray ?: throw malformed("${where}이(가) 목록이 아니에요")
+        return list.mapIndexedNotNull { i, el ->
+            when (el) {
+                is JsonNull -> null
+                is JsonObject -> el to "$where ${i + 1}번째 항목"
+                else -> throw malformed("$where ${i + 1}번째 항목이 올바른 형식이 아니에요")
+            }
+        }
+    }
+
+    /** The object at [key]; null when missing or null, refused when it is something else. */
+    private fun JsonObject.objOrNull(key: String, where: String): JsonObject? = when (val v = this[key]) {
+        null, is JsonNull -> null
+        is JsonObject -> v
+        else -> throw malformed("${where}이(가) 올바른 형식이 아니에요")
+    }
+
+    /**
+     * Scores (SCA attributes, cupping evaluation scores). A non-finite value ("NaN", "Infinity", "1e999") or a blank
+     * one is dropped, i.e. treated as not scored; a value that is not a number at all ("높음", true, an object) is refused.
+     */
+    private fun JsonObject.scores(key: String, where: String): Map<String, Double> {
+        val obj = objOrNull(key, where) ?: return emptyMap()
+        val out = LinkedHashMap<String, Double>()
+        for ((k, v) in obj) {
+            if (v is JsonNull) continue
+            val p = v as? JsonPrimitive ?: throw malformed("${where}의 $k 값이 숫자가 아니에요")
+            val c = p.content.trim()
+            if (c.isEmpty()) continue
+            val d = c.toDoubleOrNull() ?: throw malformed("${where}의 $k 값이 숫자가 아니에요: ${c.take(30)}")
+            if (d.isFinite()) out[k] = d
+        }
+        return out
+    }
+
+    private fun malformed(detail: String) = BackupFormatException("백업 파일 형식이 아니에요. ($detail)")
 
     /** A timestamp; values outside years 1..9999 would make every date display throw, so they count as missing. */
     private fun JsonObject.millisOrNull(key: String): Long? = longOrNull(key)?.takeIf { it in MIN_MILLIS..MAX_MILLIS }
@@ -525,19 +593,17 @@ class BackupCodec {
         else -> emptyList()
     }
 
-    private fun JsonObject.strMap(key: String): Map<String, String> =
-        (this[key] as? JsonObject)?.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.takeUnless { it is JsonNull }?.let { k to it.content } }?.toMap() ?: emptyMap()
+    private fun JsonObject.strMap(key: String): Map<String, String> = (this[key] as? JsonObject)?.strValues() ?: emptyMap()
 
-    /** Scores; a non-finite value ("NaN", "Infinity", "1e999") is dropped, i.e. treated as not scored. */
-    private fun JsonObject.dblMap(key: String): Map<String, Double> =
-        (this[key] as? JsonObject)?.mapNotNull { (k, v) ->
-            (v as? JsonPrimitive)?.takeUnless { it is JsonNull }?.content?.let { Numbers.parse(it) }?.let { k to it }
-        }?.toMap() ?: emptyMap()
+    private fun JsonObject.strValues(): Map<String, String> =
+        mapNotNull { (k, v) -> (v as? JsonPrimitive)?.takeUnless { it is JsonNull }?.let { k to it.content } }.toMap()
 
     private fun firstNonBlank(vararg values: String): String = values.firstOrNull { it.isNotBlank() } ?: ""
 
     companion object {
         const val APP_NAME = "coffee-journal-mobile"
+        /** Web wording (script3.js 7892). */
+        const val NO_DATA = "백업 파일 형식이 아니에요. (data 필드가 없어요)"
         const val SCHEMA = 1
         const val BAG_PREFIX = "bag-photo:"
         const val JOURNAL_PREFIX = "journal-photo:"

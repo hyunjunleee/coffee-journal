@@ -2,7 +2,12 @@
 
 package com.coffeejournal.domain.rules
 
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flow
 import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalDateTime
@@ -16,28 +21,63 @@ import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.number
 import kotlinx.datetime.isoDayNumber
 import kotlin.time.Clock
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
-/** All date/time conversions go through here so the rest of the code never touches Instant directly. */
+/**
+ * All date/time conversions go through here so the rest of the code never touches Instant directly. Every
+ * conversion uses the device's current time zone unless a [TimeZone] is passed (tests pin Asia/Seoul that way).
+ */
 object Dates {
     const val DAY_MS: Long = 86_400_000L
 
-    private val zone: TimeZone get() = TimeZone.currentSystemDefault()
+    /** The device zone, read on every call so a zone change while the app runs is picked up. */
+    val systemZone: TimeZone get() = TimeZone.currentSystemDefault()
 
     fun nowMillis(): Long = Clock.System.now().toEpochMilliseconds()
 
-    fun today(): LocalDate = Clock.System.now().toLocalDateTime(zone).date
+    fun today(zone: TimeZone = systemZone): LocalDate = Clock.System.now().toLocalDateTime(zone).date
 
-    fun toLocalDateTime(epochMillis: Long): LocalDateTime =
+    /** [today] at [clock]'s time (tests). */
+    @ExperimentalTime
+    fun today(zone: TimeZone, clock: Clock): LocalDate = clock.now().toLocalDateTime(zone).date
+
+    /**
+     * Today's local date now, then again right after every local midnight (and after a time-zone or clock change),
+     * for screens left open across midnight: the D-day pill, the calendar's today cell, the pantry peak text.
+     * It re-checks at the next midnight but at least once a minute, because a sleeping device can delay a long
+     * timer; equal dates are not repeated. Collect it with `collectAsStateWithLifecycle(Dates.today())`.
+     */
+    fun todayFlow(zone: () -> TimeZone = { systemZone }): Flow<LocalDate> = todayFlow(zone, Clock.System)
+
+    /** [todayFlow] driven by [clock] (tests use virtual time). */
+    @ExperimentalTime
+    fun todayFlow(zone: () -> TimeZone, clock: Clock): Flow<LocalDate> = flow {
+        while (true) {
+            val z = zone()
+            val now = clock.now()
+            val today = now.toLocalDateTime(z).date
+            emit(today)
+            val untilMidnight = today.plus(1, DateTimeUnit.DAY).atStartOfDayIn(z) - now
+            delay(untilMidnight.coerceIn(1.milliseconds, 1.minutes) + MIDNIGHT_MARGIN)
+        }
+    }.distinctUntilChanged()
+
+    /** Lands the re-check just after midnight rather than a hair before it. */
+    private val MIDNIGHT_MARGIN = 20.milliseconds
+
+    fun toLocalDateTime(epochMillis: Long, zone: TimeZone = systemZone): LocalDateTime =
         Instant.fromEpochMilliseconds(epochMillis).toLocalDateTime(zone)
 
-    fun toLocalDate(epochMillis: Long): LocalDate = toLocalDateTime(epochMillis).date
+    fun toLocalDate(epochMillis: Long, zone: TimeZone = systemZone): LocalDate = toLocalDateTime(epochMillis, zone).date
 
-    fun startOfDayMillis(date: LocalDate): Long = date.atStartOfDayIn(zone).toEpochMilliseconds()
+    fun startOfDayMillis(date: LocalDate, zone: TimeZone = systemZone): Long = date.atStartOfDayIn(zone).toEpochMilliseconds()
 
-    fun toMillis(dateTime: LocalDateTime): Long = dateTime.toInstant(zone).toEpochMilliseconds()
+    fun toMillis(dateTime: LocalDateTime, zone: TimeZone = systemZone): Long = dateTime.toInstant(zone).toEpochMilliseconds()
 
-    fun toMillis(date: LocalDate, hour: Int, minute: Int): Long = toMillis(date.atTime(hour, minute))
+    fun toMillis(date: LocalDate, hour: Int, minute: Int, zone: TimeZone = systemZone): Long = toMillis(date.atTime(hour, minute), zone)
 
     /** Parses "YYYY-MM-DD"; null when blank or malformed. */
     fun parseIsoDate(value: String?): LocalDate? {
