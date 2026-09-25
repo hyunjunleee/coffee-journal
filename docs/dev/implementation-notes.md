@@ -37,16 +37,21 @@ export ANDROID_HOME=/opt/android-sdk
 - 오늘 날짜: 화면이 오늘에 의존하면 `Dates.todayFlow()`를 `combine`해 자정에 갱신한다. 특정 날짜의 원두 범위는 `CalendarRanges.rangesOn(ranges, date)`.
 - 트랜잭션: 여러 저장소에 걸친 쓰기는 `TransactionRunner.write { … }` 한 블록으로(같은 코루틴 안의 DAO 호출이 모두 합류). 기록 저장은 여전히 `SaveEntryPipeline.save`.
 - 복원: 화면은 `RestoreRunner`(앱 스코프)를 통해서만 `BackupService.import`를 호출한다. 화면을 떠나도 복원이 중간에 취소되지 않는다.
-- 텍스트 입력: `AppTextField`는 한글 조합이 끊기지 않도록 로컬 `TextFieldValue`를 유지한다(`ImeSafeText`). 숫자만 받기 등 입력 제한은 `onValueChange` 안에서 걸러 되돌리지 말고 `inputFilter = { … }`로 넘긴다(거절 시 null 반환, 바꾼 문자열 반환 시 커서 보정). 소유자 쪽에서 거르면 거절된 글자가 화면에 남는다.
+- 텍스트 입력: `AppTextField`는 한글 조합이 끊기지 않도록 로컬 `TextFieldValue`를 유지한다(`ImeSafeText`). `FormTextField`·`CompactField`도 같은 방식이다. 숫자만 받기 등 입력 제한은 `onValueChange` 안에서 걸러 되돌리지 말고 `inputFilter = { … }`로 넘긴다(거절 시 null 반환, 바꾼 문자열 반환 시 커서 보정). 소유자 쪽에서 거르면 거절된 글자가 화면에 남는다. 웹의 `type=number` 필드는 `InputFilters.decimal`(음이 아닌 소수, 쉼표는 소수점으로). 한 줄 필드가 포커스를 잃으면 `shownWhen`으로 글 앞부분을 보인다.
 - 날짜 입력: `DateField`(웹 `<input type="date">` 대응, "YYYY-MM-DD" 입출력, 빈 값 안내 `연도-월-일`).
 - 글리프 버튼: ×·✕ 같은 기호만 있는 동작은 `GlyphButton(glyph, label, onClick)` — 탭 영역 48dp(`MinTouchTarget`), TalkBack 라벨.
-- 키보드: 스크롤 컨테이너에 `Modifier.imeOverlapPadding()`(edge-to-edge라 창이 키보드만큼 줄지 않음; 하단 탭 높이는 제외).
-- 폼 상태 보존: 카메라 앱이 앞에 있는 동안 프로세스가 죽어도 입력이 남도록 `SavedFormState`(SavedStateHandle + JSON)로 저장.
+- 키보드: 스크롤 컨테이너에 `Modifier.imeOverlapPadding()`(`ui/theme/ImeInsets.kt`)(edge-to-edge라 창이 키보드만큼 줄지 않음; 하단 탭 높이는 제외).
+- 폼 상태 보존: 카메라 앱이 앞에 있는 동안 프로세스가 죽어도 입력이 남도록 `SavedFormState`(`ui/theme`, SavedStateHandle + JSON)로 저장.
+- 저장 중 뒤로 가기: 폼은 `BlockBackWhile(saving)`으로 시스템 뒤로 가기를 막고, 제목줄 ←·취소도 저장 중에는 무시한다.
+- 파생 계산: 기록 전체를 다시 묶는 계산(그룹핑·통계·추천)은 `Flow.deriveOffMain { … }`으로 `Dispatchers.Default`에서, 최신 입력만 반영해 수행한다. 메인 스레드에서 직접 계산하지 않는다(기록 1,000건에서 110–150ms).
+- 큰 글자·좁은 화면: 한 줄이어야 하는 짧은 라벨은 `FitText`(줄바꿈 대신 축소), 고정 폭 숫자 열은 `N.dp.fontScaled()`(글자 배율만큼, 최대 1.6배 확장). `Seg`는 웹 flex-wrap처럼 넘치면 다음 줄로 옮긴다.
+- 동시 수정: 읽고-고쳐-쓰는 저장(로드맵, 보관함 편집, 즐겨찾기)은 `Mutex` 안에서 행을 다시 읽은 뒤 쓴다. 빠른 연속 탭이나 다른 화면의 변경이 덮이지 않게 한다.
 - 탭 간 요청: 다른 화면에서 원두 탭의 특정 서브뷰를 열 때는 `BeanViewRequests`(Koin single)에 요청을 넣고 탭을 전환한다(라우트 인자는 탭 전환 시 이전 값으로 복원되므로 쓰지 않음).
 
 ## 디자인 규약 (`ui/theme`)
+- 접근성: 글리프·체크박스·지도·휠처럼 그림만 있는 요소는 동작 이름이나 아래 목록을 가리키는 content description을 달고, 접이식 헤더·토글은 펼침/선택 상태를 노출한다. 달력 칸은 "9월 21일, 오늘, 기록 2개"처럼 읽힌다.
 - 색·타이포: `Ink.*`, `AppType.*`, 간격 `Dimens.*`. 모서리 반경 0, 헤어라인 0.5dp, 그림자 없음.
-- 컴포넌트: `TopHeader`, `ScreenTitleBar`, `SectionLabel`, `FieldLabel`, `Hairline`, `PrimaryButton`, `GhostButton`, `SubTabs`, `Seg`, `HairlineCard`, `EmptyNote`, `HintText`, `CatDot`, `Badge`, `KeyValueRow`, `AppTextField`, `ChipInput`, `Chip`, 아이콘 `AppIcons.*`(material-icons 라이브러리는 없다).
+- 컴포넌트: `TopHeader`, `ScreenTitleBar`, `SectionLabel`, `FieldLabel`, `Hairline`, `PrimaryButton`, `GhostButton`, `SubTabs`(선택 칩으로 자동 스크롤, 강조 칩 옵션), `Seg`, `HairlineCard`, `EmptyNote`, `HintText`, `CatDot`, `Badge`, `KeyValueRow`, `AppTextField`, `ChipInput`, `Chip`, 아이콘 `AppIcons.*`(material-icons 라이브러리는 없다).
 - 문구는 웹 원문을 그대로 쓴다(빈 상태 안내, 라벨, placeholder). 한국어.
 - 삭제는 항상 확인 대화상자(`AlertDialog`). 목록 정렬·필터 기본값은 웹과 동일.
 - 세그먼트는 같은 옵션 재탭 시 해제(`Seg(allowClear = true)`), 단 카테고리 같은 필수 세그는 `allowClear = false`.

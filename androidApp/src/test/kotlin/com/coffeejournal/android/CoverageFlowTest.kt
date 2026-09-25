@@ -26,7 +26,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -412,7 +411,6 @@ class CoverageFlowTest : CoverageFlowBase() {
      * F3 beanA-1: a cupping that tasted the same honey bean twice gives two records with the same LazyColumn key
      * (entryId|name|createdAt), which crashes the honey detail as soon as that subtype is opened.
      */
-    @Ignore("app defect: honey detail crashes with 'Key … was already used' when one cupping lists the same honey bean twice (F3 beanA-1, ProcessDetailScreen.kt:90)")
     @Test
     fun cov09_honeyDetail_sameBeanTwiceInOneCupping_doesNotCrash() {
         runBlocking {

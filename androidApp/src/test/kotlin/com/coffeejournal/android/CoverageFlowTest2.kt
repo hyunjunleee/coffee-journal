@@ -28,7 +28,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -140,7 +139,6 @@ class CoverageFlowTest2 : CoverageFlowBase() {
     }
 
     /** Web jumpToFarm (scrollIntoView block:center + highlight): the tapped farm's own card comes into view. */
-    @Ignore("app defect: the map panel's farm row scrolls to the top of the farm list, not to that farm's card (F3 beanB-4, BeanMapView.kt:109)")
     @Test
     fun cov11_coffeeMap_farmRow_jumpsToThatFarmsCard() {
         SampleData.seed()

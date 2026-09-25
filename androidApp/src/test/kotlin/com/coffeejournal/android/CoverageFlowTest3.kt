@@ -36,7 +36,6 @@ import kotlinx.datetime.number
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -246,7 +245,6 @@ class CoverageFlowTest3 : CoverageFlowBase() {
      * Critic gap: CalendarViewModel.updatePhase reads the whole phase and upserts it from a separate coroutine per tap,
      * so two checks made before the first write lands overwrite each other.
      */
-    @Ignore("app defect: two roadmap checks made within one database round trip lose the first one (CalendarViewModel.kt:147-152 updatePhase reads the phase and upserts it from a separate coroutine per tap)")
     @Test
     fun cov23_roadmap_twoQuickChecks_bothAreSaved() {
         runBlocking {
