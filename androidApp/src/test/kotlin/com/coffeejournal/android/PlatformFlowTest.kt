@@ -74,7 +74,7 @@ class PlatformFlowTest : FlowTestBase() {
 
     private fun dp(value: Int): Float = value * context.resources.displayMetrics.density
 
-    /** 기타 tab → floating "+" → the equipment form (a full-screen route). */
+    /** 기타 tab → 드리퍼 → floating "+" → the equipment form (a full-screen route). */
     private fun openEquipmentForm() {
         launchApp()
         tab("tab-misc")
