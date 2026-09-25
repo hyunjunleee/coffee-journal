@@ -28,6 +28,7 @@ class ScreenshotTest {
     @Before
     fun setUp() {
         startTestKoin(ApplicationProvider.getApplicationContext())
+        SampleData.seed()
     }
 
     @Test
