@@ -2,6 +2,7 @@ package com.coffeejournal.ui.nav
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -31,6 +32,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination
 import androidx.navigation.NavDestination.Companion.hasRoute
@@ -96,27 +101,48 @@ fun NavHostController.navigateTab(route: Route) {
 private fun BottomBar(current: TabSpec, onSelect: (Route) -> Unit) {
     Column(Modifier.fillMaxWidth().background(Ink.bg)) {
         Hairline(color = Ink.text, thickness = Dimens.rule)
-        Row(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)))) {
-            tabs.forEach { tab ->
-                val selected = tab == current
-                Column(
-                    Modifier
-                        .weight(1f)
-                        .testTag(tab.tag)
-                        .selectable(selected = selected, role = Role.Tab, onClick = { onSelect(tab.route) })
-                        // read once as "기타" (not the icon label plus the bracketed text), with the selected state
-                        .semantics { contentDescription = tab.label }
-                        .padding(top = 10.dp, bottom = 8.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                ) {
-                    Icon(tab.icon, contentDescription = null, tint = if (selected) Ink.text else Ink.textFaint, modifier = Modifier.size(19.dp))
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        if (selected) "[ ${tab.label} ]" else tab.label,
-                        style = AppType.monoSmall.copy(color = if (selected) Ink.text else Ink.textFaint),
-                    )
+        BoxWithConstraints(Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.navigationBars.union(WindowInsets.displayCutout.only(WindowInsetsSides.Horizontal)))) {
+            val labelStyle = rememberTabLabelStyle(constraints.maxWidth / tabs.size)
+            Row(Modifier.fillMaxWidth()) {
+                tabs.forEach { tab ->
+                    val selected = tab == current
+                    Column(
+                        Modifier
+                            .weight(1f)
+                            .testTag(tab.tag)
+                            .selectable(selected = selected, role = Role.Tab, onClick = { onSelect(tab.route) })
+                            // read once as "기타" (not the icon label plus the bracketed text), with the selected state
+                            .semantics { contentDescription = tab.label }
+                            .padding(top = 10.dp, bottom = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Icon(tab.icon, contentDescription = null, tint = if (selected) Ink.text else Ink.textFaint, modifier = Modifier.size(19.dp))
+                        Spacer(Modifier.height(4.dp))
+                        // one line ("[ 새로운 추 / 출 ]" read badly), every label at the same size
+                        Text(
+                            if (selected) "[ ${tab.label} ]" else tab.label,
+                            style = labelStyle.copy(color = if (selected) Ink.text else Ink.textFaint),
+                            maxLines = 1, softWrap = false,
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+/**
+ * The tab label style, made smaller when the widest selected label ("[ 새로운 추출 ]") would not fit a tab
+ * ([tabWidth] px) on one line (a narrow phone, a large font), so all four labels stay on one line at one size.
+ */
+@Composable
+private fun rememberTabLabelStyle(tabWidth: Int): TextStyle {
+    val measurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val base = AppType.monoSmall
+    return remember(measurer, density, tabWidth) {
+        val room = tabWidth - with(density) { 8.dp.roundToPx() }
+        val widest = tabs.maxOf { measurer.measure("[ ${it.label} ]", base, maxLines = 1, softWrap = false).size.width }
+        if (widest <= room || room <= 0) base else base.copy(fontSize = base.fontSize * (room.toFloat() / widest))
     }
 }

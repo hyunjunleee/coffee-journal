@@ -89,6 +89,14 @@ object FlatItemLogic {
     }
 
     /** Web renderRoasteryMap: scoped roasteries sorted by record count, pins for the located ones. */
+    /** The roastery map's TalkBack label: how many roasteries are pinned, and where the rest are. */
+    fun roasteryMapDescription(domestic: Boolean, model: RoasteryMapModel): String {
+        val title = if (domestic) "한국 로스터리 지도" else "해외 로스터리 지도"
+        val pinned = if (model.pins.isEmpty()) "표시된 로스터리가 없어요" else "로스터리 ${model.pins.size}곳 표시"
+        val unlocated = if (model.unlocated.isEmpty()) "" else ", 위치 미입력 ${model.unlocated.size}곳"
+        return "$title. $pinned$unlocated. 전체 목록은 지도 아래에 있어요."
+    }
+
     fun roasteryMap(items: List<MiscItem>, records: List<BeanRecord>, scope: String): RoasteryMapModel {
         val scoped = items.filter { it.type == MiscType.SOURCE && it.scope == scope }
             .sortedWith(compareByDescending<MiscItem> { roasteryRecords(records, it.name).size }.thenBy(KoreanOrder) { it.name })

@@ -30,6 +30,7 @@ import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
 import com.coffeejournal.ui.form.RemoveButton
 import com.coffeejournal.ui.form.TextLink
+import com.coffeejournal.ui.theme.InputFilters
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GhostButton
@@ -109,7 +110,8 @@ private fun BlendRows(state: FormState, suggestions: FormSuggestions, blendFocus
                 Spacer(Modifier.width(8.dp))
                 CompactField(
                     value = row.grams, onValueChange = { v -> update { s -> s.copy(blendRows = s.blendRows.replaceAt(index, row.copy(grams = v))) } },
-                    placeholder = "그램(g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.width(78.dp).padding(top = 4.dp),
+                    placeholder = "그램(g)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal,
+                    modifier = Modifier.width(78.dp).padding(top = 4.dp),
                 )
                 RemoveButton(
                     onClick = { update { s -> val rest = s.blendRows.filterIndexed { i, _ -> i != index }; s.copy(blendRows = rest.ifEmpty { listOf(BlendRowForm()) }) } },

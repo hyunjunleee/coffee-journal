@@ -29,7 +29,7 @@ import com.coffeejournal.ui.extract.components.DrinkingRow
 import com.coffeejournal.ui.extract.components.GroupActions
 import com.coffeejournal.ui.extract.components.SmallPackCardView
 import com.coffeejournal.ui.extract.components.searchResultItems
-import com.coffeejournal.ui.form.imeOverlapPadding
+import com.coffeejournal.ui.theme.imeOverlapPadding
 import com.coffeejournal.ui.nav.FormMode
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.AppIcons
@@ -55,6 +55,8 @@ private val SMALL_LABELS = mapOf(SmallPackFilter.ALL to "전체", SmallPackFilte
 fun ExtractTabScreen(nav: NavHostController) {
     val vm = koinViewModel<ExtractViewModel>()
     val state by vm.state.collectAsStateWithLifecycle()
+    val query by vm.query.collectAsStateWithLifecycle()
+    val summaryDraft by vm.summaryDraft.collectAsStateWithLifecycle()
     val photoStore = koinInject<PhotoStore>()
     val newRecord = { nav.navigate(Route.RecordForm(mode = FormMode.EXTRACT)) }
     val openEntry = { id: String -> nav.navigate(Route.EntryDetail(id)) }
@@ -76,7 +78,7 @@ fun ExtractTabScreen(nav: NavHostController) {
                 }
             }
             item { ActionRow(onNew = newRecord, onPantry = { nav.navigate(Route.Pantry) }, onBackup = { nav.navigate(Route.Backup) }) }
-            item { FilterBlock(state.controls, vm::setFilterMode, vm::setSmallMode, vm::setQuery) }
+            item { FilterBlock(state.controls, query, vm::setFilterMode, vm::setSmallMode, vm::setQuery) }
             val search = state.search
             if (search != null) {
                 searchResultItems(search, openEntry)
@@ -88,7 +90,7 @@ fun ExtractTabScreen(nav: NavHostController) {
                     val ui = state.groups[i]
                     val key = ui.group.key
                     BeanGroupCard(
-                        ui = ui, summaryDraft = state.controls.summaryDraft, photoStore = photoStore,
+                        ui = ui, summaryDraft = summaryDraft, photoStore = photoStore,
                         actions = GroupActions(
                             onToggle = { vm.toggleGroup(key, ui.expanded) },
                             onOpenEntry = openEntry,
@@ -125,7 +127,7 @@ private fun ActionRow(onNew: () -> Unit, onPantry: () -> Unit, onBackup: () -> U
 }
 
 @Composable
-private fun FilterBlock(controls: ExtractControls, onFilter: (String) -> Unit, onSmall: (String) -> Unit, onQuery: (String) -> Unit) {
+private fun FilterBlock(controls: ExtractControls, query: String, onFilter: (String) -> Unit, onSmall: (String) -> Unit, onQuery: (String) -> Unit) {
     Column(Modifier.padding(horizontal = Dimens.gutter).padding(top = 14.dp, bottom = 8.dp)) {
         SubTabs(items = FILTER_LABELS.keys.toList(), selected = controls.filterMode, onSelect = onFilter, labels = FILTER_LABELS)
         if (controls.filterMode == ExtractFilter.SMALLPACK) {
@@ -135,8 +137,8 @@ private fun FilterBlock(controls: ExtractControls, onFilter: (String) -> Unit, o
         Spacer(Modifier.height(10.dp))
         FieldLabel("원두 이름 검색")
         AppTextField(
-            value = controls.query, onValueChange = onQuery, placeholder = "예: 벤사, 게이샤, 리브레",
-            trailing = if (controls.query.isNotBlank()) ({
+            value = query, onValueChange = onQuery, placeholder = "예: 벤사, 게이샤, 리브레",
+            trailing = if (query.isNotBlank()) ({
                 GlyphButton("×", label = "검색어 지우기", onClick = { onQuery("") }, modifier = Modifier.padding(8.dp), style = AppType.body.copy(color = Ink.textFaint))
             }) else null,
         )

@@ -36,6 +36,7 @@ import com.coffeejournal.ui.theme.CatDot
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.fontScaled
 import com.coffeejournal.ui.theme.KeyValueRow
 import com.coffeejournal.ui.theme.SectionLabel
 
@@ -146,9 +147,10 @@ private fun DetailSteps(en: Entry) {
             Box(Modifier.width(4.dp).height(26.dp).background(if (s.isPour) Ink.accent else Ink.line))
             Spacer(Modifier.width(10.dp))
             Text(s.note.ifBlank { if (s.isPour) "푸어" else "대기" }, style = AppType.small.copy(color = Ink.text), modifier = Modifier.weight(1f))
-            Text(s.time, style = AppType.monoValue, modifier = Modifier.width(48.dp))
-            Text(if (s.water.isNotBlank()) "${s.water}g" else "", style = AppType.monoValue, modifier = Modifier.width(56.dp))
-            Text(if (s.wait.isNotBlank()) "${s.wait}s" else "", style = AppType.monoValue, modifier = Modifier.width(44.dp))
+            // mono values grow with the font instead of breaking in two
+            Text(s.time, style = AppType.monoValue, softWrap = false, modifier = Modifier.width(48.dp.fontScaled(1.5f)))
+            Text(if (s.water.isNotBlank()) "${s.water}g" else "", style = AppType.monoValue, softWrap = false, modifier = Modifier.width(56.dp.fontScaled(1.5f)))
+            Text(if (s.wait.isNotBlank()) "${s.wait}s" else "", style = AppType.monoValue, softWrap = false, modifier = Modifier.width(44.dp.fontScaled(1.5f)))
         }
     }
     StepsSummaryBox(en.steps, en.water, en.time, en.recipeRef)

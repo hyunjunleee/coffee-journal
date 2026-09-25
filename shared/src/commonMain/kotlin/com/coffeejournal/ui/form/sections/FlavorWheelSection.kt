@@ -20,6 +20,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.reference.FlavorWheel
 import com.coffeejournal.ui.form.Collapsible
@@ -57,7 +59,8 @@ internal fun FlavorWheelSection(open: Boolean, actualNotes: List<String>, onTogg
 @Composable
 private fun WheelRing(modifier: Modifier) {
     val colors = FlavorWheel.categories.map { Ink.hex(it.colorHex) }
-    Canvas(modifier) {
+    // the descriptor chips below are the accessible way to pick notes; the ring itself only needs a label
+    Canvas(modifier.semantics { contentDescription = "플레이버 휠 ${FlavorWheel.categories.size}개 계열: " + FlavorWheel.categories.joinToString(", ") { it.name } + ". 아래 항목을 눌러 노트를 추가해요." }) {
         val sweep = 360f / colors.size
         val stroke = size.minDimension * 0.22f
         val inset = stroke / 2 + 2f

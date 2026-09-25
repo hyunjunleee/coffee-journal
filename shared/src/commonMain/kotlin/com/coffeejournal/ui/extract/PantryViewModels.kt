@@ -12,7 +12,7 @@ import com.coffeejournal.domain.rules.NoteCanon
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.PantryRules
 import com.coffeejournal.domain.rules.Prices
-import com.coffeejournal.ui.form.SavedFormState
+import com.coffeejournal.ui.theme.SavedFormState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -121,17 +121,39 @@ class PantryEditorViewModel(
     /** Web pantry-price blur: "18000" → "18,000". */
     fun formatPrice() = _form.update { it.copy(price = Prices.formatInput(it.price)) }
 
-    /** One save per form: taps while it runs, or after it succeeded (the screen is closing), are ignored. */
+    /**
+     * One save per form: taps while it runs, or after it succeeded (the screen is closing), are ignored. The form
+     * owns only what it shows; the bag's status, opening time, creation time and source record belong to the row as
+     * it is now — it may have been opened, moved to 드립백 / 소량 or linked to a record since the form was loaded —
+     * so the row is read again right before it is written (gap #11).
+     */
     fun save() {
         val f = _form.value
         if (!f.loaded || f.saving || f.saved) return
         val notes = if (f.noteInput.isNotBlank()) NoteCanon.addChips(f.expectedNotes, f.noteInput) else f.expectedNotes
         val name = f.name.trim()
         if (name.isEmpty()) { _form.update { it.copy(error = "원두 이름을 입력해주세요.") }; return }
-        val prev = existing
+        _form.update { it.copy(saving = true, error = null) }
+        viewModelScope.launch {
+            try {
+                // an edit restored after process death may be saved before the row finished loading
+                val id = existing?.id ?: itemId?.takeIf { f.isEdit } ?: f.draftId.ifBlank { Ids.newId() }
+                val current = pantry.getById(id) ?: existing
+                pantry.upsert(formItem(f, name, notes, id, current))
+                _form.update { it.copy(expectedNotes = notes, noteInput = "", saved = true) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _form.update { it.copy(saving = false, error = "저장하지 못했어요: ${e.message ?: "알 수 없는 오류"}") }
+            }
+        }
+    }
+
+    /** The row to write: the form's fields over [current] (the stored row, null for a new bag). */
+    private fun formItem(f: PantryForm, name: String, notes: List<String>, id: String, current: PantryItem?): PantryItem {
         val now = Dates.nowMillis()
-        val item = PantryItem(
-            id = prev?.id ?: f.draftId.ifBlank { Ids.newId(now) },
+        return PantryItem(
+            id = id,
             name = name,
             roastery = f.roastery.trim(),
             packageType = f.packageType,
@@ -144,22 +166,11 @@ class PantryEditorViewModel(
             peakEnd = f.peakEnd,
             expectedNotes = NoteCanon.joinChips(notes),
             notes = f.notes.trim(),
-            status = prev?.status ?: PantryItem.STATUS_UNOPENED,
-            openedAt = prev?.openedAt,
-            createdAt = prev?.createdAt ?: now,
-            sourceEntryId = prev?.sourceEntryId ?: "",
+            status = current?.status ?: PantryItem.STATUS_UNOPENED,
+            openedAt = current?.openedAt,
+            createdAt = current?.createdAt ?: now,
+            sourceEntryId = current?.sourceEntryId ?: "",
         )
-        _form.update { it.copy(saving = true, error = null) }
-        viewModelScope.launch {
-            try {
-                pantry.upsert(item)
-                _form.update { it.copy(expectedNotes = notes, noteInput = "", saved = true) }
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                _form.update { it.copy(saving = false, error = "저장하지 못했어요: ${e.message ?: "알 수 없는 오류"}") }
-            }
-        }
     }
 
     private fun legacyRoastLevel(value: String): String = when (value) {

@@ -21,6 +21,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.reference.NoteCategories
 import com.coffeejournal.ui.theme.AppType
@@ -33,7 +35,7 @@ import com.coffeejournal.ui.theme.Ink
 internal fun FlavorWheelLegend(modifier: Modifier = Modifier) {
     val families = NoteCategories.all
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Canvas(Modifier.size(112.dp)) {
+        Canvas(Modifier.size(112.dp).semantics { contentDescription = "플레이버 휠 ${families.size}개 계열: " + families.joinToString(", ") { it.name } }) {
             val stroke = 22.dp.toPx()
             val inset = stroke / 2
             val arcSize = Size(size.width - stroke, size.height - stroke)

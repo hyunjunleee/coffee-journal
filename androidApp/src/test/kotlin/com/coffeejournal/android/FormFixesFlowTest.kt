@@ -76,21 +76,27 @@ class FormFixesFlowTest : FlowTestBase() {
 
     // ───────────── NaN / Infinity in a step field must not crash the form ─────────────
 
+    /**
+     * The wait and water fields are the web's type=number inputs: "NaN" and "Infinity" are not taken (gap #3 moved
+     * that filter into the field), so the step log keeps its numbers and the form saves them. Stored "NaN"s from a
+     * backup are still ignored by the summary (FormNumbers).
+     */
     @Test
-    fun nanStepWait_isIgnoredInsteadOfCrashing() {
+    fun nanStepWait_isNotTaken_andTheFormSavesTheNumbersThatStayed() {
         launchApp()
         openNewForm()
         typeInto(namePlaceholder, "NaN 테스트 원두")
         replaceIn("35", "NaN") // the last example step's wait (the drawdown)
-        // the last step's own time field plus 총 추출시간, recomputed without the NaN wait
-        waitUntil("총 추출시간 1:35") { count(field("1:35")) >= 2 }
+        assertTrue("the wait keeps its number", has(field("35")))
         replaceIn("80", "Infinity") // a pour's water
+        assertTrue(has(field("80")))
+        waitUntil("총 추출시간 2:10") { has(field("2:10")) }
         settle()
         clickText("저장")
         waitUntil("detail") { onDetailOf("NaN 테스트 원두") }
         val saved = entries().single()
-        assertEquals("", saved.steps.last().wait)
-        assertEquals("1:35", saved.time)
+        assertEquals("35", saved.steps.last().wait)
+        assertEquals("2:10", saved.time)
         assertTrue(saved.steps.none { it.water == "Infinity" })
     }
 

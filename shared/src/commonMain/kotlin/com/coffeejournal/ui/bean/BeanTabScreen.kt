@@ -13,8 +13,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
-import com.coffeejournal.ui.form.imeOverlapPadding
+import com.coffeejournal.ui.theme.imeOverlapPadding
 import com.coffeejournal.ui.theme.Dimens
+import com.coffeejournal.ui.theme.SubTabs
 import com.coffeejournal.ui.theme.TopHeader
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -36,9 +37,13 @@ fun BeanTabScreen(nav: NavHostController) {
         // the web header is global: every tab shows the record count
         TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = if (data.loaded) "${data.entries.size} entries" else null)
         // the selected chip is scrolled into view (the default 커피 지도 is the 8th of 9)
-        BeanSubTabs(
+        SubTabs(
+            items = BeanViews.all,
             selected = view,
             onSelect = vm::selectView,
+            labels = BeanViews.labels,
+            // ✦ Competition Lots keeps the web's accent outline (.cal-subtab-special)
+            special = setOf(BeanViews.SPECIALTY),
             modifier = Modifier.fillMaxWidth().padding(horizontal = Dimens.gutter, vertical = 10.dp),
         )
         // every sub view fills this box, so its scroll area ends at the keyboard (search fields, the process add form)

@@ -9,7 +9,7 @@ import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.MiscStatus
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
-import com.coffeejournal.ui.form.SavedFormState
+import com.coffeejournal.ui.theme.SavedFormState
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -144,7 +144,8 @@ class MiscFormViewModel(
                             is PhotoSlot.Fresh -> photoStore.save(slot.bytes).also { created += it }
                         }
                     }
-                    val existing = original
+                    // the row as it is now: its favourite mark may have changed since the form was loaded (gap #11)
+                    val existing = original?.let { repo.getById(it.id) ?: it }
                     val now = Dates.nowMillis()
                     repo.upsert(
                         MiscItem(

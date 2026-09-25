@@ -16,6 +16,7 @@ import com.coffeejournal.ui.form.FormState
 import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
 import com.coffeejournal.ui.form.TwoUp
+import com.coffeejournal.ui.theme.InputFilters
 import com.coffeejournal.ui.theme.ChipInput
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.Seg
@@ -41,15 +42,15 @@ internal fun BeanInfoSection(state: FormState, suggestions: FormSuggestions, upd
     )
     if (!state.isCafe) {
         TwoUp(
-            { m -> FormTextField(state.moisture, { v -> update { it.copy(moisture = v) } }, m, label = "수분율 (%)", placeholder = "11.3", keyboardType = KeyboardType.Decimal) },
-            { m -> FormTextField(state.density, { v -> update { it.copy(density = v) } }, m, label = "밀도 (g/L)", placeholder = "850", keyboardType = KeyboardType.Number) },
+            { m -> FormTextField(state.moisture, { v -> update { it.copy(moisture = v) } }, m, label = "수분율 (%)", placeholder = "11.3", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
+            { m -> FormTextField(state.density, { v -> update { it.copy(density = v) } }, m, label = "밀도 (g/L)", placeholder = "850", keyboardType = KeyboardType.Number, inputFilter = InputFilters::decimal) },
         )
-        TwoUp({ m -> FormTextField(state.score, { v -> update { it.copy(score = v) } }, m, label = "CoE 컵 점수", placeholder = "87.5", keyboardType = KeyboardType.Decimal) })
+        TwoUp({ m -> FormTextField(state.score, { v -> update { it.copy(score = v) } }, m, label = "CoE 컵 점수", placeholder = "87.5", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) })
     }
     ProcessAndRoast(state, update)
     if (!state.isCafe) {
         TwoUp(
-            { m -> FormTextField(state.bagWeight, { v -> update { it.copy(bagWeight = v) } }, m, label = "원두 총량 (g, 선택)", placeholder = "100", keyboardType = KeyboardType.Number) },
+            { m -> FormTextField(state.bagWeight, { v -> update { it.copy(bagWeight = v) } }, m, label = "원두 총량 (g, 선택)", placeholder = "100", keyboardType = KeyboardType.Number, inputFilter = InputFilters::decimal) },
             { m -> FormTextField(state.arrival, { v -> update { it.copy(arrival = v) } }, m, label = "입고 시기", placeholder = "예: 2026.1") },
         )
         TwoUp({ m -> FormTextField(state.roastDate, { v -> update { it.copy(roastDate = v) } }, m, label = "로스팅 날짜", placeholder = "예: 2026. 7. 11") })

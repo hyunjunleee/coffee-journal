@@ -1,4 +1,4 @@
-package com.coffeejournal.ui.form
+package com.coffeejournal.ui.theme
 
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.ime

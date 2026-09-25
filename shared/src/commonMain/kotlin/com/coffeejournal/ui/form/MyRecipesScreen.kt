@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.MyRecipe
+import com.coffeejournal.ui.theme.InputFilters
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
@@ -128,11 +129,11 @@ private fun NewRecipeForm(equipment: RecipeEquipment, onSave: (MyRecipeDraft) ->
         )
         TwoUp(
             { m -> FormTextField(d.grind, { d = d.copy(grind = it) }, m, label = "분쇄도") },
-            { m -> FormTextField(d.dose, { d = d.copy(dose = it) }, m, label = "원두량 (g)", keyboardType = KeyboardType.Decimal) },
+            { m -> FormTextField(d.dose, { d = d.copy(dose = it) }, m, label = "원두량 (g)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
         )
         TwoUp(
-            { m -> FormTextField(d.water, { d = d.copy(water = it) }, m, label = "물량 (g)", keyboardType = KeyboardType.Decimal) },
-            { m -> FormTextField(d.temp, { d = d.copy(temp = it) }, m, label = "물 온도 (°C)", keyboardType = KeyboardType.Decimal) },
+            { m -> FormTextField(d.water, { d = d.copy(water = it) }, m, label = "물량 (g)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
+            { m -> FormTextField(d.temp, { d = d.copy(temp = it) }, m, label = "물 온도 (°C)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
         )
         TwoUp({ m -> FormTextField(d.time, { d = d.copy(time = it) }, m, label = "총 추출시간", placeholder = "2:10") })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {

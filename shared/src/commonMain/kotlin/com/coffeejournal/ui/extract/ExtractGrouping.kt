@@ -327,8 +327,11 @@ object ExtractGrouping {
         return entries.any { BeanNames.coreBeanName(it.name) == key && Packages.isBlend(it) }
     }
 
-    /** Web renderWeeklyBean: opened standard bags first, otherwise the most recent standard brew. */
-    fun drinking(entries: List<Entry>, pantry: List<PantryItem>, blends: List<Blend>, misc: List<MiscItem>, today: LocalDate = Dates.today()): DrinkingState {
+    /**
+     * Web renderWeeklyBean: opened standard bags first, otherwise the most recent standard brew. [today] comes from the
+     * ViewModel's midnight-aware date flow and is never read here, so "N일째" moves on at midnight (gap #14).
+     */
+    fun drinking(entries: List<Entry>, pantry: List<PantryItem>, blends: List<Blend>, misc: List<MiscItem>, today: LocalDate): DrinkingState {
         val opened = pantry.filter { item ->
             item.isOpened && Packages.pantryPackageType(item) == PackageType.STANDARD &&
                 !isKnownBlendName(item.name, entries) && !BeanNames.isDecaf(item.name, "", "")

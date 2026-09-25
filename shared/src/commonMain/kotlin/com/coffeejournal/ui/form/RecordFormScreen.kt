@@ -35,6 +35,7 @@ import com.coffeejournal.ui.form.sections.RecipeLauncherSection
 import com.coffeejournal.ui.form.sections.RecipeSection
 import com.coffeejournal.ui.form.sections.TastingSection
 import com.coffeejournal.ui.nav.Route
+import com.coffeejournal.ui.theme.BlockBackWhile
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Hairline
@@ -79,6 +80,8 @@ fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cup
 
     // The title-bar back and 취소 wait while "저장 중..." is shown (the save itself also survives leaving, see save()).
     val leave = { if (!vm.state.value.saving) nav.popBackStack() }
+    // system back waits too, so a new record still opens its detail screen when the save finishes
+    BlockBackWhile(state.saving)
     Column(Modifier.fillMaxSize().background(Ink.bg).statusBarsPadding()) {
         ScreenTitleBar(title = if (state.isEdit) "기록 수정" else "새 기록", onBack = { leave() })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
