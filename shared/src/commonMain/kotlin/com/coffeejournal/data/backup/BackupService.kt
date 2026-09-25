@@ -1,5 +1,6 @@
 package com.coffeejournal.data.backup
 
+import com.coffeejournal.data.db.TransactionRunner
 import com.coffeejournal.data.photo.PhotoStore
 import com.coffeejournal.data.repo.BeanMetaRepository
 import com.coffeejournal.data.repo.BlendRepository
@@ -8,12 +9,12 @@ import com.coffeejournal.data.repo.MiscRepository
 import com.coffeejournal.data.repo.MyRecipeRepository
 import com.coffeejournal.data.repo.PantryRepository
 import com.coffeejournal.data.repo.RoadmapRepository
+import com.coffeejournal.data.repo.SaveEntryPipeline
 import com.coffeejournal.data.repo.SettingsRepository
 import com.coffeejournal.data.repo.StudyRepository
-import com.coffeejournal.domain.model.Entry
-import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.rules.Dates
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 enum class ImportMode { MERGE, REPLACE }
@@ -59,6 +60,8 @@ class BackupService(
     private val settings: SettingsRepository,
     private val photos: PhotoStore,
     private val codec: BackupCodec,
+    private val tx: TransactionRunner,
+    private val pipeline: SaveEntryPipeline,
 ) {
     fun fileName(): String = "커피일지-백업-${Dates.isoDate(Dates.today())}.json"
 
@@ -100,116 +103,130 @@ class BackupService(
         return ExportResult(json = json, fileName = fileName(), rows = snap.countRows(), photoCount = snap.photoCount, totalBytes = bytes)
     }
 
-    suspend fun import(s: BackupSnapshot, mode: ImportMode): ImportResult {
-        val replace = mode == ImportMode.REPLACE
-        val lines = mutableListOf<ImportLine>()
-        var photoOk = 0
-        var photoFail = 0
-
-        suspend fun savePhoto(blob: PhotoBlob): String? =
-            runCatching { photos.save(blob.bytes) }.onSuccess { photoOk++ }.onFailure { photoFail++ }.getOrNull()
-
-        // ── entries (id-based upsert; photos attached as files) ──
-        if (BackupKeys.ENTRIES in s.present) {
-            var ok = 0
-            var fail = 0
-            var detail: String? = null
+    /**
+     * Restores [s] all-or-nothing (user decision): every photo file is written first, then every database change runs
+     * in one transaction, and files that no row refers to any more are deleted only after the commit. If anything
+     * fails, the transaction rolls back, the photo files written for this restore are deleted and the error is thrown,
+     * so the app keeps exactly the data it had.
+     *
+     * Records are always merged by id, whichever [mode] is picked: 교체 never deletes a record, it only replaces the
+     * other collections. The work is not cancellable (a cancel arriving just after the commit must not delete the
+     * files the new rows point to); callers run it in an app-wide scope. [onProgress] reports stored photos (done, total).
+     */
+    suspend fun import(s: BackupSnapshot, mode: ImportMode, onProgress: (done: Int, total: Int) -> Unit = { _, _ -> }): ImportResult =
+        withContext(NonCancellable) {
+            val written = mutableListOf<String>()
             try {
-                val existingById = entries.getAll().associateBy { it.id }
-                if (replace) existingById.values.forEach { entries.delete(it.id) }
-                for (en in s.entries) {
-                    try {
-                        val existing = if (replace) null else existingById[en.id]
-                        val bagBlobs = s.photosFor(en.id, PhotoKind.BAG)
-                        val groundsBlob = s.photosFor(en.id, PhotoKind.GROUNDS).firstOrNull()
-                        val savedBag = bagBlobs.mapNotNull { savePhoto(it) }
-                        val savedGrounds = groundsBlob?.let { savePhoto(it) }
-                        val bag = if (bagBlobs.isNotEmpty()) savedBag else existing?.bagPhotos ?: emptyList()
-                        val grounds = if (groundsBlob != null) savedGrounds else existing?.groundsPhoto
-                        entries.upsert(en.copy(bagPhotos = bag, groundsPhoto = grounds))
-                        existing?.bagPhotos?.filter { it !in bag }?.forEach { photos.delete(it) }
-                        existing?.groundsPhoto?.takeIf { it != grounds }?.let { photos.delete(it) }
-                        ok++
-                    } catch (e: Exception) {
-                        fail++
-                        detail = e.message
-                    }
-                }
-            } catch (e: Exception) {
-                fail += s.entries.size - ok - fail
-                detail = e.message
+                val stored = storePhotos(s, written, onProgress)
+                val (lines, obsolete) = tx.write { applyAll(s, mode == ImportMode.REPLACE, stored) }
+                obsolete.forEach { runCatching { photos.delete(it) } }
+                ImportResult(lines)
+            } catch (e: Throwable) {
+                written.forEach { runCatching { photos.delete(it) } }
+                throw e
             }
-            if (s.entries.isNotEmpty() || replace) lines += ImportLine(BackupKeys.ENTRIES, ok, fail, detail = detail?.takeIf { fail > 0 })
+        }
+
+    /** Photo files stored for a restore, by owner id. */
+    private class StoredPhotos(
+        val bag: Map<String, List<String>>,
+        val grounds: Map<String, String>,
+        val misc: Map<String, List<String>>,
+        val count: Int,
+    )
+
+    /** Writes every photo the restore will reference before any row changes; [written] collects the file names. */
+    private suspend fun storePhotos(s: BackupSnapshot, written: MutableList<String>, onProgress: (Int, Int) -> Unit): StoredPhotos {
+        val entryIds = if (BackupKeys.ENTRIES in s.present) s.entries.mapTo(LinkedHashSet()) { it.id } else emptySet()
+        val miscIds = if (BackupKeys.MISC in s.present) s.miscItems.mapTo(LinkedHashSet()) { it.id } else emptySet()
+        val total = entryIds.sumOf { s.photosFor(it, PhotoKind.BAG).size + s.photosFor(it, PhotoKind.GROUNDS).take(1).size } +
+            miscIds.sumOf { s.miscPhotosFor(it).size }
+        onProgress(0, total)
+        suspend fun save(blob: PhotoBlob): String = photos.save(blob.bytes).also { written += it; onProgress(written.size, total) }
+        val bag = HashMap<String, List<String>>()
+        val grounds = HashMap<String, String>()
+        val misc = HashMap<String, List<String>>()
+        for (id in entryIds) {
+            s.photosFor(id, PhotoKind.BAG).takeIf { it.isNotEmpty() }?.let { blobs -> bag[id] = blobs.map { save(it) } }
+            s.photosFor(id, PhotoKind.GROUNDS).firstOrNull()?.let { grounds[id] = save(it) }
+        }
+        for (id in miscIds) s.miscPhotosFor(id).takeIf { it.isNotEmpty() }?.let { blobs -> misc[id] = blobs.map { save(it) } }
+        return StoredPhotos(bag, grounds, misc, written.size)
+    }
+
+    /** Every database change of a restore; runs inside one transaction. Returns the result lines and the photo files to delete after commit. */
+    private suspend fun applyAll(s: BackupSnapshot, replace: Boolean, stored: StoredPhotos): Pair<List<ImportLine>, List<String>> {
+        val lines = mutableListOf<ImportLine>()
+        val obsolete = mutableListOf<String>()
+
+        // ── entries: always an id-based upsert (design §4.1); local-only records are kept even for 교체 ──
+        if (BackupKeys.ENTRIES in s.present) {
+            val existingById = entries.getAll().associateBy { it.id }
+            val incoming = s.entries.associateBy { it.id }.values
+            for (en in incoming) {
+                val existing = existingById[en.id]
+                val bag = stored.bag[en.id] ?: existing?.bagPhotos ?: emptyList()
+                val grounds = if (en.id in stored.grounds) stored.grounds[en.id] else existing?.groundsPhoto
+                entries.upsert(en.copy(bagPhotos = bag, groundsPhoto = grounds))
+                existing?.bagPhotos?.filter { it !in bag }?.let { obsolete += it }
+                existing?.groundsPhoto?.takeIf { it != grounds }?.let { obsolete += it }
+            }
+            if (incoming.isNotEmpty()) lines += ImportLine(BackupKeys.ENTRIES, ok = incoming.size)
         } else lines += ImportLine(BackupKeys.ENTRIES, skipped = true)
 
-        // ── misc items (photos are inline in the web format, so absent photos mean none) ──
-        lines += restore(BackupKeys.MISC, s.miscItems, BackupKeys.MISC in s.present, replace,
-            clear = { misc.getAll().forEach { misc.delete(it.id) } },
-            put = { items ->
-                val existingById = if (replace) emptyMap() else misc.getAll().associateBy { it.id }
-                val prepared = items.map { m -> attachMiscPhotos(m, s, existingById[m.id], ::savePhoto) }
-                misc.upsertAll(prepared)
-            })
-        lines += restore(BackupKeys.BLENDS, s.blends, BackupKeys.BLENDS in s.present, replace,
-            clear = { blends.getAll().forEach { blends.delete(it.id) } }, put = { blends.upsertAll(it) })
-        lines += restore(BackupKeys.CLASSES, s.classes, BackupKeys.CLASSES in s.present, replace,
-            clear = { study.getClasses().forEach { study.deleteClass(it.id) } }, put = { study.upsertClasses(it) })
+        // ── misc items: 교체 swaps the whole list; 병합 matches by id, then by type + name ──
+        lines += collection(BackupKeys.MISC, s.miscItems, BackupKeys.MISC in s.present) { items ->
+            val local = misc.getAll()
+            if (replace) {
+                misc.deleteAllRows()
+                obsolete += local.flatMap { it.photos }
+                misc.upsertAll(items.associateBy { it.id }.values.map { it.copy(photos = stored.misc[it.id].orEmpty()) })
+            } else {
+                val merged = ImportMerge.misc(local, items, stored.misc)
+                obsolete += merged.obsoletePhotos
+                misc.upsertAll(merged.rows)
+            }
+        }
+        lines += collection(BackupKeys.BLENDS, s.blends, BackupKeys.BLENDS in s.present) { if (replace) blends.deleteAll(); blends.upsertAll(it) }
+        lines += collection(BackupKeys.CLASSES, s.classes, BackupKeys.CLASSES in s.present) { if (replace) study.deleteAllClasses(); study.upsertClasses(it) }
         lines += when {
             BackupKeys.ROADMAP !in s.present -> ImportLine(BackupKeys.ROADMAP, skipped = true)
             s.roadmap.isEmpty() -> ImportLine(BackupKeys.ROADMAP, skipped = true, detail = "비어 있음")
-            else -> runCatching { roadmap.replaceAll(s.roadmap) }
-                .fold({ ImportLine(BackupKeys.ROADMAP, ok = s.roadmap.size) }, { ImportLine(BackupKeys.ROADMAP, failed = s.roadmap.size, detail = it.message) })
+            else -> {
+                roadmap.replaceAll(if (replace) s.roadmap else ImportMerge.roadmap(roadmap.getAll(), s.roadmap))
+                ImportLine(BackupKeys.ROADMAP, ok = s.roadmap.size)
+            }
         }
-        lines += restore(BackupKeys.MY_RECIPES, s.myRecipes, BackupKeys.MY_RECIPES in s.present, replace,
-            clear = { myRecipes.getAll().forEach { myRecipes.delete(it.id) } }, put = { myRecipes.upsertAll(it) })
-        lines += restore(BackupKeys.BOOKS, s.books, BackupKeys.BOOKS in s.present, replace,
-            clear = { study.getBooks().forEach { study.deleteBook(it.id) } }, put = { study.upsertBooks(it) })
-        lines += restore(BackupKeys.SUMMARIES, s.beanSummaries, BackupKeys.SUMMARIES in s.present, replace,
-            clear = { beanMeta.getSummaries().forEach { beanMeta.putSummary(it.beanKey, "") } }, put = { beanMeta.upsertSummaries(it) })
-        lines += restore(BackupKeys.BEST, s.bestRecipes, BackupKeys.BEST in s.present, replace,
-            clear = { beanMeta.getBest().forEach { beanMeta.setBest(it.beanKey, null) } }, put = { beanMeta.upsertBestAll(it) })
-        lines += restore(BackupKeys.VIDEOS, s.videos, BackupKeys.VIDEOS in s.present, replace,
-            clear = { study.getVideos().forEach { study.deleteVideo(it.id) } }, put = { study.upsertVideos(it) })
-        lines += restore(BackupKeys.PANTRY, s.pantryItems, BackupKeys.PANTRY in s.present, replace,
-            clear = { pantry.getAll().forEach { pantry.delete(it.id) } }, put = { pantry.upsertAll(it) })
+        lines += collection(BackupKeys.MY_RECIPES, s.myRecipes, BackupKeys.MY_RECIPES in s.present) { if (replace) myRecipes.deleteAll(); myRecipes.upsertAll(it) }
+        lines += collection(BackupKeys.BOOKS, s.books, BackupKeys.BOOKS in s.present) { if (replace) study.deleteAllBooks(); study.upsertBooks(it) }
+        lines += collection(BackupKeys.SUMMARIES, s.beanSummaries, BackupKeys.SUMMARIES in s.present) { if (replace) beanMeta.deleteAllSummaries(); beanMeta.upsertSummaries(it) }
+        lines += collection(BackupKeys.BEST, s.bestRecipes, BackupKeys.BEST in s.present) { if (replace) beanMeta.deleteAllBest(); beanMeta.upsertBestAll(it) }
+        lines += collection(BackupKeys.VIDEOS, s.videos, BackupKeys.VIDEOS in s.present) { if (replace) study.deleteAllVideos(); study.upsertVideos(it) }
+        lines += collection(BackupKeys.PANTRY, s.pantryItems, BackupKeys.PANTRY in s.present) { if (replace) pantry.deleteAll(); pantry.upsertAll(it) }
         if (BackupKeys.SETTINGS in s.present && s.settings.isNotEmpty()) {
-            lines += runCatching { s.settings.forEach { (k, v) -> settings.put(k, v) } }
-                .fold({ ImportLine(BackupKeys.SETTINGS, ok = s.settings.size) }, { ImportLine(BackupKeys.SETTINGS, failed = s.settings.size, detail = it.message) })
+            if (replace) settings.deleteAll()
+            s.settings.forEach { (k, v) -> settings.put(k, v) }
+            lines += ImportLine(BackupKeys.SETTINGS, ok = s.settings.size)
         }
         // ── D-day start (web rawData) ──
         val dday = s.ddayStart?.let { Dates.parseIsoDate(it) }
         lines += when {
-            dday != null -> runCatching { settings.setDdayStart(dday) }
-                .fold({ ImportLine(BackupKeys.DDAY, ok = 1, detail = Dates.isoDate(dday)) }, { ImportLine(BackupKeys.DDAY, failed = 1, detail = it.message) })
+            dday != null -> { settings.setDdayStart(dday); ImportLine(BackupKeys.DDAY, ok = 1, detail = Dates.isoDate(dday)) }
             BackupKeys.DDAY in s.present && !s.ddayStart.isNullOrBlank() -> ImportLine(BackupKeys.DDAY, failed = 1, detail = "날짜 형식이 아니에요: ${s.ddayStart}")
             else -> ImportLine(BackupKeys.DDAY, skipped = true)
         }
-        if (s.photoCount > 0) lines += ImportLine(ImportLine.PHOTOS, ok = photoOk, failed = photoFail + (s.photoCount - photoOk - photoFail).coerceAtLeast(0))
-        return ImportResult(lines)
+        // photos whose record / item is not in the file have nothing to attach to
+        if (s.photoCount > 0) lines += ImportLine(ImportLine.PHOTOS, ok = stored.count, failed = (s.photoCount - stored.count).coerceAtLeast(0))
+
+        // ── web load-time backfill: register the roasteries, importers, farms and varieties the records use ──
+        if (BackupKeys.ENTRIES in s.present || BackupKeys.MISC in s.present) pipeline.backfill(entries.getAll())
+        return lines to obsolete
     }
 
-    private suspend fun attachMiscPhotos(m: MiscItem, s: BackupSnapshot, existing: MiscItem?, save: suspend (PhotoBlob) -> String?): MiscItem {
-        val names = s.miscPhotosFor(m.id).mapNotNull { save(it) }
-        existing?.photos?.filter { it !in names }?.forEach { photos.delete(it) }
-        return m.copy(photos = names)
-    }
-
-    private suspend fun <T> restore(
-        label: String,
-        items: List<T>,
-        present: Boolean,
-        replace: Boolean,
-        clear: suspend () -> Unit,
-        put: suspend (List<T>) -> Unit,
-    ): ImportLine {
+    private suspend fun <T> collection(label: String, items: List<T>, present: Boolean, apply: suspend (List<T>) -> Unit): ImportLine {
         if (!present) return ImportLine(label, skipped = true)
-        return try {
-            if (replace) clear()
-            put(items)
-            ImportLine(label, ok = items.size)
-        } catch (e: Exception) {
-            ImportLine(label, failed = items.size, detail = e.message)
-        }
+        apply(items)
+        return ImportLine(label, ok = items.size)
     }
 
     /** Formats bytes like the web panel: "1.25MB" / "312KB". */

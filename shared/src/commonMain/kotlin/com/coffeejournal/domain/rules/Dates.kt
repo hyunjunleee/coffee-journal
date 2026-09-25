@@ -107,13 +107,17 @@ object Dates {
         return runCatching { toMillis(LocalDateTime.parse(v)) }.getOrNull()
     }
 
-    /** Web formatRoastDateWithYear: "7. 11" → "2026. 7. 11" using the record year. */
+    /**
+     * Web formatRoastDateWithYear (script3.js 2516-2524): "07. 01" → "2026. 7. 1" using the record year; the month and
+     * day go through `Number(...)`, so leading zeros are dropped. A missing createdAt falls back to now, like the web.
+     */
     fun roastDateWithYear(value: String, createdAt: Long): String {
         val raw = value.trim()
-        if (raw.isEmpty()) return ""
-        if (Regex("^\\d{4}").containsMatchIn(raw)) return raw
+        if (raw.isEmpty() || Regex("^\\d{4}\\D").containsMatchIn(raw)) return raw
         val m = Regex("^(\\d{1,2})\\s*[./-]\\s*(\\d{1,2})\\.?$").find(raw) ?: return raw
-        val year = toLocalDate(createdAt).year
-        return "$year. ${m.groupValues[1]}. ${m.groupValues[2]}"
+        val month = m.groupValues[1].toIntOrNull() ?: return raw
+        val day = m.groupValues[2].toIntOrNull() ?: return raw
+        val year = toLocalDate(createdAt.takeIf { it != 0L } ?: nowMillis()).year
+        return "$year. $month. $day"
     }
 }

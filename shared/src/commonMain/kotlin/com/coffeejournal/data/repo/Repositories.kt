@@ -63,6 +63,7 @@ class PantryRepository(private val dao: PantryDao) {
     suspend fun upsert(item: PantryItem) = dao.upsert(item.toEntity())
     suspend fun upsertAll(items: List<PantryItem>) = dao.upsertAll(items.map { it.toEntity() })
     suspend fun delete(id: String) = dao.deleteById(id)
+    suspend fun deleteAll() = dao.deleteAll()
 }
 
 class MiscRepository(private val dao: MiscDao, private val photos: PhotoStore) {
@@ -76,6 +77,9 @@ class MiscRepository(private val dao: MiscDao, private val photos: PhotoStore) {
         dao.deleteById(id)
         existing?.photos?.forEach { photos.delete(it) }
     }
+
+    /** Deletes every row but leaves the photo files to the caller (a restore deletes them only after its commit). */
+    suspend fun deleteAllRows() = dao.deleteAll()
 }
 
 class StudyRepository(private val books: BookDao, private val videos: VideoDao, private val classes: ClassDao) {
@@ -85,6 +89,7 @@ class StudyRepository(private val books: BookDao, private val videos: VideoDao, 
     suspend fun upsertBook(item: Book) = books.upsert(item.toEntity())
     suspend fun upsertBooks(items: List<Book>) = books.upsertAll(items.map { it.toEntity() })
     suspend fun deleteBook(id: String) = books.deleteById(id)
+    suspend fun deleteAllBooks() = books.deleteAll()
 
     fun observeVideos(): Flow<List<Video>> = videos.observeAll().map { l -> l.map { it.toDomain() } }
     suspend fun getVideos(): List<Video> = videos.getAll().map { it.toDomain() }
@@ -92,6 +97,7 @@ class StudyRepository(private val books: BookDao, private val videos: VideoDao, 
     suspend fun upsertVideo(item: Video) = videos.upsert(item.toEntity())
     suspend fun upsertVideos(items: List<Video>) = videos.upsertAll(items.map { it.toEntity() })
     suspend fun deleteVideo(id: String) = videos.deleteById(id)
+    suspend fun deleteAllVideos() = videos.deleteAll()
 
     fun observeClasses(): Flow<List<CoffeeClass>> = classes.observeAll().map { l -> l.map { it.toDomain() } }
     suspend fun getClasses(): List<CoffeeClass> = classes.getAll().map { it.toDomain() }
@@ -99,6 +105,7 @@ class StudyRepository(private val books: BookDao, private val videos: VideoDao, 
     suspend fun upsertClass(item: CoffeeClass) = classes.upsert(item.toEntity())
     suspend fun upsertClasses(items: List<CoffeeClass>) = classes.upsertAll(items.map { it.toEntity() })
     suspend fun deleteClass(id: String) = classes.deleteById(id)
+    suspend fun deleteAllClasses() = classes.deleteAll()
 }
 
 class BlendRepository(private val dao: BlendDao) {
@@ -108,6 +115,7 @@ class BlendRepository(private val dao: BlendDao) {
     suspend fun upsert(item: Blend) = dao.upsert(item.toEntity())
     suspend fun upsertAll(items: List<Blend>) = dao.upsertAll(items.map { it.toEntity() })
     suspend fun delete(id: String) = dao.deleteById(id)
+    suspend fun deleteAll() = dao.deleteAll()
 }
 
 class MyRecipeRepository(private val dao: MyRecipeDao) {
@@ -117,6 +125,7 @@ class MyRecipeRepository(private val dao: MyRecipeDao) {
     suspend fun upsert(item: MyRecipe) = dao.upsert(item.toEntity())
     suspend fun upsertAll(items: List<MyRecipe>) = dao.upsertAll(items.map { it.toEntity() })
     suspend fun delete(id: String) = dao.deleteById(id)
+    suspend fun deleteAll() = dao.deleteAll()
 }
 
 class RoadmapRepository(private val dao: RoadmapDao) {
@@ -145,6 +154,7 @@ class BeanMetaRepository(private val dao: BeanMetaDao) {
         if (text.isBlank()) dao.deleteSummary(beanKey) else dao.upsertSummary(BeanSummaryEntity(beanKey, text.trim(), Dates.nowMillis()))
     }
     suspend fun upsertSummaries(items: List<BeanSummary>) = dao.upsertSummaries(items.map { it.toEntity() })
+    suspend fun deleteAllSummaries() = dao.deleteAllSummaries()
 
     fun observeBest(): Flow<Map<String, String>> = dao.observeBest().map { l -> l.associate { it.beanKey to it.entryId } }
     suspend fun getBest(): List<BestRecipe> = dao.getBest().map { it.toDomain() }
@@ -152,6 +162,7 @@ class BeanMetaRepository(private val dao: BeanMetaDao) {
         if (entryId == null) dao.deleteBest(beanKey) else dao.upsertBest(BestRecipeEntity(beanKey, entryId))
     }
     suspend fun upsertBestAll(items: List<BestRecipe>) = dao.upsertBestAll(items.map { it.toEntity() })
+    suspend fun deleteAllBest() = dao.deleteAllBest()
 }
 
 class SettingsRepository(private val dao: SettingsDao) {
@@ -159,6 +170,7 @@ class SettingsRepository(private val dao: SettingsDao) {
     suspend fun get(key: String): String? = dao.get(key)
     suspend fun put(key: String, value: String) = dao.put(SettingEntity(key, value))
     suspend fun delete(key: String) = dao.delete(key)
+    suspend fun deleteAll() = dao.deleteAll()
     suspend fun getAll(): Map<String, String> = dao.getAll().associate { it.key to it.value }
 
     fun observeDdayStart(): Flow<LocalDate?> = observe(KEY_DDAY_START).map { Dates.parseIsoDate(it) }

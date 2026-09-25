@@ -1,6 +1,8 @@
 package com.coffeejournal.di
 
 import com.coffeejournal.data.db.AppDatabase
+import com.coffeejournal.data.db.RoomTransactionRunner
+import com.coffeejournal.data.db.TransactionRunner
 import com.coffeejournal.data.repo.BeanMetaRepository
 import com.coffeejournal.data.repo.BlendRepository
 import com.coffeejournal.data.repo.EntryRepository
@@ -12,15 +14,21 @@ import com.coffeejournal.data.repo.SaveEntryPipeline
 import com.coffeejournal.data.repo.SettingsRepository
 import com.coffeejournal.data.repo.StudyRepository
 import com.coffeejournal.ui.nav.Features
+import kotlinx.coroutines.cancel
 import org.koin.core.KoinApplication
 import org.koin.core.context.startKoin
 import org.koin.core.module.Module
+import org.koin.core.module.dsl.onClose
+import org.koin.core.module.dsl.withOptions
 import org.koin.dsl.module
 
 /** Platform supplies the database builder and the photo store. */
 expect val platformModule: Module
 
 val dataModule = module {
+    single { AppScope() } withOptions { onClose { it?.cancel() } }
+    single<TransactionRunner> { RoomTransactionRunner(get()) }
+
     single { get<AppDatabase>().entryDao() }
     single { get<AppDatabase>().pantryDao() }
     single { get<AppDatabase>().miscDao() }
@@ -42,7 +50,7 @@ val dataModule = module {
     single { RoadmapRepository(get()) }
     single { BeanMetaRepository(get()) }
     single { SettingsRepository(get()) }
-    single { SaveEntryPipeline(get(), get(), get()) }
+    single { SaveEntryPipeline(get(), get(), get(), get()) }
 }
 
 fun initKoin(config: KoinApplication.() -> Unit = {}) {

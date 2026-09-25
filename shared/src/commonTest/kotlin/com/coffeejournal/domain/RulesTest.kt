@@ -102,6 +102,42 @@ class RulesTest {
         val ref = RecipeRef("유어홈", steps)
         assertTrue(RecipeSteps.diff(steps, ref).isEmpty())
         val changed = steps.toMutableList().also { it[2] = it[2].copy(water = "200") }
-        assertEquals(listOf("2차: 물량 190g→200g (+10 g)"), RecipeSteps.diff(changed, ref))
+        assertEquals(listOf("2차: 물량 190g→200g (+10g)"), RecipeSteps.diff(changed, ref))
+    }
+
+    /** Web compareStepsToRecipe (script3.js 6841-6865): one line per step, parts joined with ", ", no space before the unit. */
+    @Test fun recipeDiffMatchesWebWording() {
+        val ref = RecipeRef("유어홈", listOf(RecipeStep("0:00", "30", "30", "뜸"), RecipeStep("0:30", "100", "20", ""), RecipeStep("0:50", "100", "", "")))
+        val cur = listOf(RecipeStep("0:00", "35", "25", "뜸"), RecipeStep("0:30", "90", "20", "빠르게"), RecipeStep("0:50", "100", "5", ""))
+        assertEquals(
+            listOf("뜸: 물량 30g→35g (+5g), 대기 30s→25s (-5s)", "빠르게: 물량 100g→90g (-10g)"),
+            RecipeSteps.diff(cur, ref),
+        )
+        // web label: ref.note || cur.note || `${i + 1}단계`
+        assertEquals(listOf("1단계: 대기 10s→12.5s (+2.5s)"), RecipeSteps.diff(listOf(RecipeStep("0:00", "", "12.5", "")), RecipeRef("r", listOf(RecipeStep("0:00", "", "10", "")))))
+    }
+
+    /** Web formatRoastDateWithYear (script3.js 2516-2524): `${year}. ${Number(m1)}. ${Number(m2)}`. */
+    @Test fun roastDateWithYearDropsLeadingZerosLikeTheWeb() {
+        val created = Dates.toMillis(LocalDate(2026, 3, 5), 9, 0)
+        assertEquals("2026. 7. 1", Dates.roastDateWithYear("07. 01", created))
+        assertEquals("2026. 7. 11", Dates.roastDateWithYear("7/11", created))
+        assertEquals("2026. 12. 3", Dates.roastDateWithYear(" 12-03. ", created))
+        assertEquals("2026. 07. 01", Dates.roastDateWithYear("2026. 07. 01", created))
+        assertEquals("2026-07-01", Dates.roastDateWithYear("2026-07-01", created))
+        assertEquals("7월 1일", Dates.roastDateWithYear("7월 1일", created))
+        assertEquals("", Dates.roastDateWithYear("  ", created))
+    }
+
+    /** Web getEntrySelection(record) (script3.js 2764-2767) for cupping beans: the importer comes from the name's parentheses. */
+    @Test fun cuppingRecordsCarryTheImporterFromTheirName() {
+        val cupping = Entry(
+            id = "c", createdAt = 1, category = com.coffeejournal.domain.model.Category.CUPPING,
+            cuppingBeans = listOf(
+                com.coffeejournal.domain.model.CuppingBean(name = "케냐 키암부 AB (커피 리브레, 모모스 셀렉션)"),
+                com.coffeejournal.domain.model.CuppingBean(name = "브라질 내추럴"),
+            ),
+        )
+        assertEquals(listOf("모모스", ""), com.coffeejournal.domain.rules.BeanRecords.flatten(listOf(cupping)).map { it.selection })
     }
 }

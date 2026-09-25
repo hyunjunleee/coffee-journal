@@ -6,7 +6,7 @@ import com.coffeejournal.domain.model.PackageType
 import com.coffeejournal.domain.model.PantryItem
 import kotlinx.datetime.LocalDate
 import kotlin.math.max
-import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 object PantryRules {
     enum class RoastGroup(val label: String, val peakFrom: Int, val peakTo: Int) {
@@ -56,35 +56,42 @@ object PantryRules {
         return Dates.startOfDayMillis(Dates.plusDays(roast, roastGroup(item.roastLevel).peakFrom))
     }
 
-    /** Web pantryPriceText: "200g · 18,000원 · 100g 환산 9,000원". */
+    /** Web pantryPriceText: "200g · 18,000원 · 100g 환산 9,000원". "NaN"/"Infinity" weights count as missing (web `!(weight > 0)`). */
     fun priceText(weight: String, price: String): String {
-        val w = weight.trim().toDoubleOrNull() ?: return ""
-        val p = Prices.normalize(price).toDoubleOrNull() ?: return ""
-        if (w <= 0 || p < 0) return ""
-        val per100 = (p * 100 / w).roundToInt()
-        return "${Prices.trimNumber(w)}g · ${Prices.format(p)}원 · 100g 환산 ${Prices.format(per100.toDouble())}원"
+        val (w, p) = weightAndPrice(weight, price) ?: return ""
+        return "${Prices.trimNumber(w)}g · ${Prices.format(p)}원 · 100g 환산 ${Prices.format(per100(p, w))}원"
     }
 
     fun unitPriceText(weight: String, price: String): String {
-        val w = weight.trim().toDoubleOrNull() ?: return ""
-        val p = Prices.normalize(price).toDoubleOrNull() ?: return ""
-        if (w <= 0 || p < 0) return ""
-        return "100g 환산가 · ${Prices.format((p * 100 / w).roundToInt().toDouble())}원"
+        val (w, p) = weightAndPrice(weight, price) ?: return ""
+        return "100g 환산가 · ${Prices.format(per100(p, w))}원"
     }
+
+    /** Web guard `if (!(weight > 0) || !(price >= 0)) return ''` with non-finite numbers treated as missing. */
+    private fun weightAndPrice(weight: String, price: String): Pair<Double, Double>? {
+        val w = Numbers.parse(weight) ?: return null
+        val p = Numbers.parse(Prices.normalize(price)) ?: return null
+        if (!(w > 0) || !(p >= 0)) return null
+        return w to p
+    }
+
+    private fun per100(price: Double, weight: Double): Double = (price * 100 / weight).roundToLong().toDouble()
 
     /** Remaining grams for a bean: bag weight (default 100) minus brews, custom-blend components and lab blends. */
     fun remainingGrams(beanKey: String, bagWeight: Double?, entries: List<Entry>, blends: List<Blend>): Pair<Double, Double> {
-        val bag = bagWeight?.takeIf { it > 0 } ?: 100.0
+        val bag = Numbers.finite(bagWeight)?.takeIf { it > 0 } ?: 100.0
         var used = 0.0
         for (en in entries) {
             if (!Packages.isBrew(en)) continue
-            if (BeanNames.coreBeanName(en.name) == beanKey) used += en.dose.trim().toDoubleOrNull() ?: 0.0
+            if (BeanNames.coreBeanName(en.name) == beanKey) used += Numbers.parse(en.dose) ?: 0.0
             if (en.beanMode == com.coffeejournal.domain.model.BeanMode.CUSTOM_BLEND) {
-                for (c in en.blendComponents) if (BeanNames.coreBeanName(c.name) == beanKey) used += c.grams.trim().toDoubleOrNull() ?: 0.0
+                for (c in en.blendComponents) if (BeanNames.coreBeanName(c.name) == beanKey) used += Numbers.parse(c.grams) ?: 0.0
             }
         }
-        for (b in blends) for (c in b.beans) if (BeanNames.coreBeanName(c.name) == beanKey) used += c.grams.trim().toDoubleOrNull() ?: 0.0
-        val remaining = max(0.0, ((bag - used) * 10).roundToInt() / 10.0)
+        for (b in blends) for (c in b.beans) if (BeanNames.coreBeanName(c.name) == beanKey) used += Numbers.parse(c.grams) ?: 0.0
+        // many huge-but-finite doses can still add up to ±Infinity; an unknown usage leaves the bag untouched
+        val left = (bag - used).takeIf { it.isFinite() } ?: bag
+        val remaining = max(0.0, (left * 10).roundToLong() / 10.0)
         return Pair(remaining, bag)
     }
 

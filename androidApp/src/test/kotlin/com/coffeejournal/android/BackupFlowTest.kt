@@ -16,6 +16,7 @@ import com.coffeejournal.data.repo.MiscRepository
 import com.coffeejournal.data.repo.MyRecipeRepository
 import com.coffeejournal.data.repo.PantryRepository
 import com.coffeejournal.data.repo.RoadmapRepository
+import com.coffeejournal.data.repo.SaveEntryPipeline
 import com.coffeejournal.data.repo.SettingsRepository
 import com.coffeejournal.data.repo.StudyRepository
 import com.coffeejournal.domain.model.Book
@@ -68,6 +69,8 @@ class BackupFlowTest : FlowTestBase() {
                 dripper = "V60", filter = "V60 표백", grind = "C40 24클릭", time = "2:30", steps = listOf(RecipeStep("0:00", "50", "10", "뜸")), createdAt = 1_780_000_000_000L)
         )
         koinGet<SettingsRepository>().put("last-filter", "dripbag")
+        // SampleData writes records directly; register their roasteries / farms / varieties the way saving them would
+        koinGet<SaveEntryPipeline>().backfill(entries.getAll())
     }
 
     /** Every collection with photo file names replaced by their bytes, so two databases can be compared. */
@@ -131,14 +134,20 @@ class BackupFlowTest : FlowTestBase() {
         assertSameCollections(before, normalized())
     }
 
+    /**
+     * User decision / design §4.1: records are always merged by id, even for 교체, which replaces only the other
+     * collections. 병합 keeps everything local.
+     */
     @Test
-    fun backup03_replaceDropsLocalOnlyData_mergeKeepsIt() {
+    fun backup03_replaceKeepsLocalRecordsButReplacesOtherCollections_mergeKeepsEverything() {
         seedEverything()
         val before = normalized()
         val json = exportJson()
+        val localPhoto = byteArrayOf(-1, -40, -1, 77)
 
         fun addLocalOnlyData() = runBlocking {
-            koinGet<EntryRepository>().upsert(Entry(id = "local1", createdAt = 1_788_000_000_000L, name = "로컬 전용 원두"))
+            val photo = koinGet<PhotoStore>().save(localPhoto)
+            koinGet<EntryRepository>().upsert(Entry(id = "local1", createdAt = 1_788_000_000_000L, name = "로컬 전용 원두", bagPhotos = listOf(photo)))
             koinGet<StudyRepository>().upsertBook(Book(id = "localBook", createdAt = 1L, title = "로컬 책"))
             koinGet<MiscRepository>().upsert(MiscItem(id = "localMisc", type = MiscType.KETTLE, name = "로컬 주전자", createdAt = 1L))
             koinGet<PantryRepository>().upsert(PantryItem(id = "localBag", name = "로컬 봉투", createdAt = 1L))
@@ -147,7 +156,19 @@ class BackupFlowTest : FlowTestBase() {
         freshDevice()
         addLocalOnlyData()
         importJson(json, ImportMode.REPLACE)
-        assertSameCollections(before, normalized())
+        val replaced = normalized()
+        @Suppress("UNCHECKED_CAST")
+        val replacedEntries = replaced.getValue("entries") as List<Entry>
+        assertEquals("교체 keeps the local-only record", before["entries"], replacedEntries.filter { it.id != "local1" })
+        assertTrue(replacedEntries.any { it.id == "local1" })
+        val local1 = runBlocking { koinGet<EntryRepository>().getById("local1")!! }
+        assertTrue("its photo file is kept too", runBlocking { koinGet<PhotoStore>().readBytes(local1.bagPhotos.single()) }!!.contentEquals(localPhoto))
+        assertEquals(
+            "every other collection is exactly the backup's (local book, kettle and bag are gone)",
+            before.filterKeys { it != "entries" && it != "entryPhotos" },
+            replaced.filterKeys { it != "entries" && it != "entryPhotos" },
+        )
+        assertEquals(before["entryPhotos"], photosWithoutLocal1(replaced))
 
         freshDevice()
         addLocalOnlyData()
@@ -159,8 +180,11 @@ class BackupFlowTest : FlowTestBase() {
         assertTrue(ids("books").containsAll(setOf("localBook", "b1")))
         assertTrue(ids("miscItems").containsAll(setOf("localMisc", "m1", "m7")))
         assertTrue(ids("pantry").containsAll(setOf("localBag", "p1", "p2")))
-        assertEquals(before["entryPhotos"], merged["entryPhotos"])
+        assertEquals(before["entryPhotos"], photosWithoutLocal1(merged))
     }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun photosWithoutLocal1(collections: Map<String, Any?>) = (collections.getValue("entryPhotos") as List<String>).filterNot { it.startsWith("local1/") }
 
     @Test
     fun backup04_exportIsIdempotent_reExportAfterRestoreMatches() {
@@ -213,7 +237,31 @@ class BackupFlowTest : FlowTestBase() {
         clickNode(dialogButton("복원"))
         waitForText("복원 결과")
         waitForText("모두 ✓ 로 떴어요. 각 탭에서 데이터가 잘 들어왔는지 확인해보세요.")
-        assertSameCollections(before, normalized())
+        val after = normalized()
+        // records are merged by id even for 교체: e3 comes back, the record made after the backup stays
+        @Suppress("UNCHECKED_CAST")
+        val restoredEntries = after.getValue("entries") as List<Entry>
+        assertEquals(before["entries"], restoredEntries.filter { it.id != "after" })
+        assertTrue(restoredEntries.any { it.id == "after" })
+        assertSameCollections(before.filterKeys { it != "entries" }, after)
+    }
+
+    /** miscBackup-8: the error panel shows its title once and only the message under it (web 7963-7964). */
+    @Test
+    fun backup07_unreadableFile_showsTitleOnceAndOnlyTheMessage() {
+        launchApp()
+        clickText("💾 백업")
+        waitForText("전체 데이터 백업")
+        clickText("📂 백업 파일에서 복원")
+        val shadow = Shadows.shadowOf(compose.activity)
+        val open = shadow.nextStartedActivityForResult
+        val file = File(context.cacheDir, "not-a-backup.json").apply { writeText("not json at all") }
+        compose.runOnUiThread { shadow.receiveResult(open.intent, Activity.RESULT_OK, Intent().setData(Uri.fromFile(file))) }
+        waitForText("복원 중 오류가 발생했어요")
+        waitForText("백업 파일 형식이 아니에요. (JSON을 읽을 수 없어요)")
+        assertEquals("the sentence is not repeated under the title", 1, count(hasText("오류가 발생했어요", substring = true)))
+        clickText("닫기")
+        waitGone(hasText("복원 중 오류가 발생했어요"))
     }
 
     // ───────────────────────── web backup file ─────────────────────────
@@ -318,6 +366,12 @@ class BackupFlowTest : FlowTestBase() {
         val misc = runBlocking { koinGet<MiscRepository>().getAll() }.associateBy { it.id }
         assertEquals(1, misc.getValue("wm1").photos.size)
         assertEquals(true, misc.getValue("wm2").favorite)
+        // web load-time backfill (script3.js 8238-8373) runs after the restore: values used by the records are registered
+        fun names(type: String) = misc.values.filter { it.type == type }.map { it.name }.sorted()
+        assertEquals("roastery from the parentheses and roastery fields, no duplicate 커피 리브레", listOf("커피 리브레", "프릳츠"), names(MiscType.SOURCE))
+        assertEquals(listOf("모모스"), names(MiscType.SELECTION))
+        assertEquals(listOf("엘 인헤르토(아길레라 가족)"), names(MiscType.FARM))
+        assertEquals(listOf("74158", "Pink Bourbon", "SL28"), names(MiscType.VARIETY))
         assertEquals(listOf("웹 책"), runBlocking { koinGet<StudyRepository>().getBooks().map { it.title } })
         assertEquals(listOf("웹 클래스"), runBlocking { koinGet<StudyRepository>().getClasses().map { it.title } })
         assertEquals(listOf("커핑 10회"), runBlocking { koinGet<RoadmapRepository>().getAll().single().items.map { it.text } })

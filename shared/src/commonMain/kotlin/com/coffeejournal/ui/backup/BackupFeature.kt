@@ -5,6 +5,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.coffeejournal.data.backup.BackupCodec
 import com.coffeejournal.data.backup.BackupService
+import com.coffeejournal.data.backup.RestoreRunner
+import com.coffeejournal.di.AppScope
 import com.coffeejournal.ui.nav.Feature
 import com.coffeejournal.ui.nav.Route
 import org.koin.core.module.dsl.viewModelOf
@@ -14,7 +16,8 @@ import org.koin.dsl.module
 object BackupFeature : Feature {
     override val module = module {
         single { BackupCodec() }
-        single { BackupService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        single { BackupService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        single { RestoreRunner(get(), get<AppScope>()) }
         viewModelOf(::BackupViewModel)
     }
 

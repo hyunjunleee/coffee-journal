@@ -315,4 +315,34 @@ class BackupCodecTest {
         assertNull(codec.decodeDataUrl(""))
         assertNull(codec.decodeDataUrl("data:image/jpeg;base64"))
     }
+    /** Backup data is untrusted: "NaN" / "Infinity" / "1e999" numbers count as missing instead of crashing later. */
+    @Test fun nonFiniteNumbersInABackupCountAsMissing() {
+        val s = codec.decode(
+            """
+            {"data": {
+              "entries": [{"id": "n1", "createdAt": "1e999", "name": "x", "attributes": {"flavor": "NaN", "acidity": "Infinity", "body": 8, "balance": "-0"},
+                "cuppingBeanDetails": [], "rating": "NaN"},
+                {"id": "n2", "createdAt": 9223372036854775807, "category": "커핑",
+                "cuppingBeanDetails": [{"name": "A", "evaluationScores": {"acidity": "1e999", "flavor": 9}}]}],
+              "books": [{"id": "b", "createdAt": 1, "title": "t", "rating": "NaN"}],
+              "roadmapData": [{"id": "p", "title": "t", "dayStart": "Infinity", "dayEnd": 1e999, "items": []}],
+              "pantryItems": [{"id": "p1", "name": "x", "openedAt": "NaN", "createdAt": 5}]
+            }}
+            """.trimIndent(),
+        )
+        val (n1, n2) = s.entries
+        assertEquals(mapOf("body" to 8.0, "balance" to -0.0), n1.attributes)
+        assertTrue(n1.createdAt in 1_700_000_000_000L..4_000_000_000_000L, "createdAt falls back to now: ${n1.createdAt}")
+        assertTrue(n2.createdAt in 1_700_000_000_000L..4_000_000_000_000L, "an out-of-range timestamp falls back to now")
+        assertEquals(mapOf("flavor" to 9.0), n2.cuppingBeans.single().evaluationScores)
+        assertEquals(0, s.books.single().rating)
+        assertEquals(0 to 0, s.roadmap.single().dayStart to s.roadmap.single().dayEnd)
+        assertNull(s.pantryItems.single().openedAt)
+    }
+
+    /** web loadMiscItems (script3.js 5177-5178): legacy type 'equipment' is shown as a kettle. */
+    @Test fun legacyEquipmentTypeBecomesKettle() {
+        val s = codec.decode("""{"data": {"miscItems": [{"id": "old", "type": "equipment", "name": "하리오 부오노"}]}}""")
+        assertEquals(MiscType.KETTLE, s.miscItems.single().type)
+    }
 }

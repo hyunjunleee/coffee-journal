@@ -20,7 +20,8 @@ object BeanRecords {
                     region = bean.region,
                     farmProducer = bean.farmProducer,
                     roastery = bean.roastery,
-                    selection = "",
+                    // web getEntrySelection(record): cupping beans have no selection field, so it comes from the name's "(로스터리, 셀렉션)"
+                    selection = BeanNames.selectionShortName(BeanNames.parseNameParens(bean.name)?.source),
                     altitude = bean.altitude,
                     variety = bean.variety,
                     process = bean.process,

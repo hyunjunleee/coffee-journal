@@ -32,6 +32,9 @@ private val strMapSer = MapSerializer(String.serializer(), String.serializer())
 private val dblMapSer = MapSerializer(String.serializer(), Double.serializer())
 private val roadmapItemsSer = ListSerializer(RoadmapItem.serializer())
 
+/** JSON cannot hold NaN/Infinity (encoding throws); a non-finite score is treated as not scored. */
+private fun Map<String, Double>.finiteOnly(): Map<String, Double> = if (values.all { it.isFinite() }) this else filterValues { it.isFinite() }
+
 private inline fun <T> parseOr(json: String?, default: T, block: (String) -> T): T =
     if (json.isNullOrBlank()) default else runCatching { block(json) }.getOrDefault(default)
 
@@ -47,7 +50,7 @@ fun Entry.toEntity(): EntryEntity = EntryEntity(
     notes = notes, cuppingType = cuppingType, cuppingPlace = cuppingPlace,
     stepsJson = dbJson.encodeToString(stepsSer, steps),
     recipeRefJson = recipeRef?.let { dbJson.encodeToString(RecipeRef.serializer(), it) },
-    attributesJson = dbJson.encodeToString(dblMapSer, attributes),
+    attributesJson = dbJson.encodeToString(dblMapSer, attributes.finiteOnly()),
     attributeNotesJson = dbJson.encodeToString(strMapSer, attributeNotes),
     tagsJson = dbJson.encodeToString(strListSer, tags),
     bagPhotosJson = dbJson.encodeToString(strListSer, bagPhotos),
@@ -55,13 +58,18 @@ fun Entry.toEntity(): EntryEntity = EntryEntity(
     legacyExtraJson = legacyExtra?.let { dbJson.encodeToString(JsonObject.serializer(), it) },
 )
 
+/**
+ * Cupping bean rows are keyed purely by position ("<entryId>-<i>"). They are deleted and re-inserted on every save
+ * and nothing refers to a bean id, so the id carried in from the form is ignored: a bean added after removing an
+ * earlier one must not reuse a surviving bean's stored id, or INSERT OR REPLACE would silently drop that bean.
+ */
 fun Entry.toBeanEntities(): List<CuppingBeanEntity> = cuppingBeans.mapIndexed { i, b ->
     CuppingBeanEntity(
-        id = b.id.ifBlank { "$id-$i" }, entryId = id, position = i, name = b.name, country = b.country, region = b.region,
+        id = "$id-$i", entryId = id, position = i, name = b.name, country = b.country, region = b.region,
         roastery = b.roastery, farmProducer = b.farmProducer, altitude = b.altitude, variety = b.variety, price = b.price,
         rank = b.rank, process = b.process, roast = b.roast, expectedNotes = b.expectedNotes, actualNotes = b.actualNotes,
         evaluationJson = dbJson.encodeToString(strMapSer, b.evaluation),
-        evaluationScoresJson = dbJson.encodeToString(dblMapSer, b.evaluationScores),
+        evaluationScoresJson = dbJson.encodeToString(dblMapSer, b.evaluationScores.finiteOnly()),
         memo = b.memo, beanMode = b.beanMode, blendComponentsText = b.blendComponentsText,
     )
 }

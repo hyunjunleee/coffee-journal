@@ -24,7 +24,10 @@ internal object BackupDates {
     /** "2026.9.25 14:23" in the device time zone, or null. */
     fun localLabel(text: String?): String? {
         val millis = parseIso8601(text) ?: return null
-        val dt = Dates.toLocalDateTime(millis)
-        return "${Dates.ymdCompact(millis)} ${Dates.pad2(dt.hour)}:${Dates.pad2(dt.minute)}"
+        // an absurd year cannot be shown as a local date; the file is still restorable, so just say "날짜 미상"
+        return runCatching {
+            val dt = Dates.toLocalDateTime(millis)
+            "${Dates.ymdCompact(millis)} ${Dates.pad2(dt.hour)}:${Dates.pad2(dt.minute)}"
+        }.getOrNull()
     }
 }

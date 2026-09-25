@@ -12,6 +12,7 @@ import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.model.CuppingType
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.MiscItem
+import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.domain.model.PackageType
 import com.coffeejournal.domain.model.PantryItem
@@ -23,6 +24,7 @@ import com.coffeejournal.domain.model.Video
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
+import com.coffeejournal.domain.rules.Numbers
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 import kotlinx.serialization.json.Json
@@ -36,6 +38,7 @@ import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
+import kotlin.math.abs
 import kotlin.math.floor
 
 class BackupFormatException(message: String) : Exception(message)
@@ -214,7 +217,7 @@ class BackupCodec {
 
     /** Whole numbers are written as integers (the web stores SCA scores like 8, not 8.0). */
     private fun numberMap(map: Map<String, Double>): JsonObject = buildJsonObject { map.forEach { (k, v) -> put(k, num(v)) } }
-    private fun num(v: Double): JsonPrimitive = if (v == floor(v) && !v.isInfinite() && !v.isNaN()) JsonPrimitive(v.toLong()) else JsonPrimitive(v)
+    private fun num(v: Double): JsonPrimitive = if (v == floor(v) && abs(v) < 1e15) JsonPrimitive(v.toLong()) else JsonPrimitive(v)
 
     fun dataUrl(bytes: ByteArray): String = "data:image/jpeg;base64," + base64.encode(bytes)
 
@@ -234,7 +237,7 @@ class BackupCodec {
         val miscItems = data.arr(BackupKeys.MISC).mapNotNull { (it as? JsonObject)?.let { o -> decodeMisc(o, miscPhotos) } }
         val summaries = (data[BackupKeys.SUMMARIES] as? JsonObject)?.mapNotNull { (key, v) ->
             when (v) {
-                is JsonObject -> v.str("text").takeIf { it.isNotBlank() }?.let { BeanSummary(key, it, v.long("generatedAt", 0L)) }
+                is JsonObject -> v.str("text").takeIf { it.isNotBlank() }?.let { BeanSummary(key, it, v.millis("generatedAt", 0L)) }
                 is JsonPrimitive -> v.takeUnless { it is JsonNull }?.content?.takeIf { it.isNotBlank() }?.let { BeanSummary(key, it, 0L) }
                 else -> null
             }
@@ -299,7 +302,7 @@ class BackupCodec {
         }.takeIf { it.isNotEmpty() }
         return Entry(
             id = id,
-            createdAt = o.long("createdAt", Dates.nowMillis()),
+            createdAt = o.millis("createdAt", Dates.nowMillis()),
             category = category,
             beanMode = o.str("beanMode").ifBlank { BeanMode.SINGLE },
             blendComponents = o.arr("blendComponents").mapNotNull { (it as? JsonObject)?.let(::decodeBlendComponent) },
@@ -386,7 +389,8 @@ class BackupCodec {
     private fun decodeBlendComponent(o: JsonObject): BlendComponent? = o.str("name").takeIf { it.isNotBlank() || o.str("grams").isNotBlank() }?.let { BlendComponent(it, o.str("grams")) }
 
     private fun decodeMisc(o: JsonObject, photosOut: MutableList<PhotoBlob>): MiscItem? {
-        val type = o.str("type")
+        // web loadMiscItems (script3.js 5177-5178) shows legacy 'equipment' items as kettles; storage may still hold the old type
+        val type = o.str("type").let { if (it == LEGACY_EQUIPMENT) MiscType.KETTLE else it }
         if (type.isBlank()) return null
         val id = o.str("id").ifBlank { Ids.newId() }
         val urls = o.strList("photos").ifEmpty { listOfNotNull(o.str("photo").takeIf { it.isNotBlank() }) }
@@ -394,18 +398,18 @@ class BackupCodec {
         return MiscItem(
             id = id, type = type, name = o.str("name"), notes = o.str("notes"), since = o.str("since"), status = o.str("status"),
             scope = o.str("scope"), location = o.str("location"), favorite = o.bool("favorite"), photos = emptyList(),
-            createdAt = o.long("createdAt", Dates.nowMillis()),
+            createdAt = o.millis("createdAt", Dates.nowMillis()),
         )
     }
 
     private fun decodeBlend(o: JsonObject) = Blend(
         id = o.str("id").ifBlank { Ids.newId() }, name = o.str("name"), date = o.str("date"),
         beans = o.arr("beans").mapNotNull { (it as? JsonObject)?.let(::decodeBlendComponent) }, notes = o.str("notes"),
-        createdAt = o.long("createdAt", Dates.nowMillis()),
+        createdAt = o.millis("createdAt", Dates.nowMillis()),
     )
 
     private fun decodeClass(o: JsonObject) = CoffeeClass(
-        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.long("createdAt", Dates.nowMillis()), title = o.str("title"),
+        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.millis("createdAt", Dates.nowMillis()), title = o.str("title"),
         classType = o.str("classType").ifBlank { "oneday" }, date = o.str("date"), startDate = o.str("startDate"), endDate = o.str("endDate"), notes = o.str("notes"),
     )
 
@@ -413,25 +417,25 @@ class BackupCodec {
         val id = o.str("id").ifBlank { "phase$index" }
         return RoadmapPhase(
             id = id, position = index, title = o.str("title"), range = o.str("range"),
-            dayStart = o.long("dayStart", 0L).toInt(), dayEnd = o.long("dayEnd", 0L).toInt(),
+            dayStart = o.int("dayStart", 0), dayEnd = o.int("dayEnd", 0),
             items = o.arr("items").mapIndexedNotNull { i, it -> (it as? JsonObject)?.let { io -> RoadmapItem(io.str("id").ifBlank { "$id-$i" }, io.str("text"), io.bool("done")) } },
         )
     }
 
     private fun decodeRecipe(o: JsonObject) = MyRecipe(
         id = o.str("id").ifBlank { Ids.newId() }, name = o.str("name"), fromEntryId = o.str("fromEntryId").takeIf { it.isNotBlank() },
-        beanName = o.str("beanName"), rating = o.long("rating", 0L).toInt(), dose = o.str("dose"), water = o.str("water"), temp = o.str("temp"),
+        beanName = o.str("beanName"), rating = o.int("rating", 0), dose = o.str("dose"), water = o.str("water"), temp = o.str("temp"),
         dripper = o.str("dripper"), filter = o.str("filter"), grind = o.str("grind"), time = o.str("time"),
-        steps = o.arr("steps").mapNotNull { (it as? JsonObject)?.let(::decodeStep) }, createdAt = o.long("createdAt", Dates.nowMillis()),
+        steps = o.arr("steps").mapNotNull { (it as? JsonObject)?.let(::decodeStep) }, createdAt = o.millis("createdAt", Dates.nowMillis()),
     )
 
     private fun decodeBook(o: JsonObject) = Book(
-        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.long("createdAt", Dates.nowMillis()), title = o.str("title"), author = o.str("author"),
-        status = o.str("status").ifBlank { "읽는 중" }, startDate = o.str("startDate"), endDate = o.str("endDate"), rating = o.long("rating", 0L).toInt(), notes = o.str("notes"),
+        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.millis("createdAt", Dates.nowMillis()), title = o.str("title"), author = o.str("author"),
+        status = o.str("status").ifBlank { "읽는 중" }, startDate = o.str("startDate"), endDate = o.str("endDate"), rating = o.int("rating", 0), notes = o.str("notes"),
     )
 
     private fun decodeVideo(o: JsonObject) = Video(
-        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.long("createdAt", Dates.nowMillis()), title = o.str("title"),
+        id = o.str("id").ifBlank { Ids.newId() }, createdAt = o.millis("createdAt", Dates.nowMillis()), title = o.str("title"),
         channel = o.str("channel"), url = o.str("url"), notes = o.str("notes"),
     )
 
@@ -439,8 +443,8 @@ class BackupCodec {
         id = o.str("id").ifBlank { Ids.newId() }, name = o.str("name"), roastery = o.str("roastery"), packageType = o.str("packageType").ifBlank { PackageType.STANDARD },
         weight = o.str("weight"), price = o.str("price"), roastLevel = o.str("roastLevel"), roastDate = o.str("roastDate"), purchaseDate = o.str("purchaseDate"),
         peakStart = o.str("peakStart"), peakEnd = o.str("peakEnd"), expectedNotes = o.str("expectedNotes"), notes = o.str("notes"),
-        status = o.str("status").ifBlank { PantryItem.STATUS_UNOPENED }, openedAt = o.longOrNull("openedAt"),
-        createdAt = o.long("createdAt", Dates.nowMillis()), sourceEntryId = o.str("sourceEntryId"),
+        status = o.str("status").ifBlank { PantryItem.STATUS_UNOPENED }, openedAt = o.millisOrNull("openedAt"),
+        createdAt = o.millis("createdAt", Dates.nowMillis()), sourceEntryId = o.str("sourceEntryId"),
     )
 
     private fun decodeEntryPhotos(photos: JsonObject?): List<PhotoBlob> {
@@ -491,22 +495,29 @@ class BackupCodec {
         return when (p.content.lowercase()) {
             "true" -> true
             "false", "" -> false
-            else -> p.content.toDoubleOrNull()?.let { it != 0.0 } ?: false
+            else -> p.content.toDoubleOrNull()?.let { it != 0.0 && !it.isNaN() } ?: false
         }
     }
 
+    /** Numbers are read leniently, but "NaN", "Infinity" and "1e999" count as missing. */
     private fun JsonObject.longOrNull(key: String): Long? {
         val p = this[key] as? JsonPrimitive ?: return null
         if (p is JsonNull) return null
         val c = p.content.trim()
         c.toLongOrNull()?.let { return it }
-        c.toDoubleOrNull()?.let { return it.toLong() }
+        c.toDoubleOrNull()?.let { d -> return if (d.isFinite()) d.toLong() else null }
         Dates.parseDateTimeInput(c.take(16))?.let { return it }
         Dates.parseIsoDate(c)?.let { return Dates.startOfDayMillis(it) }
         return null
     }
 
-    private fun JsonObject.long(key: String, default: Long): Long = longOrNull(key) ?: default
+    /** A timestamp; values outside years 1..9999 would make every date display throw, so they count as missing. */
+    private fun JsonObject.millisOrNull(key: String): Long? = longOrNull(key)?.takeIf { it in MIN_MILLIS..MAX_MILLIS }
+
+    private fun JsonObject.millis(key: String, default: Long): Long = millisOrNull(key) ?: default
+
+    private fun JsonObject.int(key: String, default: Int): Int =
+        longOrNull(key)?.coerceIn(Int.MIN_VALUE.toLong(), Int.MAX_VALUE.toLong())?.toInt() ?: default
 
     private fun JsonObject.strList(key: String): List<String> = when (val v = this[key]) {
         is JsonArray -> v.mapNotNull { (it as? JsonPrimitive)?.takeUnless { p -> p is JsonNull }?.content }
@@ -517,8 +528,11 @@ class BackupCodec {
     private fun JsonObject.strMap(key: String): Map<String, String> =
         (this[key] as? JsonObject)?.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.takeUnless { it is JsonNull }?.let { k to it.content } }?.toMap() ?: emptyMap()
 
+    /** Scores; a non-finite value ("NaN", "Infinity", "1e999") is dropped, i.e. treated as not scored. */
     private fun JsonObject.dblMap(key: String): Map<String, Double> =
-        (this[key] as? JsonObject)?.mapNotNull { (k, v) -> (v as? JsonPrimitive)?.takeUnless { it is JsonNull }?.content?.toDoubleOrNull()?.let { k to it } }?.toMap() ?: emptyMap()
+        (this[key] as? JsonObject)?.mapNotNull { (k, v) ->
+            (v as? JsonPrimitive)?.takeUnless { it is JsonNull }?.content?.let { Numbers.parse(it) }?.let { k to it }
+        }?.toMap() ?: emptyMap()
 
     private fun firstNonBlank(vararg values: String): String = values.firstOrNull { it.isNotBlank() } ?: ""
 
@@ -527,6 +541,10 @@ class BackupCodec {
         const val SCHEMA = 1
         const val BAG_PREFIX = "bag-photo:"
         const val JOURNAL_PREFIX = "journal-photo:"
+        private const val LEGACY_EQUIPMENT = "equipment"
+        /** 0001-01-01T00:00Z .. 9999-12-31T23:59:59.999Z */
+        private const val MIN_MILLIS = -62_135_596_800_000L
+        private const val MAX_MILLIS = 253_402_300_799_999L
         /** Web-only fields kept verbatim inside Entry.legacyExtra so a re-export does not lose them. */
         val LEGACY_KEYS = listOf("beanGuidance", "photoFeedback", "adviceChat", "consultation", "practice", "noteChat", "rating")
     }

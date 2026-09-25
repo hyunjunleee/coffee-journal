@@ -67,14 +67,19 @@ interface PantryDao {
 
     @Query("DELETE FROM pantry_items WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM pantry_items")
+    suspend fun deleteAll()
 }
 
 @Dao
 interface MiscDao {
-    @Query("SELECT * FROM misc_items ORDER BY createdAt DESC")
+    // auto-registration adds several items in the same millisecond; the id tie-break keeps their order stable
+    // (otherwise it flips on every backup round trip)
+    @Query("SELECT * FROM misc_items ORDER BY createdAt DESC, id DESC")
     fun observeAll(): Flow<List<MiscItemEntity>>
 
-    @Query("SELECT * FROM misc_items ORDER BY createdAt DESC")
+    @Query("SELECT * FROM misc_items ORDER BY createdAt DESC, id DESC")
     suspend fun getAll(): List<MiscItemEntity>
 
     @Query("SELECT * FROM misc_items WHERE id = :id")
@@ -88,6 +93,9 @@ interface MiscDao {
 
     @Query("DELETE FROM misc_items WHERE id = :id")
     suspend fun deleteById(id: String)
+
+    @Query("DELETE FROM misc_items")
+    suspend fun deleteAll()
 }
 
 @Dao
@@ -98,6 +106,7 @@ interface BookDao {
     @Upsert suspend fun upsert(item: BookEntity)
     @Upsert suspend fun upsertAll(items: List<BookEntity>)
     @Query("DELETE FROM books WHERE id = :id") suspend fun deleteById(id: String)
+    @Query("DELETE FROM books") suspend fun deleteAll()
 }
 
 @Dao
@@ -108,6 +117,7 @@ interface VideoDao {
     @Upsert suspend fun upsert(item: VideoEntity)
     @Upsert suspend fun upsertAll(items: List<VideoEntity>)
     @Query("DELETE FROM videos WHERE id = :id") suspend fun deleteById(id: String)
+    @Query("DELETE FROM videos") suspend fun deleteAll()
 }
 
 @Dao
@@ -118,6 +128,7 @@ interface ClassDao {
     @Upsert suspend fun upsert(item: ClassEntity)
     @Upsert suspend fun upsertAll(items: List<ClassEntity>)
     @Query("DELETE FROM classes WHERE id = :id") suspend fun deleteById(id: String)
+    @Query("DELETE FROM classes") suspend fun deleteAll()
 }
 
 @Dao
@@ -128,6 +139,7 @@ interface BlendDao {
     @Upsert suspend fun upsert(item: BlendEntity)
     @Upsert suspend fun upsertAll(items: List<BlendEntity>)
     @Query("DELETE FROM blends WHERE id = :id") suspend fun deleteById(id: String)
+    @Query("DELETE FROM blends") suspend fun deleteAll()
 }
 
 @Dao
@@ -138,6 +150,7 @@ interface MyRecipeDao {
     @Upsert suspend fun upsert(item: MyRecipeEntity)
     @Upsert suspend fun upsertAll(items: List<MyRecipeEntity>)
     @Query("DELETE FROM my_recipes WHERE id = :id") suspend fun deleteById(id: String)
+    @Query("DELETE FROM my_recipes") suspend fun deleteAll()
 }
 
 @Dao
@@ -157,12 +170,14 @@ interface BeanMetaDao {
     @Upsert suspend fun upsertSummary(item: BeanSummaryEntity)
     @Upsert suspend fun upsertSummaries(items: List<BeanSummaryEntity>)
     @Query("DELETE FROM bean_summaries WHERE beanKey = :key") suspend fun deleteSummary(key: String)
+    @Query("DELETE FROM bean_summaries") suspend fun deleteAllSummaries()
 
     @Query("SELECT * FROM best_recipes") fun observeBest(): Flow<List<BestRecipeEntity>>
     @Query("SELECT * FROM best_recipes") suspend fun getBest(): List<BestRecipeEntity>
     @Upsert suspend fun upsertBest(item: BestRecipeEntity)
     @Upsert suspend fun upsertBestAll(items: List<BestRecipeEntity>)
     @Query("DELETE FROM best_recipes WHERE beanKey = :key") suspend fun deleteBest(key: String)
+    @Query("DELETE FROM best_recipes") suspend fun deleteAllBest()
 }
 
 @Dao
@@ -172,4 +187,5 @@ interface SettingsDao {
     @Query("SELECT * FROM settings") suspend fun getAll(): List<SettingEntity>
     @Upsert suspend fun put(entity: SettingEntity)
     @Query("DELETE FROM settings WHERE `key` = :key") suspend fun delete(key: String)
+    @Query("DELETE FROM settings") suspend fun deleteAll()
 }

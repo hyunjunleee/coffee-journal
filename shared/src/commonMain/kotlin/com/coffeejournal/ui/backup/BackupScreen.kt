@@ -67,7 +67,7 @@ fun BackupScreen(nav: NavHostController) {
                     onClick = { vm.export { result -> saver(result.fileName, result.json) } },
                 )
                 GhostButton(
-                    text = if (state.importing) "복원 중..." else "📂 백업 파일에서 복원",
+                    text = if (state.importing) restoringLabel(state.importProgress) else "📂 백업 파일에서 복원",
                     enabled = !state.busy,
                     onClick = { opener() },
                 )
@@ -75,17 +75,9 @@ fun BackupScreen(nav: NavHostController) {
             if (state.busy) {
                 Spacer(Modifier.height(12.dp))
                 LinearProgressIndicator(Modifier.fillMaxWidth(), color = Ink.accent, trackColor = Ink.surfaceRaised)
-                HintText(if (state.exporting) "모든 기록과 사진을 모으는 중이에요..." else "백업 내용을 저장하는 중이에요. 이 화면을 닫지 마세요.")
+                HintText(if (state.exporting) "모든 기록과 사진을 모으는 중이에요..." else "백업 내용을 저장하는 중이에요. 다른 화면으로 이동해도 복원은 계속돼요.")
             }
-            state.error?.let { message ->
-                Spacer(Modifier.height(12.dp))
-                HairlineCard {
-                    Text(if (message.startsWith("백업 중")) "백업 중 오류가 발생했어요" else "복원 중 오류가 발생했어요", style = AppType.cardTitle.copy(color = Ink.bad))
-                    HintText(message)
-                    Spacer(Modifier.height(8.dp))
-                    GhostButton("닫기", small = true, onClick = { vm.dismissError() })
-                }
-            }
+            state.error?.let { error -> ErrorPanel(error, onDismiss = { vm.dismissError() }) }
             state.export?.let { result -> ExportPanel(result, state.saveStatus, onSaveAgain = { saver(result.fileName, result.json) }) }
             state.importResult?.let { result -> ImportPanel(result) }
         }
@@ -114,14 +106,31 @@ fun BackupScreen(nav: NavHostController) {
                         labels = mapOf(ImportMode.MERGE.name to "병합", ImportMode.REPLACE.name to "교체"),
                     )
                     HintText(
-                        if (mode == ImportMode.MERGE) "병합: 같은 id의 항목은 백업 내용으로 덮어쓰고, 나머지 데이터는 그대로 둬요."
-                        else "교체: 지금 앱에 있는 데이터를 비운 뒤 이 백업 내용으로 채워요. 되돌릴 수 없어요.",
+                        if (mode == ImportMode.MERGE) "병합: 같은 id의 항목(장비·로스터리 등은 이름이 같은 항목)은 백업 내용으로 덮어쓰고, 나머지 데이터는 그대로 둬요."
+                        else "교체: 기록은 같은 id끼리 덮어쓰고 지금 있는 기록은 그대로 둬요. 나머지 데이터(장비·블렌드·로드맵 등)는 비운 뒤 이 백업 내용으로 채워요. 되돌릴 수 없어요.",
                     )
                 }
             },
             confirmButton = { TextButton(onClick = { vm.restore(mode) }) { Text("복원", style = AppType.body.copy(color = if (mode == ImportMode.REPLACE) Ink.bad else Ink.text)) } },
             dismissButton = { TextButton(onClick = { vm.cancelRestore() }) { Text("취소", style = AppType.body.copy(color = Ink.textMuted)) } },
         )
+    }
+}
+
+/** Web restore button label "복원 중... (n/total)"; the count is the photo files stored so far. */
+private fun restoringLabel(progress: Pair<Int, Int>?): String =
+    progress?.takeIf { it.second > 0 }?.let { (done, total) -> "복원 중... ($done/$total)" } ?: "복원 중..."
+
+/** Web error panel: a red title, then only the error message under it. */
+@Composable
+private fun ErrorPanel(error: BackupError, onDismiss: () -> Unit) {
+    Spacer(Modifier.height(12.dp))
+    HairlineCard {
+        Text(if (error.restore) "복원 중 오류가 발생했어요" else "백업 중 오류가 발생했어요", style = AppType.cardTitle.copy(color = Ink.bad))
+        if (error.detail.isNotBlank()) HintText(error.detail)
+        if (error.untouched) HintText("복원하지 않았어요. 지금 앱에 있는 데이터는 그대로예요.")
+        Spacer(Modifier.height(8.dp))
+        GhostButton("닫기", small = true, onClick = onDismiss)
     }
 }
 

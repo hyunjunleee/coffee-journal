@@ -815,7 +815,6 @@ class MoreFlowTest : FlowTestBase() {
         assertEquals("one blend after a double tap on 저장", 1, runBlocking { koinGet<BlendRepository>().getAll().size })
     }
 
-    @Ignore("app defect: pantry sync ignores the name's parenthesised roastery (web uses entry.roastery || entry.source)")
     @Test
     fun more35_nameParensRoastery_reachesThePantryBag() {
         launchApp()
@@ -831,7 +830,6 @@ class MoreFlowTest : FlowTestBase() {
         assertEquals("pantry bag roastery falls back to the roastery in the name's parentheses", "모모스", bag.roastery)
     }
 
-    @Ignore("app defect: cupping save never auto-registers the importer (web pushes ['selection', getEntrySelection(b)] per bean)")
     @Test
     fun more36_cuppingBeanNameParens_registersImporter() {
         launchApp()
