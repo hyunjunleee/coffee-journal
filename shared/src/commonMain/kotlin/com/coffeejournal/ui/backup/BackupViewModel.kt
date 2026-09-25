@@ -41,6 +41,8 @@ data class BackupUiState(
     val importProgress: Pair<Int, Int>? = null,
     val importResult: ImportResult? = null,
     val error: BackupError? = null,
+    /** A finished export waits for the screen to open the "save as" picker (see [BackupViewModel.onSavePickerRequested]). */
+    val saveRequested: Boolean = false,
 ) {
     val busy: Boolean get() = exporting || importing
 }
@@ -73,19 +75,26 @@ class BackupViewModel(
         }
     }
 
-    /** Builds the backup; [onReady] receives it so the screen can open the platform "save as" picker. */
-    fun export(onReady: (ExportResult) -> Unit) {
+    /**
+     * Builds the backup, then raises [BackupUiState.saveRequested]. The screen opens the "save as" picker from its own
+     * composition, so a picker launcher that went away with a recreated activity is never used.
+     */
+    fun export() {
         if (_state.value.busy) return
-        _state.update { it.copy(exporting = true, export = null, saveStatus = null, importResult = null, error = null) }
+        _state.update { it.copy(exporting = true, export = null, saveStatus = null, importResult = null, error = null, saveRequested = false) }
         viewModelScope.launch {
             try {
                 val result = service.export()
-                _state.update { it.copy(exporting = false, export = result) }
-                onReady(result)
+                _state.update { it.copy(exporting = false, export = result, saveRequested = true) }
             } catch (e: Exception) {
                 _state.update { it.copy(exporting = false, error = BackupError(restore = false, detail = e.message ?: e::class.simpleName ?: "")) }
             }
         }
+    }
+
+    /** The screen took the pending save request and opened the picker. */
+    fun onSavePickerRequested() {
+        _state.update { it.copy(saveRequested = false) }
     }
 
     fun onSaveResult(ok: Boolean) {

@@ -15,6 +15,7 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,6 +50,13 @@ fun BackupScreen(nav: NavHostController) {
     val state by vm.state.collectAsStateWithLifecycle()
     val saver = rememberJsonSaver { ok -> vm.onSaveResult(ok) }
     val opener = rememberJsonOpener { text -> vm.onFileLoaded(text) }
+    LaunchedEffect(state.saveRequested) {
+        val result = state.export
+        if (state.saveRequested && result != null) {
+            vm.onSavePickerRequested()
+            saver(result.fileName, result.json)
+        }
+    }
 
     Column(Modifier.fillMaxSize()) {
         ScreenTitleBar("전체 데이터 백업", onBack = { nav.popBackStack() })
@@ -64,7 +72,7 @@ fun BackupScreen(nav: NavHostController) {
                 GhostButton(
                     text = if (state.exporting) "백업 만드는 중..." else "💾 전체 데이터 백업",
                     enabled = !state.busy,
-                    onClick = { vm.export { result -> saver(result.fileName, result.json) } },
+                    onClick = { vm.export() },
                 )
                 GhostButton(
                     text = if (state.importing) restoringLabel(state.importProgress) else "📂 백업 파일에서 복원",
@@ -79,6 +87,8 @@ fun BackupScreen(nav: NavHostController) {
             }
             state.error?.let { error -> ErrorPanel(error, onDismiss = { vm.dismissError() }) }
             state.export?.let { result -> ExportPanel(result, state.saveStatus, onSaveAgain = { saver(result.fileName, result.json) }) }
+            // a save finished after the app was restarted behind the picker: the export itself is gone, the outcome is not
+            if (state.export == null) state.saveStatus?.let { SaveStatusPanel(it) }
             state.importResult?.let { result -> ImportPanel(result) }
         }
     }
@@ -146,7 +156,7 @@ private fun ExportPanel(result: ExportResult, saveStatus: SaveStatus?, onSaveAga
         Spacer(Modifier.height(10.dp))
         HintText(
             when (saveStatus) {
-                SaveStatus.SAVED -> "파일로 저장했어요. 다른 앱(웹 버전 등)에서 복원하려면 저장된 파일을 그쪽으로 옮기세요."
+                SaveStatus.SAVED -> SAVED_TEXT
                 SaveStatus.FAILED -> "파일 저장이 취소되었거나 실패했어요. 아래 버튼으로 다시 저장하거나 텍스트로 공유할 수 있어요."
                 null -> "파일 저장 창이 열려요. 저장 위치를 고르면 백업 파일이 만들어져요."
             },
@@ -156,6 +166,21 @@ private fun ExportPanel(result: ExportResult, saveStatus: SaveStatus?, onSaveAga
             GhostButton("다시 저장", small = true, onClick = onSaveAgain)
             GhostButton("텍스트로 공유", small = true, onClick = { shareText(result.fileName, result.json) })
         }
+    }
+}
+
+private const val SAVED_TEXT = "파일로 저장했어요. 다른 앱(웹 버전 등)에서 복원하려면 저장된 파일을 그쪽으로 옮기세요."
+
+/** Outcome of a "save as" whose export is no longer on screen (the app was restarted while the picker was open). */
+@Composable
+private fun SaveStatusPanel(status: SaveStatus) {
+    Spacer(Modifier.height(14.dp))
+    HairlineCard {
+        when (status) {
+            SaveStatus.SAVED -> Text("✅ 백업 파일 저장 완료", style = AppType.cardTitle)
+            SaveStatus.FAILED -> Text("백업 파일을 저장하지 못했어요", style = AppType.cardTitle.copy(color = Ink.bad))
+        }
+        HintText(if (status == SaveStatus.SAVED) SAVED_TEXT else "빈 파일은 남기지 않았어요. 위 버튼으로 백업을 다시 만들어 저장해주세요.")
     }
 }
 

@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,10 +37,16 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 
 /** Small mono uppercase-ish label above a group of fields (web .section-label). */
@@ -303,8 +310,54 @@ fun Chip(text: String, modifier: Modifier = Modifier, selected: Boolean = false,
         Text(prefix + text, style = AppType.small.copy(color = if (selected) Ink.bg else Ink.text))
         if (onRemove != null) {
             Spacer(Modifier.width(6.dp))
-            Text("×", style = AppType.small.copy(color = if (selected) Ink.bg else Ink.textFaint), modifier = Modifier.clickable(onClick = onRemove))
+            GlyphButton("×", label = "$text 삭제", onClick = onRemove, style = AppType.small.copy(color = if (selected) Ink.bg else Ink.textFaint))
         }
+    }
+}
+
+/** Design §8: the smallest touch target. */
+val MinTouchTarget = 48.dp
+
+/**
+ * A glyph-only action such as a chip's ×, a photo's ✕ or a row's remove mark. [modifier] shapes the visible glyph
+ * box exactly as a plain `Box`/`Text` would (size, background, alignment, padding), so the look and the layout do not
+ * change; the tap area is widened to at least [MinTouchTarget] around the glyph without taking layout space, and
+ * TalkBack reads [label] ("오렌지 삭제", "사진 삭제") as a button instead of "multiplication sign".
+ */
+@Composable
+fun GlyphButton(
+    glyph: String,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    style: TextStyle = AppType.small.copy(color = Ink.textFaint),
+    enabled: Boolean = true,
+) {
+    Layout(
+        modifier = modifier,
+        content = {
+            // sizing probe: the glyph as it used to be laid out; measured only, never placed or announced
+            Text(glyph, style = style, modifier = Modifier.clearAndSetSemantics { })
+            Box(
+                Modifier
+                    .clickable(
+                        interactionSource = null,
+                        indication = ripple(bounded = false, radius = MinTouchTarget / 2),
+                        enabled = enabled,
+                        role = Role.Button,
+                        onClick = onClick,
+                    )
+                    .semantics { contentDescription = label },
+                contentAlignment = Alignment.Center,
+            ) { Text(glyph, style = style) }
+        },
+    ) { measurables, constraints ->
+        val glyphBox = measurables[0].measure(constraints)
+        val min = MinTouchTarget.roundToPx()
+        val w = maxOf(glyphBox.width, min)
+        val h = maxOf(glyphBox.height, min)
+        val target = measurables[1].measure(Constraints.fixed(w, h))
+        layout(glyphBox.width, glyphBox.height) { target.place((glyphBox.width - w) / 2, (glyphBox.height - h) / 2) }
     }
 }
 
