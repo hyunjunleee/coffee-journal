@@ -64,5 +64,6 @@ dependencies {
     testImplementation(libs.koin.test)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.kotlinx.datetime)
+    testImplementation(libs.navigation.compose)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
