@@ -242,9 +242,9 @@ private fun AddPhaseRow(defaultStart: Int, onAdd: (String, String, Int, Int) -> 
         AppTextField(value = range, onValueChange = { range = it }, label = "기간 설명", placeholder = "예: 1~3개월")
         Spacer(Modifier.height(8.dp))
         Row {
-            AppTextField(value = start, onValueChange = { start = it.filter(Char::isDigit) }, label = "시작 D-day", keyboardType = KeyboardType.Number, modifier = Modifier.weight(1f))
+            AppTextField(value = start, onValueChange = { start = it }, inputFilter = { it.filter(Char::isDigit) }, label = "시작 D-day", keyboardType = KeyboardType.Number, modifier = Modifier.weight(1f))
             Spacer(Modifier.width(8.dp))
-            AppTextField(value = end, onValueChange = { end = it.filter(Char::isDigit) }, label = "종료 D-day (미포함)", keyboardType = KeyboardType.Number, modifier = Modifier.weight(1f))
+            AppTextField(value = end, onValueChange = { end = it }, inputFilter = { it.filter(Char::isDigit) }, label = "종료 D-day (미포함)", keyboardType = KeyboardType.Number, modifier = Modifier.weight(1f))
         }
         Spacer(Modifier.height(10.dp))
         Row {

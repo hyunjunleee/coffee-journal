@@ -78,6 +78,8 @@ class PlatformFlowTest : FlowTestBase() {
     private fun openEquipmentForm() {
         launchApp()
         tab("tab-misc")
+        // The web hides "+" on 전체, so pick a type first (web #misc-equipment-subtabs).
+        clickText("드리퍼")
         clickNode(hasContentDescription("추가") and hasClickAction())
         waitFor(button("대표 사진"), "equipment form")
     }

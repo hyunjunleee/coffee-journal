@@ -68,3 +68,33 @@ class ImeSafeTextTest {
         assertEquals("abc가", t.value.text)
     }
 }
+
+class ImeSafeTextFilterTest {
+    private fun typed(text: String) = androidx.compose.ui.text.input.TextFieldValue(text, androidx.compose.ui.text.TextRange(text.length))
+    private val grams: (String) -> String? = { t -> t.replace(',', '.').takeIf { Regex("\\d*\\.?\\d*").matches(it) } }
+
+    @Test
+    fun rejectedEditIsNotShownAndNotReported() {
+        val s = ImeSafeText("10.5")
+        assertEquals(null, s.onEdit(typed("10.5g"), grams))
+        assertEquals("10.5", s.value.text)
+    }
+
+    @Test
+    fun rewrittenEditIsShownAndReportedRewritten() {
+        val s = ImeSafeText("10")
+        assertEquals("10.", s.onEdit(typed("10,"), grams))
+        assertEquals("10.", s.value.text)
+        assertEquals(3, s.value.selection.end)
+        s.syncExternal("10.")
+        assertEquals("10.", s.value.text)
+    }
+
+    @Test
+    fun digitsOnlyFilterDropsLettersButKeepsDigits() {
+        val s = ImeSafeText("12")
+        assertEquals(null, s.onEdit(typed("12a")) { it.filter(Char::isDigit) }.takeIf { it != "12" })
+        assertEquals("12", s.value.text)
+        assertEquals("123", s.onEdit(typed("123")) { it.filter(Char::isDigit) })
+    }
+}

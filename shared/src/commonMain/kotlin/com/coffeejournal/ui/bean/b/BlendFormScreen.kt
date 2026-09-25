@@ -82,7 +82,7 @@ fun BlendFormScreen(nav: NavHostController, blendId: String?) {
                     Spacer(Modifier.width(8.dp))
                     // a number field like the web's type=number: letters and a second point are not taken
                     AppTextField(
-                        value = row.grams, onValueChange = { v -> BlendSources.gramsInput(v)?.let { vm.updateRow(i, grams = it) } },
+                        value = row.grams, onValueChange = { vm.updateRow(i, grams = it) }, inputFilter = BlendSources::gramsInput,
                         placeholder = "그램(g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.width(92.dp),
                     )
                     GlyphButton(

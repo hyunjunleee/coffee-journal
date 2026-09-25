@@ -261,14 +261,27 @@ class ImeSafeText(initial: String) {
         value = TextFieldValue(external, TextRange(external.length))
     }
 
-    /** An edit from the text field. Returns the new text to report to the owner, or null when only the cursor moved. */
-    fun onEdit(edited: TextFieldValue): String? {
-        val changed = edited.text != value.text
-        value = edited
+    /**
+     * An edit from the text field. Returns the new text to report to the owner, or null when only the cursor moved
+     * or [filter] rejected the edit. [filter] returns the text to accept (possibly rewritten) or null to reject;
+     * it runs here, not in the owner, because the owner's reaction arrives asynchronously and cannot undo what the
+     * field already shows.
+     */
+    fun onEdit(edited: TextFieldValue, filter: ((String) -> String?)? = null): String? {
+        var accepted = edited
+        if (filter != null && edited.text != value.text) {
+            val text = filter(edited.text) ?: return null
+            if (text != edited.text) {
+                val cursor = (edited.selection.end + text.length - edited.text.length).coerceIn(0, text.length)
+                accepted = TextFieldValue(text, TextRange(cursor))
+            }
+        }
+        val changed = accepted.text != value.text
+        value = accepted
         if (!changed) return null
-        sent.addLast(edited.text)
+        sent.addLast(accepted.text)
         while (sent.size > MAX_PENDING) sent.removeFirst()
-        return edited.text
+        return accepted.text
     }
 
     /** Ends the IME composition, keeping the composed text as plain text. */
@@ -304,10 +317,12 @@ fun AppTextField(
     minLines: Int = 1,
     enabled: Boolean = true,
     trailing: (@Composable () -> Unit)? = null,
+    /** Accepts, rewrites or rejects (null) each edit before it is shown; see [ImeSafeText.onEdit]. */
+    inputFilter: ((String) -> String?)? = null,
 ) {
     val sync = rememberImeSafeText(value)
     AppTextFieldValue(
-        value = sync.value, onValueChange = { edited -> sync.onEdit(edited)?.let(onValueChange) }, modifier = modifier, label = label,
+        value = sync.value, onValueChange = { edited -> sync.onEdit(edited, inputFilter)?.let(onValueChange) }, modifier = modifier, label = label,
         placeholder = placeholder, singleLine = singleLine, keyboardType = keyboardType, imeAction = imeAction,
         onImeAction = onImeAction, minLines = minLines, enabled = enabled, trailing = trailing,
     )
