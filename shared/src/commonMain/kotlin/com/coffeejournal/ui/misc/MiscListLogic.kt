@@ -2,7 +2,6 @@ package com.coffeejournal.ui.misc
 
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.MiscStatus
-import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.reference.EquipmentTypes
 import com.coffeejournal.domain.rules.Dates
 
@@ -62,6 +61,6 @@ object MiscListLogic {
     /** Web: "2026.7.15부터 사용" from an ISO date; null when blank or malformed. */
     fun sinceLabel(since: String): String? = Dates.parseIsoDate(since)?.let { "${Dates.ymdCompact(it)}부터 사용" }
 
-    /** The type a new item gets from the FAB: the current tab, or 드리퍼 on 전체. */
-    fun formType(currentType: String): String = if (currentType == ALL) MiscType.DRIPPER else currentType
+    /** The type a new item gets from the "+" button; null on 전체, where the web hides the button until a type is picked. */
+    fun formType(currentType: String): String? = currentType.takeIf { it != ALL }
 }

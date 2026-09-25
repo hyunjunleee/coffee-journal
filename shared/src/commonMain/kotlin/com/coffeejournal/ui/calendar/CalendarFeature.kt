@@ -22,9 +22,10 @@ object CalendarFeature : Feature {
         viewModelOf(::CalendarViewModel)
         viewModelOf(::StudyViewModel)
         viewModelOf(::ClassesViewModel)
-        viewModel { (id: String?) -> BookFormViewModel(id, get()) }
-        viewModel { (id: String?) -> VideoFormViewModel(id, get()) }
-        viewModel { (id: String?) -> ClassFormViewModel(id, get()) }
+        // the last get() is the destination's SavedStateHandle (typed input survives process death)
+        viewModel { (id: String?) -> BookFormViewModel(id, get(), get()) }
+        viewModel { (id: String?) -> VideoFormViewModel(id, get(), get()) }
+        viewModel { (id: String?) -> ClassFormViewModel(id, get(), get()) }
     }
 
     override fun NavGraphBuilder.routes(nav: NavHostController) {

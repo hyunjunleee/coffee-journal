@@ -46,7 +46,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
-import org.junit.Ignore
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.annotation.Config
@@ -87,7 +86,6 @@ class MoreFlowTest : FlowTestBase() {
 
     // ───────────── design §2.3.5: calendar day panel blend → blend view ─────────────
 
-    @Ignore("app defect: calendar day-panel blend row only switches to the 원두 tab (커피 지도), not its 블렌드 view (design §2.3.5)")
     @Test
     fun more01_calendarDayPanelBlend_opensBlendView() {
         runBlocking {
@@ -183,6 +181,10 @@ class MoreFlowTest : FlowTestBase() {
         waitFor(button("⭐ 베스트 레시피 해제"))
         back()
         waitForText("6 entries")
+        // groups start collapsed like the web (home-4): open the new bean's group
+        val header = hasText(newBean) and hasClickAction()
+        scrollListTo(hasText("+ 새 기록 추가"), header)
+        clickNode(header)
         val bestCard = hasText("⭐ 이 원두의 베스트 레시피")
         scrollListTo(hasText("+ 새 기록 추가"), bestCard)
         assertTrue("home group shows the best recipe card", has(bestCard))
@@ -530,7 +532,10 @@ class MoreFlowTest : FlowTestBase() {
         back()
         tab("tab-extract")
         waitForText("2 entries")
-        // the brew group now also lists the home cupping row
+        // the brew group now also lists the home cupping row (groups start collapsed, so open it first)
+        val header = hasText("홈커핑 대상 원두") and hasClickAction()
+        scrollListTo(hasText("+ 새 기록 추가"), header)
+        clickNode(header)
         val cuppingRow = hasText("커핑 · 홈커핑")
         scrollListTo(hasText("+ 새 기록 추가"), cuppingRow)
         assertTrue("home group shows the single-bean home cupping", has(cuppingRow))
@@ -757,7 +762,6 @@ class MoreFlowTest : FlowTestBase() {
         assertEquals("control: the record form guards its save, one record", 1, entries().size)
     }
 
-    @Ignore("app defect: pantry editor save is not re-entrant; a double tap on 저장 stores two bags")
     @Test
     fun more31_doubleTapSave_pantryEditorCreatesOneBag() {
         launchApp()
@@ -771,7 +775,6 @@ class MoreFlowTest : FlowTestBase() {
         assertEquals("one bag after a double tap on 저장", 1, runBlocking { koinGet<PantryRepository>().getAll().size })
     }
 
-    @Ignore("app defect: book form save is not re-entrant; a double tap on 저장 stores two books")
     @Test
     fun more32_doubleTapSave_bookFormCreatesOneBook() {
         launchApp()
@@ -786,11 +789,11 @@ class MoreFlowTest : FlowTestBase() {
         assertEquals("one book after a double tap on 저장", 1, runBlocking { koinGet<StudyRepository>().getBooks().size })
     }
 
-    @Ignore("app defect: equipment form resets saving=false after success; a double tap on 저장 stores two items")
     @Test
     fun more33_doubleTapSave_equipmentFormCreatesOneItem() {
         launchApp()
         tab("tab-misc")
+        clickText("드리퍼") // "+ 추가" is hidden on 전체, like the web
         clickNode(hasContentDescription("추가") and hasClickAction())
         typeInto("예: 오리가미 드리퍼", "더블탭 드리퍼")
         val taps = doubleTapSave()
@@ -800,7 +803,6 @@ class MoreFlowTest : FlowTestBase() {
         assertEquals("one dripper after a double tap on 저장", 1, runBlocking { koinGet<MiscRepository>().getAll().size })
     }
 
-    @Ignore("app defect: blend form save is not re-entrant; a double tap on 저장 stores two blends")
     @Test
     fun more34_doubleTapSave_blendFormCreatesOneBlend() {
         launchApp()

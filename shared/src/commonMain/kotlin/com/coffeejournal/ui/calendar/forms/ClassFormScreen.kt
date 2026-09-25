@@ -10,9 +10,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.ClassType
 import com.coffeejournal.ui.theme.AppTextField
+import com.coffeejournal.ui.theme.DateField
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.Seg
 import org.koin.compose.viewmodel.koinViewModel
@@ -26,7 +28,9 @@ private val typeLabels = mapOf(ClassType.ONEDAY to "원데이 클래스", ClassT
 fun ClassFormScreen(nav: NavHostController, classId: String?) {
     val vm = koinViewModel<ClassFormViewModel>(key = "class-form-$classId") { parametersOf(classId) }
     val s by vm.state.collectAsStateWithLifecycle()
-    FormScaffold(title = if (s.isEdit) "클래스 수정" else "클래스 추가", onBack = { nav.popBackStack() }, onSave = { vm.save { nav.popBackStack() } }) {
+    // one pop per back / 취소 / successful save, even when tapped again during the exit transition
+    val leave = dropUnlessResumed { nav.popBackStack() }
+    FormScaffold(title = if (s.isEdit) "클래스 수정" else "클래스 추가", onBack = leave, onSave = { vm.save(leave) }, saving = s.saving) {
         AppTextField(label = "클래스명", value = s.title, onValueChange = { v -> vm.update { copy(title = v, titleError = false) } }, placeholder = "예: 홈카페 원데이 클래스")
         RequiredHint(s.titleError, "클래스명을 입력해주세요")
         Spacer(Modifier.height(12.dp))

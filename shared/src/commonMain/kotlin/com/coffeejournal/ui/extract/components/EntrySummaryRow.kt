@@ -28,11 +28,15 @@ fun EntrySummaryRow(row: EntryRow, onClick: () -> Unit, modifier: Modifier = Mod
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             CatDot(Ink.categoryColor(row.category))
             Text(row.dateText, style = AppType.monoValue)
-            Text(row.categoryText, style = AppType.small)
+            if (row.categoryText.isNotBlank()) Text(row.categoryText, style = AppType.small)
             row.packageBadge?.let { Badge(it) }
             if (row.isBest) Badge("⭐ 베스트", color = Ink.accent)
             Spacer(Modifier.weight(1f))
             row.scoreText?.let { Text(it, style = AppType.monoValue) }
+        }
+        row.blendLabel?.let { label ->
+            Spacer(Modifier.height(3.dp))
+            Row { Spacer(Modifier.width(14.dp)); Text(label, style = AppType.small.copy(color = Ink.text)) }
         }
         if (row.recipeLine.isNotBlank()) {
             Spacer(Modifier.height(3.dp))

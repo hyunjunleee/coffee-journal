@@ -24,7 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.DdayRules
+import com.coffeejournal.ui.theme.AppDatePickerDialog
 import com.coffeejournal.ui.theme.AppType
+import com.coffeejournal.ui.theme.DateField
 import com.coffeejournal.ui.theme.Badge
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.HairlineCard
@@ -68,6 +70,6 @@ fun DdaySection(start: LocalDate?, label: String?, milestone: DdayRules.Mileston
         Spacer(Modifier.width(Dimens.gutter))
     }
     if (picking) {
-        DatePickerSheet(initial = start, onDismiss = { picking = false }, onPick = { onSave(it); picking = false })
+        AppDatePickerDialog(initial = start, onDismiss = { picking = false }, onPick = { onSave(it); picking = false })
     }
 }

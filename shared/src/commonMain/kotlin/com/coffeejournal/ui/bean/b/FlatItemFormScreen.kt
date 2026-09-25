@@ -15,9 +15,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.MiscStatus
 import com.coffeejournal.domain.model.Scope
+import com.coffeejournal.ui.form.imeOverlapPadding
 import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
@@ -35,9 +37,11 @@ fun FlatItemFormScreen(nav: NavHostController, type: String, itemId: String?) {
     val vm = koinViewModel<FlatItemFormViewModel> { parametersOf(type, itemId) }
     val s by vm.state.collectAsStateWithLifecycle()
     val spec = vm.spec
+    // one pop per back / 취소 / successful save, even when tapped again during the exit transition
+    val leave = dropUnlessResumed { nav.popBackStack() }
     Column(Modifier.fillMaxSize().background(Ink.bg)) {
-        ScreenTitleBar("${spec.label} ${if (itemId == null) "추가" else "수정"}", onBack = { nav.popBackStack() })
-        Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
+        ScreenTitleBar("${spec.label} ${if (itemId == null) "추가" else "수정"}", onBack = leave)
+        Column(Modifier.weight(1f).imeOverlapPadding().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             Spacer(Modifier.height(16.dp))
             AppTextField(value = s.name, onValueChange = vm::setName, label = "이름", placeholder = spec.namePlaceholder, enabled = s.loaded)
             if (spec.hasStatus) {
@@ -55,8 +59,8 @@ fun FlatItemFormScreen(nav: NavHostController, type: String, itemId: String?) {
             Spacer(Modifier.height(14.dp))
             AppTextField(value = s.notes, onValueChange = vm::setNotes, label = "메모 (선택)", placeholder = spec.notesPlaceholder, singleLine = false, minLines = 3)
             Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                PrimaryButton(if (itemId == null) "저장" else "수정 저장", enabled = s.loaded && s.name.isNotBlank(), onClick = { vm.save { nav.popBackStack() } })
-                GhostButton("취소", onClick = { nav.popBackStack() })
+                PrimaryButton(if (itemId == null) "저장" else "수정 저장", enabled = s.loaded && !s.saving && s.name.isNotBlank(), onClick = { vm.save(leave) })
+                GhostButton("취소", onClick = leave)
             }
             Spacer(Modifier.height(96.dp))
         }

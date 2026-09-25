@@ -199,4 +199,65 @@ class ExtractGroupingTest {
         assertEquals("일반 원두 · 리브레 · 200g · 18,000원 · 100g 환산 9,000원 · 로스팅 2026-06-01 · 구매 2026-06-05",
             PantryListing.metaLine(PantryItem(id = "m", name = "m", roastery = "리브레", weight = "200", price = "18000", roastDate = "2026-06-01", purchaseDate = "2026-06-05", createdAt = 0)))
     }
+
+    // home-3: the opened-bag card shows the web's info lines (filled from same-name records), not roast date / weight
+    @Test fun openedBagCardShowsInfoLinesFromSameNameRecords() {
+        val entries = listOf(
+            brew("b1", "워카 첼베사", 0) { copy(roastery = "커피 리브레", selection = "Nordic Approach", farmProducer = "워카 첼베사(SNAP)", washingStation = "첼베사") },
+        )
+        val pantry = listOf(PantryItem(id = "p", name = "워카 첼베사", weight = "200", price = "18000", roastDate = "2026-06-20", status = PantryItem.STATUS_OPENED, openedAt = at(2), createdAt = at(0)))
+        val card = assertIs<DrinkingState.OpenedBags>(ExtractGrouping.drinking(entries, pantry, emptyList(), emptyList(), today = LocalDate(2026, 7, 10))).cards.single()
+        assertEquals(
+            listOf(InfoLine("로스터리", "커피 리브레"), InfoLine("생두 수입사", "Nordic Approach"), InfoLine("농장", "워카 첼베사(SNAP)"), InfoLine("워싱 스테이션", "첼베사")),
+            card.infoLines,
+        )
+        assertEquals("200g · 18,000원 · 100g 환산 9,000원", card.priceText)
+        // the bag's own roastery wins over the records'
+        val own = pantry.single().copy(roastery = "모모스")
+        val ownCard = assertIs<DrinkingState.OpenedBags>(ExtractGrouping.drinking(entries, listOf(own), emptyList(), emptyList(), today = LocalDate(2026, 7, 10))).cards.single()
+        assertEquals(InfoLine("로스터리", "모모스"), ownCard.infoLines.first())
+    }
+
+    // home-5: home-brew rows drop "원두"; a custom-blend row names the blend
+    @Test fun entryRowsHideBeanCategoryAndLabelCustomBlends() {
+        assertEquals("", ExtractGrouping.entryRow(brew("b", "벤사", 0), isBest = false).categoryText)
+        assertNull(ExtractGrouping.entryRow(brew("b", "벤사", 0), isBest = false).blendLabel)
+        val blend = brew("x", "벤사 + 게이샤", 1) { copy(beanMode = BeanMode.CUSTOM_BLEND, blendComponents = listOf(BlendComponent("벤사", "10"), BlendComponent("게이샤", "8"))) }
+        assertEquals("직접 블렌드 · 벤사 + 게이샤", ExtractGrouping.entryRow(blend, isBest = false).blendLabel)
+        val cup = Entry(id = "c", createdAt = at(2), category = Category.CUPPING, cuppingType = "홈커핑", name = "벤사")
+        assertEquals("커핑 · 홈커핑", ExtractGrouping.entryRow(cup, isBest = false).categoryText)
+    }
+
+    // home-6: the most-recent-bean card subtracts only standard single-bean brews (plus blend components)
+    @Test fun recentBeanRemainingIgnoresDripBagsSamplesAndDecafOfTheSameName() {
+        val entries = listOf(
+            brew("b1", "게이샤", 0) { copy(dose = "12", bagWeight = "200") },
+            brew("d1", "게이샤", 1) { copy(dose = "12", packageType = PackageType.DRIPBAG) },
+            brew("s1", "게이샤", 2) { copy(dose = "10", packageType = PackageType.SAMPLE) },
+            brew("x1", "게이샤 + 벤사", 3) { copy(dose = "15", beanMode = BeanMode.CUSTOM_BLEND, blendComponents = listOf(BlendComponent("게이샤", "7"), BlendComponent("벤사", "8"))) },
+        )
+        val blends = listOf(Blend(id = "lab", beans = listOf(BlendComponent("게이샤", "5")), createdAt = at(1)))
+        val card = assertIs<DrinkingState.RecentBean>(ExtractGrouping.drinking(entries, emptyList(), blends, emptyList(), today = LocalDate(2026, 7, 10))).card
+        // 200 − 12 (standard brew) − 7 (custom-blend component) − 5 (lab blend); the drip bag and sample do not count
+        assertEquals("잔여량 176g/200g", card.remainingLine)
+    }
+
+    // home-7: the stored importer text is searchable, "셀렉션" included
+    @Test fun searchFindsTheStoredImporterText() {
+        val entries = listOf(brew("b", "예가체프", 0) { copy(selection = "모모스 셀렉션") })
+        assertEquals(1, ExtractGrouping.search(entries, "모모스 셀렉션")!!.total)
+        assertEquals(1, ExtractGrouping.search(entries, "셀렉션")!!.total)
+        assertEquals(1, ExtractGrouping.search(entries, "모모스")!!.total)
+    }
+
+    // hand-off from the data lane: stored "NaN" / "Infinity" weights never render as "NaNg"
+    @Test fun nonFiniteWeightsRenderNoGrams() {
+        assertEquals("", ExtractGrouping.weightText("NaN"))
+        assertEquals("", ExtractGrouping.weightText("Infinity"))
+        assertEquals("", ExtractGrouping.weightText("0"))
+        assertEquals("200g", ExtractGrouping.weightText(" 200 "))
+        assertEquals("12.5g", ExtractGrouping.weightText("12.5"))
+        assertEquals("리브레", ExtractGrouping.smallPackCard(PantryItem(id = "p", name = "x", roastery = "리브레", weight = "NaN", createdAt = 0)).statsLine)
+        assertEquals("소량 · 리브레", PantryListing.metaLine(PantryItem(id = "p", name = "x", roastery = "리브레", weight = "Infinity", packageType = PackageType.SAMPLE, createdAt = 0)))
+    }
 }

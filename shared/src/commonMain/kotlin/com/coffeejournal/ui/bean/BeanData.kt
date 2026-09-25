@@ -8,6 +8,8 @@ import com.coffeejournal.domain.model.PantryItem
 
 /** Everything the 원두 tab views derive their statistics from; computed once by the tab view model. */
 data class BeanData(
+    /** False until the repositories have emitted once (the header shows no count before that). */
+    val loaded: Boolean = false,
     val entries: List<Entry> = emptyList(),
     /** BeanRecords.flatten(entries): one row per tasted bean, cupping sessions expanded. */
     val records: List<BeanRecord> = emptyList(),

@@ -13,6 +13,7 @@ import com.coffeejournal.domain.rules.BeanRecords
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.ui.bean.BeanData
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +36,7 @@ class BlendsViewModel(private val blends: BlendRepository) : ViewModel() {
 /** Live BeanData for the stand-alone detail routes (country / roastery) that are opened outside the tab. */
 class BeanExtraDataViewModel(entries: EntryRepository, misc: MiscRepository, blends: BlendRepository) : ViewModel() {
     val data: StateFlow<BeanData> = combine(entries.observeAll(), misc.observeAll(), blends.observeAll()) { e, m, b ->
-        BeanData(entries = e, records = BeanRecords.flatten(e), miscItems = m, blends = b)
+        BeanData(loaded = true, entries = e, records = BeanRecords.flatten(e), miscItems = m, blends = b)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BeanData())
 }
 
@@ -44,9 +45,13 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
     data class State(
         val name: String = "", val status: String = "", val scope: String = Scope.DOMESTIC, val location: String = "",
         val notes: String = "", val existing: MiscItem? = null, val loaded: Boolean = false,
+        /** A save is running or has succeeded (the screen is closing): further saves are ignored. */
+        val saving: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State(loaded = itemId == null))
+    /** A new item's id, fixed for this form, so a repeated save could only upsert the same row. */
+    private val newId = Ids.newId()
     val state: StateFlow<State> = _state
     val spec: FlatItemLogic.Spec = FlatItemLogic.spec(type)
 
@@ -69,18 +74,25 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
     fun save(onDone: () -> Unit) {
         val s = _state.value
         val name = s.name.trim()
-        if (name.isEmpty()) return
+        if (name.isEmpty() || s.saving || !s.loaded) return
+        _state.update { it.copy(saving = true) }
         viewModelScope.launch {
-            val base = s.existing ?: MiscItem(id = Ids.newId(), type = type, name = name, createdAt = Dates.nowMillis())
-            misc.upsert(
-                base.copy(
-                    name = name, notes = s.notes.trim(),
-                    status = if (spec.hasStatus) s.status else base.status,
-                    scope = if (spec.hasScope) s.scope else base.scope,
-                    location = if (spec.hasScope) s.location.trim() else base.location,
+            try {
+                val base = s.existing ?: MiscItem(id = newId, type = type, name = name, createdAt = Dates.nowMillis())
+                misc.upsert(
+                    base.copy(
+                        name = name, notes = s.notes.trim(),
+                        status = if (spec.hasStatus) s.status else base.status,
+                        scope = if (spec.hasScope) s.scope else base.scope,
+                        location = if (spec.hasScope) s.location.trim() else base.location,
+                    )
                 )
-            )
-            onDone()
+                onDone()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(saving = false) }
+            }
         }
     }
 }
@@ -90,9 +102,13 @@ class BlendFormViewModel(private val blendId: String?, private val blends: Blend
     data class State(
         val name: String = "", val date: String = Dates.isoDate(Dates.today()), val rows: List<BlendComponent> = listOf(BlendComponent(""), BlendComponent("")),
         val notes: String = "", val existing: Blend? = null, val loaded: Boolean = false,
+        /** A save is running or has succeeded (the screen is closing): further saves are ignored. */
+        val saving: Boolean = false,
     )
 
     private val _state = MutableStateFlow(State(loaded = blendId == null))
+    /** A new blend's id, fixed for this form, so a repeated save could only upsert the same row. */
+    private val newId = Ids.newId()
     val state: StateFlow<State> = _state
     val suggestions: StateFlow<List<String>> = entries.observeAll()
         .map { e -> BlendSources.recentBeanNames(BeanRecords.flatten(e)) }
@@ -124,17 +140,24 @@ class BlendFormViewModel(private val blendId: String?, private val blends: Blend
     fun save(onDone: () -> Unit) {
         val s = _state.value
         val beans = BlendSources.validRows(s.rows)
-        if (beans.isEmpty()) return
+        if (beans.isEmpty() || s.saving || !s.loaded) return
+        _state.update { it.copy(saving = true) }
         viewModelScope.launch {
-            val now = Dates.nowMillis()
-            blends.upsert(
-                Blend(
-                    id = s.existing?.id ?: Ids.newId(now), name = s.name.trim(),
-                    date = s.date.trim().ifEmpty { Dates.isoDate(Dates.today()) }, beans = beans, notes = s.notes.trim(),
-                    createdAt = s.existing?.createdAt ?: now,
+            try {
+                val now = Dates.nowMillis()
+                blends.upsert(
+                    Blend(
+                        id = s.existing?.id ?: newId, name = s.name.trim(),
+                        date = s.date.trim().ifEmpty { Dates.isoDate(Dates.today()) }, beans = beans, notes = s.notes.trim(),
+                        createdAt = s.existing?.createdAt ?: now,
+                    )
                 )
-            )
-            onDone()
+                onDone()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(saving = false) }
+            }
         }
     }
 }

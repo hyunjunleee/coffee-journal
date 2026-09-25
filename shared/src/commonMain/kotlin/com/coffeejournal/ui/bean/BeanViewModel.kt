@@ -45,6 +45,7 @@ class BeanViewModel(
         entries.observeAll(), misc.observeAll(), blends.observeAll(), pantry.observeAll(),
     ) { entryList, miscItems, blendList, pantryItems ->
         BeanData(
+            loaded = true,
             entries = entryList,
             records = BeanRecords.flatten(entryList),
             miscItems = miscItems,

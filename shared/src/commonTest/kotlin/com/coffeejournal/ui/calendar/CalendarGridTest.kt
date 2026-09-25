@@ -123,4 +123,33 @@ class CalendarGridTest {
         assertNull(CalendarGrid.currentPhase(phases, 60))
         assertNull(CalendarGrid.currentPhase(phases, null))
     }
+
+    // calendar-3: a phase added by hand overlaps the starter [0, 99999) and must still become the current one
+    @Test fun narrowestPhaseContainingTheDayIsCurrent() {
+        val starter = RoadmapPhase("starter", 0, "나의 로드맵", "자유롭게 작성", 0, 99999)
+        val added = RoadmapPhase("phase-1", 1, "추출 기초", "1~3개월", 30, 90)
+        val phases = listOf(starter, added)
+        assertEquals("phase-1", CalendarGrid.currentPhase(phases, 30)?.id)
+        assertEquals("phase-1", CalendarGrid.currentPhase(phases, 89)?.id)
+        assertEquals("starter", CalendarGrid.currentPhase(phases, 29)?.id)
+        assertEquals("starter", CalendarGrid.currentPhase(phases, 90)?.id)
+        // equal spans: the earlier position wins, like the web's first match
+        val twin = RoadmapPhase("phase-2", 2, "같은 기간", "", 30, 90)
+        assertEquals("phase-1", CalendarGrid.currentPhase(phases + twin, 40)?.id)
+    }
+
+    // calendar-6: the repository lists newest first; a day lists its records oldest first like the web
+    @Test fun dayListsRecordsOldestFirst() {
+        val d = LocalDate(2026, 9, 3)
+        val newestFirst = listOf(
+            entry(d, name = "셋째", hour = 18, category = Category.CUPPING),
+            entry(d, name = "둘째", hour = 12, category = Category.CAFE),
+            entry(d, name = "첫째", hour = 8),
+            entry(d, name = "넷째", hour = 7, category = Category.BEAN).let { it.copy(createdAt = it.createdAt - Dates.DAY_MS) },
+        )
+        val c = cell(CalendarGrid.build(sep, newestFirst, emptyList(), CalFilter.ALL, null, today), 3)
+        assertEquals(listOf("첫째", "둘째", "셋째"), c.entries.map { it.name })
+        assertEquals(listOf(Category.BEAN, Category.CAFE, Category.CUPPING), c.dotCategories)
+        assertEquals(listOf(Category.BEAN, Category.CAFE, Category.CUPPING), c.categories)
+    }
 }

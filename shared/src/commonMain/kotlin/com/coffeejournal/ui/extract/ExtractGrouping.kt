@@ -14,6 +14,7 @@ import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.BeanRecords
 import com.coffeejournal.domain.rules.CuppingTypes
 import com.coffeejournal.domain.rules.Dates
+import com.coffeejournal.domain.rules.Numbers
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.PantryRules
 import com.coffeejournal.domain.rules.Prices
@@ -81,7 +82,8 @@ sealed interface DrinkingState {
 data class OpenedBagCard(
     val item: PantryItem,
     val eyebrow: String,
-    val metaLine: String,
+    /** Web beanInfoLinesHtml of the bag: 로스터리 / 생두 수입사 / 농장 / 워싱 스테이션, filled from same-name records. */
+    val infoLines: List<InfoLine>,
     val remainingLine: String,
     val priceText: String,
     val windowText: String,
@@ -100,7 +102,10 @@ data class EntryRow(
     val entryId: String,
     val category: String,
     val dateText: String,
+    /** Web entry-sub: the category only when it is not 원두 ("커핑 · 유형" for cupping projections), else blank. */
     val categoryText: String,
+    /** Set for a custom-blend record, so it is not mistaken for a plain brew of the group's bean (web card title). */
+    val blendLabel: String?,
     val packageBadge: String?,
     val isBest: Boolean,
     val scoreText: String?,
@@ -245,7 +250,12 @@ object ExtractGrouping {
             entryId = entry.id,
             category = category,
             dateText = Dates.ymdPadded(entry.createdAt),
-            categoryText = if (category == Category.CUPPING) "$category · ${CuppingTypes.effective(entry)}" else category,
+            categoryText = when (category) {
+                Category.CUPPING -> "$category · ${CuppingTypes.effective(entry)}"
+                Category.BEAN -> ""
+                else -> category
+            },
+            blendLabel = if (entry.beanMode == BeanMode.CUSTOM_BLEND) "직접 블렌드 · " + BeanNames.displayName(entry.name).ifBlank { "이름 없음" } else null,
             packageBadge = when (type) { PackageType.DRIPBAG -> "드립백"; PackageType.SAMPLE -> "소량"; else -> null },
             isBest = isBest,
             scoreText = ScaScoring.effectiveTotal(entry.attributes)?.let { ScaScoring.format2(it) + " / 100" },
@@ -264,7 +274,7 @@ object ExtractGrouping {
     fun smallPackCard(item: PantryItem): SmallPackCard {
         val stats = listOf(
             item.roastery,
-            PantryRules.priceText(item.weight, item.price).ifBlank { if (item.weight.isNotBlank()) "${item.weight}g" else "" },
+            PantryRules.priceText(item.weight, item.price).ifBlank { weightText(item.weight) },
             if (item.roastDate.isNotBlank()) "로스팅 ${item.roastDate}" else "",
         ).filter { it.isNotBlank() }.joinToString(" · ")
         return SmallPackCard(item, stats, PantryRules.drinkWindowText(item))
@@ -277,8 +287,11 @@ object ExtractGrouping {
         val query = normalize(rawQuery)
         if (query.isEmpty()) return null
         val seen = HashSet<String>()
+        // BeanRecord.selection is the short importer name ("모모스" for "모모스 셀렉션"); the web searches the stored text
+        val rawSelection = entries.associate { it.id to it.selection }
         val matching = BeanRecords.flatten(entries).filter { record ->
-            val searchable = normalize(listOf(record.name, record.roastery, record.selection).filter { it.isNotBlank() }.joinToString(" "))
+            val stored = if (record.parentEntryId == null) rawSelection[record.entryId].orEmpty() else ""
+            val searchable = normalize(listOf(record.name, record.roastery, record.selection, stored).filter { it.isNotBlank() }.joinToString(" "))
             if (!searchable.contains(query)) return@filter false
             seen.add("${record.parentEntryId ?: record.entryId}:${BeanNames.coreBeanName(record.name)}")
         }
@@ -330,8 +343,12 @@ object ExtractGrouping {
         val startAt = sameBean.minOf { it.createdAt }
         val start = Dates.toLocalDate(startAt)
         val daysIn = Dates.daysBetween(start, today) + 1
-        val bagWeight = sameBean.sortedByDescending { it.createdAt }.firstOrNull { it.bagWeight.isNotBlank() }?.bagWeight?.trim()?.toDoubleOrNull()
-        val (remaining, bag) = PantryRules.remainingGrams(key, bagWeight, entries, blends)
+        val bagWeight = sameBean.sortedByDescending { it.createdAt }.firstOrNull { it.bagWeight.isNotBlank() }?.bagWeight?.let(Numbers::parse)
+        // Web renderWeeklyBean: only the standard single-bean brews above count with their own dose (not drip bags,
+        // samples, blends or decaf); custom blends still count the grams of a matching component. Their names are
+        // blanked so the shared rule reads only their components.
+        val customBlends = entries.filter { Packages.isBrew(it) && it.beanMode == BeanMode.CUSTOM_BLEND }.map { it.copy(name = "") }
+        val (remaining, bag) = PantryRules.remainingGrams(key, bagWeight, sameBean + customBlends, blends)
         val lines = infoLines(latest, entries)
         // The farm shown on the card (own field, else filled from sibling records) decides which farm memo to show.
         val farmKey = latest.farmProducer.ifBlank { lines.firstOrNull { it.label == "농장" }?.value ?: "" }.trim().lowercase()
@@ -349,22 +366,22 @@ object ExtractGrouping {
 
     private fun openedBagCard(item: PantryItem, entries: List<Entry>, blends: List<Blend>): OpenedBagCard {
         val key = BeanNames.coreBeanName(item.name)
-        val (remaining, bag) = PantryRules.remainingGrams(key, item.weight.trim().toDoubleOrNull(), entries, blends)
+        val (remaining, bag) = PantryRules.remainingGrams(key, Numbers.parse(item.weight), entries, blends)
         val openedAt = item.openedAt ?: item.createdAt
-        val meta = listOf(
-            item.roastery,
-            if (item.roastDate.isNotBlank()) "로스팅 ${item.roastDate}" else "",
-            if (item.weight.isNotBlank()) "${item.weight}g" else "",
-        ).filter { it.isNotBlank() }.joinToString(" · ")
+        // the web passes an id-less object, so every same-name record may fill a blank; a made-up id does the same
+        val asEntry = Entry(id = "pantry:" + item.id, createdAt = 0L, name = item.name, roastery = item.roastery)
         return OpenedBagCard(
             item = item,
             eyebrow = "마시는 중 · ${Dates.ymdCompact(openedAt)}.~",
-            metaLine = meta,
+            infoLines = infoLines(asEntry, entries),
             remainingLine = remainingLine(remaining, bag),
             priceText = PantryRules.priceText(item.weight, item.price),
             windowText = PantryRules.drinkWindowText(item),
         )
     }
+
+    /** "200g", or blank when the weight is missing or not a finite positive number (no "NaNg"). */
+    fun weightText(weight: String): String = Numbers.parse(weight)?.takeIf { it > 0 }?.let { Prices.trimNumber(it) + "g" } ?: ""
 
     fun remainingLine(remaining: Double, bag: Double): String = "잔여량 ${Prices.trimNumber(remaining)}g/${Prices.trimNumber(bag)}g"
 

@@ -14,7 +14,8 @@ object ExtractFeature : Feature {
     override val module = module {
         viewModel { ExtractViewModel(get(), get(), get(), get(), get(), get()) }
         viewModel { PantryViewModel(get()) }
-        viewModel { (itemId: String) -> PantryEditorViewModel(itemId.ifBlank { null }, get()) }
+        // the last get() is the destination's SavedStateHandle (typed input survives process death)
+        viewModel { (itemId: String) -> PantryEditorViewModel(itemId.ifBlank { null }, get(), get()) }
     }
 
     override fun NavGraphBuilder.routes(nav: NavHostController) {

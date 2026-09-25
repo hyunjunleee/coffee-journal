@@ -20,6 +20,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,7 +56,8 @@ fun MiscTabScreen(nav: NavHostController) {
     var deleteTarget by remember { mutableStateOf<MiscItem?>(null) }
 
     Column(Modifier.fillMaxSize()) {
-        TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = "${state.total} items")
+        // the web header is global: every tab shows the record count
+        TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = state.entryCount?.let { "$it entries" })
         Box(Modifier.fillMaxSize()) {
             LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, top = 12.dp, bottom = 96.dp)) {
                 item(key = "type-tabs") {
@@ -92,16 +94,19 @@ fun MiscTabScreen(nav: NavHostController) {
                     }
                 }
             }
-            Box(
-                Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 20.dp, bottom = 20.dp)
-                    .size(52.dp)
-                    .background(Ink.accent)
-                    .clickable { nav.navigate(Route.MiscForm(type = MiscListLogic.formType(state.type))) },
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(AppIcons.plus, contentDescription = "추가", tint = Ink.bg, modifier = Modifier.size(22.dp))
+            // web: '+ 추가' is hidden on 전체, so the type is picked first (there is no type choice in the form)
+            MiscListLogic.formType(state.type)?.let { formType ->
+                Box(
+                    Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 20.dp, bottom = 20.dp)
+                        .size(52.dp)
+                        .background(Ink.accent)
+                        .clickable { nav.navigate(Route.MiscForm(type = formType)) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(AppIcons.plus, contentDescription = "추가", tint = Ink.bg, modifier = Modifier.size(22.dp))
+                }
             }
         }
     }
@@ -169,9 +174,10 @@ private fun MiscCard(item: MiscItem, showType: Boolean, photoPath: (String) -> S
             Text(item.notes, style = AppType.bodyMuted)
         }
         Spacer(Modifier.height(10.dp))
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GhostButton("수정", small = true, icon = AppIcons.edit, onClick = onEdit)
-            GhostButton("삭제", small = true, icon = AppIcons.trash, danger = true, onClick = onDelete)
+        // the buttons keep their small look but reserve a 48dp touch target each (design §8)
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            GhostButton("수정", small = true, icon = AppIcons.edit, onClick = onEdit, modifier = Modifier.minimumInteractiveComponentSize())
+            GhostButton("삭제", small = true, icon = AppIcons.trash, danger = true, onClick = onDelete, modifier = Modifier.minimumInteractiveComponentSize())
         }
     }
 }
