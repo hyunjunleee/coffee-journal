@@ -50,7 +50,7 @@ export ANDROID_HOME=/opt/android-sdk
 
 ## 디자인 규약 (`ui/theme`)
 - 접근성: 글리프·체크박스·지도·휠처럼 그림만 있는 요소는 동작 이름이나 아래 목록을 가리키는 content description을 달고, 접이식 헤더·토글은 펼침/선택 상태를 노출한다. 달력 칸은 "9월 21일, 오늘, 기록 2개"처럼 읽힌다.
-- 색·타이포: `Ink.*`, `AppType.*`, 간격 `Dimens.*`. 모서리 반경 0, 헤어라인 0.5dp, 그림자 없음.
+- 색·타이포: `Ink.*`, `AppType.*`, 간격 `Dimens.*`. 입력 상자 안의 글(값·placeholder)은 `AppType.input` / `AppType.inputSmall`(줄 상자를 자르지 않아 한글·영문 필드 높이가 같음). 모서리 반경 0, 헤어라인 0.5dp, 그림자 없음.
 - 컴포넌트: `TopHeader`, `ScreenTitleBar`, `SectionLabel`, `FieldLabel`, `Hairline`, `PrimaryButton`, `GhostButton`, `SubTabs`(선택 칩으로 자동 스크롤, 강조 칩 옵션), `Seg`, `HairlineCard`, `EmptyNote`, `HintText`, `CatDot`, `Badge`, `KeyValueRow`, `AppTextField`, `ChipInput`, `Chip`, 아이콘 `AppIcons.*`(material-icons 라이브러리는 없다).
 - 문구는 웹 원문을 그대로 쓴다(빈 상태 안내, 라벨, placeholder). 한국어.
 - 삭제는 항상 확인 대화상자(`AlertDialog`). 목록 정렬·필터 기본값은 웹과 동일.

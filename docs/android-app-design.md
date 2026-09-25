@@ -217,9 +217,12 @@ coffee-journal/
 ## 8. 테스트·품질
 - `commonTest`: 도메인 규칙(이름 정규화, 범위 계산, 피크, SCA, 단계 요약·차이, 노트 정규화, 국가 판별), 백업 코덱 왕복(웹 샘플 JSON 포함), 저장 파이프라인.
 - Android 계측: Room 마이그레이션·DAO 스모크(선택).
-- 빌드 게이트: `:shared:testDebugUnitTest` + `:androidApp:assembleDebug`.
+- 빌드 게이트: `:shared:testDebugUnitTest` + `:androidApp:testDebugUnitTest` + `:androidApp:assembleDebug`.
 - 화면 검증: 에뮬레이터 없이 Robolectric + Roborazzi로 실제 Compose 화면을 JVM에서 렌더해 PNG로 남긴다(`./gradlew :androidApp:recordRoborazziDebug` → `androidApp/screenshots/`). 테스트는 인메모리 Room(프레임워크 SQLite 드라이버)과 샘플 데이터(`SampleData`)를 주입한다.
-- 접근성: 최소 터치 48dp, 대비 4.5:1(잉크/아이보리), 콘텐츠 설명.
+- 흐름 테스트: 같은 환경에서 실제 `App()`을 띄워 탭·입력으로 사용자 흐름 전체를 수행하고, 화면 문구와 저장된 데이터를 웹 원본 핸들러 기준으로 함께 검증한다(백업 왕복, 원자적 복원, 한글 IME 조합, 자정 전환, 연속 탭 경합, 저장 중 뒤로 가기 포함).
+- 렌더 매트릭스: 모든 라우트를 기본·320dp 폭·글자 1.3/2.0배로 렌더해 줄바꿈·잘림·겹침을 확인한다(`ScreenshotMatrixTest`).
+- 현재 규모: `shared` 단위 179개, `androidApp` 흐름·스크린샷 232개, 모두 통과(건너뜀 0).
+- 접근성: 최소 터치 48dp, 대비 4.5:1(잉크/아이보리), 콘텐츠 설명, 토글·펼침 상태 노출.
 
 ## 9. iOS 확장 경로 (2차)
 1. macOS에서 `coffeejournal.enableIos=true`로 iOS 타깃 활성화 → `shared` 프레임워크 생성.
@@ -236,3 +239,5 @@ coffee-journal/
 | M4 | 원두 탭 9뷰(지도 포함), 장비 탭 | 빌드 |
 | M5 | 백업/복원(웹 호환), 사진 파이프라인 | 코덱 테스트 |
 | M6 | 마무리(빈 상태·접근성·성능), 문서 갱신 | 전체 테스트 |
+
+진행 상황: M0–M6 완료. 이후 웹 원본 대비 전수 감사(확정 결함 105건)를 거쳐, 사용자 스타일 결정으로 제외한 5건을 뺀 100건을 수정하고 흐름 테스트로 고정했다. iOS(§9)는 공유 코드·`iosMain` 구현까지 준비되어 있고 macOS에서의 빌드·실행 확인이 남았다.

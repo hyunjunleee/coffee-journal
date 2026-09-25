@@ -19,9 +19,12 @@ iosApp/      SwiftUI 호스트 스켈레톤 (macOS에서 coffeejournal.enableIos
 ```
 export ANDROID_HOME=/opt/android-sdk          # Android SDK 위치 (local.properties의 sdk.dir 도 가능)
 ./gradlew :androidApp:assembleDebug            # APK: androidApp/build/outputs/apk/debug/androidApp-debug.apk
-./gradlew :shared:testDebugUnitTest            # 도메인 규칙·백업 코덱 등 단위 테스트
+./gradlew :shared:testDebugUnitTest            # 도메인 규칙·백업 코덱·저장 파이프라인 등 단위 테스트 (179개)
+./gradlew :androidApp:testDebugUnitTest        # 실제 App()을 JVM에서 띄워 누르는 흐름·스크린샷 테스트 (232개)
 ./gradlew :androidApp:recordRoborazziDebug     # 실제 화면을 JVM에서 렌더한 PNG → androidApp/screenshots/
 ```
+- 흐름 테스트(Robolectric + Compose UI Test)는 에뮬레이터 없이 실제 앱 화면을 탭·입력해 웹 원본 동작(`script3.js`)과 저장된 데이터를 함께 검증한다: 기록 3모드 입력·수정·삭제, 레시피 런처, 단계 로그, 플레이버 휠, 블렌드, 커핑 원두 편집, 달력·로드맵, 원두 탭 9뷰(지도 탭 판정 포함), 장비, 백업 왕복(웹 파일 포함)·손상 파일·원자적 복원, 한글 조합 입력, 자정 전환, 저장 경합, 접근성 라벨.
+- `androidApp/screenshots/`에는 주요 화면 PNG가 커밋되어 있고, 320dp 폭·글자 1.3/2.0배 렌더 매트릭스(`screenshots/matrix/`)는 같은 명령으로 생성된다(커밋하지 않음).
 요구 사항: JDK 17+, Android SDK Platform 36 / Build-Tools 35. Gradle 래퍼(8.14.3) 포함.
 
 ## 데이터
