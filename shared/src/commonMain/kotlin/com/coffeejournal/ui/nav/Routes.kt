@@ -12,6 +12,7 @@ sealed interface Route {
     /** mode: "extract" (원두), "cafe", "cupping". entryId != null edits an existing record. */
     @Serializable data class RecordForm(val mode: String = "extract", val entryId: String? = null, val cuppingType: String? = null) : Route
     @Serializable data class EntryDetail(val entryId: String) : Route
+    @Serializable data object Pantry : Route
     @Serializable data class PantryEditor(val itemId: String? = null) : Route
     @Serializable data class BlendForm(val blendId: String? = null) : Route
     @Serializable data class BookForm(val bookId: String? = null) : Route
