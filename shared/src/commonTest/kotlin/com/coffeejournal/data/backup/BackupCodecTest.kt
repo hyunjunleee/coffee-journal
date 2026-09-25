@@ -340,6 +340,55 @@ class BackupCodecTest {
         assertNull(s.pantryItems.single().openedAt)
     }
 
+    // ───────────── gap #6: damaged files are refused as a whole ─────────────
+
+    private fun refused(text: String): String = assertFailsWith<BackupFormatException> { codec.decode(text) }.message!!
+
+    @Test fun jsonArrayOrBareValueAtTheRootHasNoDataField() {
+        assertEquals(BackupCodec.NO_DATA, refused("""[{"data": {"entries": []}}]"""))
+        assertEquals(BackupCodec.NO_DATA, refused("42"))
+        assertEquals("백업 파일 형식이 아니에요. (JSON을 읽을 수 없어요)", refused("{\"data\": {\"entries\": [ "))
+    }
+
+    @Test fun wrongFieldTypesAreRefusedWithTheirPlace() {
+        fun entries(vararg json: String) = """{"data": {"entries": [${json.joinToString(",")}]}}"""
+        val ok = """{"id": "a", "createdAt": 1789174800000, "name": "정상"}"""
+        assertEquals(
+            "백업 파일 형식이 아니에요. (entries 2번째 항목의 createdAt이 날짜가 아니에요: abc)",
+            refused(entries(ok, """{"id": "b", "createdAt": "abc"}""")),
+        )
+        assertEquals("백업 파일 형식이 아니에요. (entries 1번째 항목의 steps이(가) 목록이 아니에요)", refused(entries("""{"id": "c", "steps": {"time": "0:00"}}""")))
+        assertEquals(
+            "백업 파일 형식이 아니에요. (entries 1번째 항목의 attributes의 flavor 값이 숫자가 아니에요: 높음)",
+            refused(entries("""{"id": "d", "attributes": {"flavor": "높음"}}""")),
+        )
+        assertTrue(refused(entries("""{"id": "e", "attributes": [8, 9]}""")).contains("attributes이(가) 올바른 형식이 아니에요"))
+        assertTrue(refused(entries("\"just a string\"")).contains("entries 1번째 항목이 올바른 형식이 아니에요"))
+        assertTrue(refused("""{"data": {"entries": {"a": 1}}}""").contains("entries이(가) 목록이 아니에요"))
+        assertTrue(refused("""{"data": {"books": [{"id": "b", "createdAt": {"when": 1}}]}}""").contains("books 1번째 항목의 createdAt"))
+        assertTrue(
+            refused(entries("""{"id": "f", "category": "커핑", "cuppingBeanDetails": [{"name": "A", "evaluationScores": {"acidity": "좋음"}}]}"""))
+                .contains("cuppingBeanDetails 1번째 항목의 evaluationScores의 acidity"),
+        )
+    }
+
+    @Test fun lenientValuesStillDecode() {
+        val s = codec.decode(
+            """{"data": {"entries": [
+              {"id": "a", "createdAt": "1789174800000", "attributes": {"flavor": "8.25", "acidity": "", "body": null, "balance": "NaN"}, "steps": null, "recipeRef": null},
+              null,
+              {"id": "b", "createdAt": "2026-09-20T01:02:03.456Z"},
+              {"id": "c", "createdAt": ""}
+            ]}}""",
+        )
+        assertEquals(listOf("a", "b", "c"), s.entries.map { it.id })
+        assertEquals(1_789_174_800_000L, s.entries[0].createdAt)
+        assertEquals(mapOf("flavor" to 8.25), s.entries[0].attributes)
+        // an ISO time with its offset is an instant, not device-local time with the seconds cut off (gap #14)
+        assertEquals(1_789_866_123_456L, s.entries[1].createdAt)
+        assertTrue(s.entries[2].createdAt > 1_700_000_000_000L, "blank createdAt falls back to now")
+    }
+
     /** web loadMiscItems (script3.js 5177-5178): legacy type 'equipment' is shown as a kettle. */
     @Test fun legacyEquipmentTypeBecomesKettle() {
         val s = codec.decode("""{"data": {"miscItems": [{"id": "old", "type": "equipment", "name": "하리오 부오노"}]}}""")

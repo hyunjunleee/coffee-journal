@@ -5,7 +5,10 @@ interface PhotoStore {
     /** Absolute path usable by the image loader. */
     fun pathFor(fileName: String): String
 
-    /** Down-scales, re-encodes as JPEG and persists; returns the stored file name. */
+    /**
+     * Down-scales, re-encodes as JPEG and persists; returns the stored file name. An upright JPEG that already fits
+     * [MAX_EDGE_PX] (e.g. restored from a backup) is stored byte for byte, so round trips never degrade it.
+     */
     suspend fun save(bytes: ByteArray): String
 
     suspend fun readBytes(fileName: String): ByteArray?

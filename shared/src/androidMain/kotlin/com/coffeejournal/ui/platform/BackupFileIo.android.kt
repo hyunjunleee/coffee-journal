@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -23,7 +24,9 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.koin.core.context.GlobalContext
+import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 
 /**
  * The payload of a pending "save as". It is written to cacheDir/backup-save before the picker opens and only its path
@@ -105,20 +108,67 @@ actual fun rememberJsonSaver(onResult: (Boolean) -> Unit): (suggestedName: Strin
 }
 
 @Composable
-actual fun rememberJsonOpener(onLoaded: (String?) -> Unit): () -> Unit {
+actual fun rememberJsonOpener(onOpened: (OpenedFile) -> Unit): () -> Unit {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val callback = rememberUpdatedState(onLoaded)
+    val callback = rememberUpdatedState(onOpened)
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
         scope.launch {
-            val text = withContext(Dispatchers.IO) {
-                runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) } }.getOrNull()
-            }
-            callback.value(text)
+            val limit = BackupFileLimits.maxFileBytes(Runtime.getRuntime().maxMemory())
+            val opened = withContext(Dispatchers.IO) { BackupFileReader.read(context, uri, limit) }
+            callback.value(opened)
         }
     }
     return { launchOrToast(context, PlatformMessages.OPEN_PICKER) { launcher.launch(arrayOf("application/json", "*/*")) } }
+}
+
+/** Reads a picked backup file as UTF-8 text, refusing it once it is larger than the limit (checked before reading). */
+object BackupFileReader {
+    private const val BUFFER = 64 * 1024
+
+    fun read(context: Context, uri: Uri, limit: Long): OpenedFile =
+        read(sizeOf(context, uri), limit) { context.contentResolver.openInputStream(uri) }
+
+    /** [size] is the size the provider reported (null when unknown); [open] opens the stream. */
+    fun read(size: Long?, limit: Long, open: () -> InputStream?): OpenedFile {
+        if (size != null && size > limit) return OpenedFile.TooLarge(size, limit)
+        return try {
+            open()?.use { read(it, size, limit) } ?: OpenedFile.Unreadable
+        } catch (e: OutOfMemoryError) {
+            OpenedFile.TooLarge(size ?: -1L, limit)
+        } catch (e: Exception) {
+            OpenedFile.Unreadable
+        }
+    }
+
+    /** Streams [input] into one buffer of the expected size; stops as soon as more than [limit] bytes arrived. */
+    fun read(input: InputStream, knownSize: Long?, limit: Long): OpenedFile {
+        val out = ByteArrayOutputStream((knownSize ?: BUFFER.toLong()).coerceIn(0L, limit).toInt().coerceAtLeast(32))
+        val buffer = ByteArray(BUFFER)
+        var total = 0L
+        while (true) {
+            val n = input.read(buffer)
+            if (n < 0) break
+            total += n
+            if (total > limit) return OpenedFile.TooLarge(knownSize?.takeIf { it > limit } ?: -1L, limit)
+            out.write(buffer, 0, n)
+        }
+        // decodes straight from the stream's buffer, without another copy of the bytes
+        return OpenedFile.Text(out.toString(Charsets.UTF_8.name()))
+    }
+
+    /** The document's size from its provider, or the file's length for a file:// uri; null when unknown. */
+    private fun sizeOf(context: Context, uri: Uri): Long? {
+        if (uri.scheme == ContentResolver.SCHEME_FILE) return uri.path?.let(::File)?.takeIf { it.isFile }?.length()
+        val fromQuery = runCatching {
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+            }
+        }.getOrNull()
+        if (fromQuery != null && fromQuery >= 0) return fromQuery
+        return runCatching { context.contentResolver.openFileDescriptor(uri, "r")?.use { it.statSize } }.getOrNull()?.takeIf { it >= 0 }
+    }
 }
 
 /** Above this many characters the text goes through a cache file to stay under the Binder transaction limit. */

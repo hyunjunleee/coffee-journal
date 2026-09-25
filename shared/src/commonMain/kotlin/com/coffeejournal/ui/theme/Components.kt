@@ -21,6 +21,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +33,13 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -42,10 +52,13 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 
@@ -76,7 +89,7 @@ fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifi
         modifier
             .heightIn(min = if (small) 34.dp else Dimens.touch)
             .background(bg)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = if (small) 12.dp else 18.dp, vertical = if (small) 6.dp else 10.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -92,7 +105,7 @@ fun GhostButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier
         modifier
             .heightIn(min = if (small) 32.dp else Dimens.touch)
             .border(BorderStroke(Dimens.hairline, if (danger) Ink.bad else Ink.line), RectangleShape)
-            .clickable(enabled = enabled, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = if (small) 10.dp else 14.dp, vertical = if (small) 5.dp else 9.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.Center,
@@ -114,14 +127,15 @@ fun SubTabs(
     scrollable: Boolean = true,
 ) {
     val rowModifier = if (scrollable) modifier.horizontalScroll(rememberScrollState()) else modifier
-    Row(rowModifier, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+    // TalkBack reads each item as a tab with its selected state (design §8)
+    Row(rowModifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         items.forEach { item ->
             val on = item == selected
             Row(
                 Modifier
                     .border(BorderStroke(Dimens.hairline, if (on) Ink.accent else Ink.line), RectangleShape)
                     .background(if (on) Ink.accent else Color.Transparent)
-                    .clickable { onSelect(item) }
+                    .selectable(selected = on, role = Role.Tab, onClick = { onSelect(item) })
                     .padding(horizontal = 11.dp, vertical = 7.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -142,7 +156,8 @@ fun Seg(
     allowClear: Boolean = true,
     labels: Map<String, String> = emptyMap(),
 ) {
-    Row(modifier.fillMaxWidth().border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)) {
+    // one choice out of several: radio buttons with a selected state for TalkBack (design §8)
+    Row(modifier.fillMaxWidth().border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape).selectableGroup()) {
         options.forEachIndexed { i, opt ->
             val on = opt == value
             Box(
@@ -150,7 +165,7 @@ fun Seg(
                     .weight(1f)
                     .heightIn(min = 40.dp)
                     .background(if (on) Ink.accent else Ink.surface)
-                    .clickable { onChange(if (on && allowClear) "" else opt) }
+                    .selectable(selected = on, role = Role.RadioButton, onClick = { onChange(if (on && allowClear) "" else opt) })
                     .padding(horizontal = 6.dp, vertical = 9.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -220,7 +235,61 @@ fun KeyValueRow(key: String, value: String, modifier: Modifier = Modifier) {
     }
 }
 
-/** Square outlined text field with the archive palette. */
+/**
+ * The text a field shows, kept by the field itself (cursor, selection and IME composition included) while its owner —
+ * usually a ViewModel's StateFlow — receives every edit and echoes it back a little later. The owner's value only
+ * replaces the field's text when it changes to something the field did not send: an async echo of an earlier
+ * keystroke never moves the cursor back or breaks a Hangul syllable that is still being composed, while a real
+ * change from outside (a restored draft, a reformatted price, a cleared input) still shows up.
+ */
+@Stable
+class ImeSafeText(initial: String) {
+    var value: TextFieldValue by mutableStateOf(TextFieldValue(initial, TextRange(initial.length)))
+        private set
+    private var lastExternal: String = initial
+    /** Texts reported to the owner whose echo has not come back yet (oldest first). */
+    private val sent = ArrayDeque<String>()
+
+    /** Call with the owner's current text on every composition, before reading [value]. */
+    fun syncExternal(external: String) {
+        if (external == lastExternal) return
+        lastExternal = external
+        if (external == value.text) { sent.clear(); return }
+        val echo = sent.indexOf(external)
+        if (echo >= 0) { repeat(echo + 1) { sent.removeFirst() }; return }
+        sent.clear()
+        value = TextFieldValue(external, TextRange(external.length))
+    }
+
+    /** An edit from the text field. Returns the new text to report to the owner, or null when only the cursor moved. */
+    fun onEdit(edited: TextFieldValue): String? {
+        val changed = edited.text != value.text
+        value = edited
+        if (!changed) return null
+        sent.addLast(edited.text)
+        while (sent.size > MAX_PENDING) sent.removeFirst()
+        return edited.text
+    }
+
+    /** Ends the IME composition, keeping the composed text as plain text. */
+    fun commitComposition() {
+        if (value.composition != null) value = value.copy(composition = null)
+    }
+
+    val isComposing: Boolean get() = value.composition != null
+
+    private companion object { const val MAX_PENDING = 64 }
+}
+
+/** An [ImeSafeText] for a field whose text is owned by [value]. Use it with the TextFieldValue overload of a text field. */
+@Composable
+fun rememberImeSafeText(value: String): ImeSafeText {
+    val sync = remember { ImeSafeText(value) }
+    sync.syncExternal(value)
+    return sync
+}
+
+/** Square outlined text field with the archive palette. Typing is IME-safe (see [ImeSafeText]). */
 @Composable
 fun AppTextField(
     value: String,
@@ -236,13 +305,42 @@ fun AppTextField(
     enabled: Boolean = true,
     trailing: (@Composable () -> Unit)? = null,
 ) {
+    val sync = rememberImeSafeText(value)
+    AppTextFieldValue(
+        value = sync.value, onValueChange = { edited -> sync.onEdit(edited)?.let(onValueChange) }, modifier = modifier, label = label,
+        placeholder = placeholder, singleLine = singleLine, keyboardType = keyboardType, imeAction = imeAction,
+        onImeAction = onImeAction, minLines = minLines, enabled = enabled, trailing = trailing,
+    )
+}
+
+@Composable
+private fun AppTextFieldValue(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    modifier: Modifier,
+    label: String?,
+    placeholder: String,
+    singleLine: Boolean,
+    keyboardType: KeyboardType,
+    imeAction: ImeAction,
+    onImeAction: (() -> Unit)?,
+    minLines: Int,
+    enabled: Boolean,
+    trailing: (@Composable () -> Unit)?,
+) {
     Column(modifier) {
         if (label != null) FieldLabel(label)
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth(),
-            placeholder = { Text(placeholder, style = AppType.body.copy(color = Ink.textFaint)) },
+            // a wrapping placeholder would make a one-line field taller than its neighbours
+            placeholder = {
+                Text(
+                    placeholder, style = AppType.body.copy(color = Ink.textFaint),
+                    maxLines = if (singleLine) 1 else Int.MAX_VALUE, overflow = if (singleLine) TextOverflow.Ellipsis else TextOverflow.Clip,
+                )
+            },
             singleLine = singleLine,
             minLines = minLines,
             enabled = enabled,
@@ -264,7 +362,12 @@ fun AppTextField(
     }
 }
 
-/** Chip list with an input row; Enter or the button adds, × removes (web .expected-notes-chips). */
+/**
+ * Chip list with an input row; Enter or the button adds, × removes (web .expected-notes-chips). The input is split on
+ * commas and deduplicated (web addExpectedNoteFromInput). A syllable still being composed by the IME is committed
+ * and added first; the input is cleared a frame later, so the keyboard does not put the syllable back into the
+ * emptied field (the web skips Enter while `e.isComposing`).
+ */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun ChipInput(
@@ -276,17 +379,32 @@ fun ChipInput(
     placeholder: String = "노트 추가 후 Enter (예: 오렌지)",
     addLabel: String = "추가",
 ) {
+    val sync = rememberImeSafeText(input)
+    var clearPending by remember { mutableStateOf(false) }
+    val clear = { sync.onEdit(TextFieldValue(""))?.let(onInputChange) }
+    val add = {
+        addChipsFromInput(sync, chips)?.let { added ->
+            onChipsChange(added.chips)
+            if (added.clearNow) clear() else clearPending = true
+        }
+    }
+    LaunchedEffect(clearPending) {
+        if (clearPending) {
+            // let the committed text reach the IME before the field is emptied
+            withFrameNanos { }
+            clear()
+            clearPending = false
+        }
+    }
     Column(modifier) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            AppTextField(
-                value = input, onValueChange = onInputChange, modifier = Modifier.weight(1f), placeholder = placeholder,
-                imeAction = ImeAction.Done,
-                onImeAction = { if (input.isNotBlank()) { onChipsChange(com.coffeejournal.domain.rules.NoteCanon.addChips(chips, input)); onInputChange("") } },
+            AppTextFieldValue(
+                value = sync.value, onValueChange = { edited -> sync.onEdit(edited)?.let(onInputChange) }, modifier = Modifier.weight(1f),
+                label = null, placeholder = placeholder, singleLine = true, keyboardType = KeyboardType.Text, imeAction = ImeAction.Done,
+                onImeAction = { add() }, minLines = 1, enabled = true, trailing = null,
             )
             Spacer(Modifier.width(8.dp))
-            GhostButton(addLabel, small = true, onClick = {
-                if (input.isNotBlank()) { onChipsChange(com.coffeejournal.domain.rules.NoteCanon.addChips(chips, input)); onInputChange("") }
-            })
+            GhostButton(addLabel, small = true, onClick = { add() })
         }
         if (chips.isNotEmpty()) {
             FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -298,13 +416,46 @@ fun ChipInput(
     }
 }
 
+/** The chips after 추가 / Done, and whether the input can be emptied right away. */
+internal class ChipAddition(val chips: List<String>, val clearNow: Boolean)
+
+/**
+ * 추가 / Done in [ChipInput]: the input (comma-split, deduplicated) is added to [chips]; null when it is blank. A
+ * syllable the IME is still composing is committed first and stays in the field for this frame ([ChipAddition.clearNow]
+ * false), so the keyboard is not handed an emptied field while it still holds the syllable.
+ */
+internal fun addChipsFromInput(input: ImeSafeText, chips: List<String>): ChipAddition? {
+    val text = input.value.text
+    if (text.isBlank()) return null
+    val composing = input.isComposing
+    if (composing) input.commitComposition()
+    return ChipAddition(com.coffeejournal.domain.rules.NoteCanon.addChips(chips, text), clearNow = !composing)
+}
+
+/**
+ * A small square chip. With [onClick] it is an on/off choice — a checkbox with its checked state for TalkBack — or,
+ * with [toggle] false, a plain button (e.g. a name suggestion).
+ */
 @Composable
-fun Chip(text: String, modifier: Modifier = Modifier, selected: Boolean = false, onClick: (() -> Unit)? = null, onRemove: (() -> Unit)? = null, prefix: String = "") {
+fun Chip(
+    text: String,
+    modifier: Modifier = Modifier,
+    selected: Boolean = false,
+    onClick: (() -> Unit)? = null,
+    onRemove: (() -> Unit)? = null,
+    prefix: String = "",
+    toggle: Boolean = true,
+) {
     val base = modifier
         .border(BorderStroke(Dimens.hairline, if (selected) Ink.accent else Ink.line), RectangleShape)
         .background(if (selected) Ink.accent else Ink.surface)
+    val interactive = when {
+        onClick == null -> base
+        toggle -> base.toggleable(value = selected, role = Role.Checkbox, onValueChange = { onClick() })
+        else -> base.clickable(role = Role.Button, onClick = onClick)
+    }
     Row(
-        (if (onClick != null) base.clickable(onClick = onClick) else base).padding(horizontal = 9.dp, vertical = 5.dp),
+        interactive.padding(horizontal = 9.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(prefix + text, style = AppType.small.copy(color = if (selected) Ink.bg else Ink.text))
@@ -383,7 +534,7 @@ fun ScreenTitleBar(title: String, onBack: (() -> Unit)?, modifier: Modifier = Mo
     Column(modifier.fillMaxWidth().background(Ink.bg)) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             if (onBack != null) {
-                Box(Modifier.size(Dimens.touch).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
+                Box(Modifier.size(Dimens.touch).clickable(role = Role.Button, onClick = onBack), contentAlignment = Alignment.Center) {
                     Icon(AppIcons.chevronLeft, contentDescription = "뒤로", tint = Ink.text, modifier = Modifier.size(20.dp))
                 }
             } else Spacer(Modifier.width(8.dp))

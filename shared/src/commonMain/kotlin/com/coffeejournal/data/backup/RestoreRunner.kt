@@ -36,9 +36,17 @@ class RestoreRunner(private val service: BackupService, private val scope: Corou
                 throw e
             } catch (e: Exception) {
                 RestoreState.Failed(e.message ?: e::class.simpleName ?: "알 수 없는 오류")
+            } catch (e: Error) {
+                // the restore is all-or-nothing, so running out of memory while storing photos leaves the data as it was
+                if (generateSequence<Throwable>(e) { it.cause }.take(8).none { it::class.simpleName == "OutOfMemoryError" }) throw e
+                RestoreState.Failed(OUT_OF_MEMORY)
             }
         }
         return true
+    }
+
+    companion object {
+        const val OUT_OF_MEMORY = "메모리가 부족해서 복원하지 못했어요."
     }
 
     /** The screen has shown the outcome; the next visit starts clean. A running restore is left alone. */

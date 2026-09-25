@@ -30,9 +30,14 @@ import com.coffeejournal.domain.model.PantryItem
 import com.coffeejournal.domain.model.RecipeStep
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.DdayRules
+import com.coffeejournal.ui.backup.BackupViewModel
+import com.coffeejournal.ui.platform.BackupFileLimits
+import com.coffeejournal.ui.platform.BackupFileReader
+import com.coffeejournal.ui.platform.OpenedFile
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -264,6 +269,75 @@ class BackupFlowTest : FlowTestBase() {
         assertEquals("the sentence is not repeated under the title", 1, count(hasText("오류가 발생했어요", substring = true)))
         clickText("닫기")
         waitGone(hasText("복원 중 오류가 발생했어요"))
+    }
+
+    // ───────────────────────── gap #6: damaged and huge files ─────────────────────────
+
+    private fun openBackupFile(text: String) {
+        val shadow = Shadows.shadowOf(compose.activity)
+        clickText("📂 백업 파일에서 복원")
+        val open = shadow.nextStartedActivityForResult
+        val file = File(context.cacheDir, "damaged-${System.nanoTime()}.json").apply { writeText(text) }
+        compose.runOnUiThread { shadow.receiveResult(open.intent, Activity.RESULT_OK, Intent().setData(Uri.fromFile(file))) }
+    }
+
+    /** Each damaged file shows the error panel, no restore dialog, and the data stays exactly as it was. */
+    @Test
+    fun backup08_damagedFiles_showAnErrorAndImportNothing() {
+        seedEverything()
+        val before = normalized()
+        launchApp()
+        clickText("💾 백업")
+        waitForText("전체 데이터 백업")
+        val cases = listOf(
+            "not json at all" to "백업 파일 형식이 아니에요. (JSON을 읽을 수 없어요)",
+            """[{"data": {"entries": []}}]""" to "백업 파일 형식이 아니에요. (data 필드가 없어요)",
+            """{"data": {"entries": [{"id": "ok1", "createdAt": 1789174800000, "name": "멀쩡한 기록"}, {"id": "x1", "createdAt": "abc", "name": "망가진 기록"}]}}"""
+                to "백업 파일 형식이 아니에요. (entries 2번째 항목의 createdAt이 날짜가 아니에요: abc)",
+            """{"data": {"entries": [{"id": "x2", "name": "단계", "steps": {"time": "0:00", "water": "40"}}]}}"""
+                to "백업 파일 형식이 아니에요. (entries 1번째 항목의 steps이(가) 목록이 아니에요)",
+            """{"data": {"entries": [{"id": "x3", "name": "점수", "attributes": {"flavor": "높음"}}], "books": [{"id": "bk", "title": "새 책"}]}}"""
+                to "백업 파일 형식이 아니에요. (entries 1번째 항목의 attributes의 flavor 값이 숫자가 아니에요: 높음)",
+        )
+        for ((text, message) in cases) {
+            openBackupFile(text)
+            waitForText("복원 중 오류가 발생했어요")
+            waitForText(message)
+            waitForText("복원하지 않았어요. 지금 앱에 있는 데이터는 그대로예요.")
+            assertFalse("no restore dialog for '$message'", has(dialogButton("복원")))
+            clickText("닫기")
+            waitGone(hasText("복원 중 오류가 발생했어요"))
+        }
+        assertEquals("nothing was imported", before, normalized())
+    }
+
+    /** A file larger than the device can parse is refused before it is read completely, with its size in the message. */
+    @Test
+    fun backup09_tooLargeFile_isRefusedBeforeReading_withAClearMessage() {
+        val big = File(context.cacheDir, "big-backup.json").apply { writeBytes(ByteArray(64 * 1024) { 'x'.code.toByte() }) }
+        var opened = false
+        val refused = BackupFileReader.read(big.length(), limit = 32 * 1024) { opened = true; big.inputStream() }
+        assertTrue(refused is OpenedFile.TooLarge && refused.bytes == big.length() && refused.limit == 32L * 1024)
+        assertFalse("never opened", opened)
+        // a provider that does not report the size: reading stops right after the limit
+        val unknown = BackupFileReader.read(null, limit = 32 * 1024) { big.inputStream() }
+        assertTrue(unknown is OpenedFile.TooLarge && unknown.bytes == -1L)
+        assertTrue((BackupFileReader.read(context, Uri.fromFile(big), 1024L * 1024L) as OpenedFile.Text).text.length == 64 * 1024)
+        // running out of memory while reading is reported the same way instead of crashing
+        val oom = BackupFileReader.read(null, limit = 1024) { object : java.io.InputStream() { override fun read(): Int = throw OutOfMemoryError("test") } }
+        assertTrue(oom is OpenedFile.TooLarge)
+        // the limit follows the heap: a fifth of it, between 16 MB and 256 MB
+        assertEquals(51L * 1024 * 1024 + 209715, BackupFileLimits.maxFileBytes(256L * 1024 * 1024))
+        assertEquals(BackupFileLimits.MAX_LIMIT_BYTES, BackupFileLimits.maxFileBytes(4L * 1024 * 1024 * 1024))
+
+        val vm: BackupViewModel = koinGet()
+        vm.onFileOpened(OpenedFile.TooLarge(120L * 1024 * 1024 + 512 * 1024, 51L * 1024 * 1024))
+        assertEquals(
+            "백업 파일이 너무 커서 불러올 수 없어요. (파일 120.50MB, 이 기기에서는 51.00MB까지 불러올 수 있어요)",
+            vm.state.value.error!!.detail,
+        )
+        assertTrue(vm.state.value.error!!.restore)
+        assertEquals(null, vm.state.value.pending)
     }
 
     // ───────────────────────── web backup file ─────────────────────────

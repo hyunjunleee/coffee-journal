@@ -12,6 +12,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import platform.Foundation.NSData
+import platform.Foundation.NSDataReadingMappedIfSafe
+import platform.Foundation.NSProcessInfo
 import platform.Foundation.NSURL
 import platform.Foundation.create
 import platform.UIKit.UIActivityViewController
@@ -78,14 +80,14 @@ actual fun rememberJsonSaver(onResult: (Boolean) -> Unit): (suggestedName: Strin
 }
 
 @Composable
-actual fun rememberJsonOpener(onLoaded: (String?) -> Unit): () -> Unit {
+actual fun rememberJsonOpener(onOpened: (OpenedFile) -> Unit): () -> Unit {
     val scope = rememberCoroutineScope()
-    val callback = rememberUpdatedState(onLoaded)
+    val callback = rememberUpdatedState(onOpened)
     val delegate = remember {
         OpenPickerDelegate { url ->
             scope.launch {
-                val text = withContext(Dispatchers.Default) { readText(url) }
-                callback.value(text)
+                val opened = withContext(Dispatchers.Default) { readText(url) }
+                callback.value(opened)
             }
         }
     }
@@ -100,10 +102,15 @@ actual fun rememberJsonOpener(onLoaded: (String?) -> Unit): () -> Unit {
     }
 }
 
-private fun readText(url: NSURL): String? {
+private fun readText(url: NSURL): OpenedFile {
     val scoped = url.startAccessingSecurityScopedResource()
     try {
-        return NSData.create(contentsOfURL = url)?.toByteArray()?.decodeToString()
+        val limit = BackupFileLimits.maxFileBytes((NSProcessInfo.processInfo.physicalMemory / 4u).toLong())
+        // mapped, so checking the size does not read the whole file into memory first
+        val data = NSData.create(contentsOfURL = url, options = NSDataReadingMappedIfSafe, error = null) ?: return OpenedFile.Unreadable
+        val size = data.length.toLong()
+        if (size > limit) return OpenedFile.TooLarge(size, limit)
+        return OpenedFile.Text(data.toByteArray().decodeToString())
     } finally {
         if (scoped) url.stopAccessingSecurityScopedResource()
     }

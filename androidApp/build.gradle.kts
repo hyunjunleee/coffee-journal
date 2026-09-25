@@ -44,6 +44,33 @@ roborazzi {
     outputDir.set(file("screenshots"))
 }
 
+// The production database driver (BundledSQLiteDriver) loads a native SQLite. Its Android build cannot run on the
+// test JVM, so the host build's library is unpacked here and handed to the driver through its documented system
+// properties; tests that use the real platform module then run the same driver as the app.
+val sqliteHostNatives: Configuration by configurations.creating {
+    isTransitive = false
+    isCanBeConsumed = false
+    attributes {
+        attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_RUNTIME))
+        attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+    }
+}
+val hostSqlite: Pair<String, String> = run {
+    val os = System.getProperty("os.name").lowercase()
+    val arch = if (System.getProperty("os.arch").lowercase().let { "aarch64" in it || "arm64" in it }) "arm64" else "x64"
+    if ("mac" in os) "osx_$arch" to "libsqliteJni.dylib" else "linux_$arch" to "libsqliteJni.so"
+}
+val unpackSqliteHostNatives by tasks.registering(Sync::class) {
+    from({ sqliteHostNatives.map { zipTree(it) } }) { include("natives/${hostSqlite.first}/**") }
+    into(layout.buildDirectory.dir("sqlite-host"))
+}
+val sqliteHostDir = layout.buildDirectory.dir("sqlite-host/natives/${hostSqlite.first}")
+tasks.withType<Test>().configureEach {
+    dependsOn(unpackSqliteHostNatives)
+    systemProperty("androidx.sqlite.driver.bundled.path", sqliteHostDir.get().asFile.absolutePath)
+    systemProperty("androidx.sqlite.driver.bundled.name", hostSqlite.second)
+}
+
 dependencies {
     implementation(project(":shared"))
     implementation(libs.androidx.activity.compose)
@@ -68,4 +95,5 @@ dependencies {
     testImplementation(libs.kotlinx.serialization.json)
     testImplementation(libs.navigation.compose)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+    sqliteHostNatives(libs.sqlite.bundled.jvm)
 }

@@ -20,7 +20,7 @@ class AndroidPhotoStore(context: Context) : PhotoStore {
     override fun pathFor(fileName: String): String = File(dir, fileName).absolutePath
 
     override suspend fun save(bytes: ByteArray): String = withContext(Dispatchers.IO) {
-        val jpeg = downscaleToJpeg(bytes, PhotoStore.MAX_EDGE_PX, PhotoStore.JPEG_QUALITY)
+        val jpeg = if (isStorableAsIs(bytes, PhotoStore.MAX_EDGE_PX)) bytes else downscaleToJpeg(bytes, PhotoStore.MAX_EDGE_PX, PhotoStore.JPEG_QUALITY)
         val name = UUID.randomUUID().toString().replace("-", "") + ".jpg"
         File(dir, name).writeBytes(jpeg)
         name
@@ -38,6 +38,28 @@ class AndroidPhotoStore(context: Context) : PhotoStore {
     override suspend fun exists(fileName: String): Boolean = withContext(Dispatchers.IO) { File(dir, fileName).exists() }
 
     companion object {
+        /** A JPEG this large or smaller is never re-encoded when it already fits (1280px at q82 is ~0.3 MB). */
+        const val MAX_KEEP_BYTES = 2 * 1024 * 1024
+
+        /**
+         * True when [bytes] already are what [save] would produce: an upright JPEG whose longest edge fits [maxEdge].
+         * Such a photo — one restored from a backup, or a web photo (700px, q0.7) — is stored byte for byte, so every
+         * backup → restore round trip keeps it identical instead of losing quality (and growing) with each re-encode.
+         */
+        fun isStorableAsIs(bytes: ByteArray, maxEdge: Int): Boolean {
+            if (bytes.size < 4 || bytes.size > MAX_KEEP_BYTES) return false
+            if (bytes[0] != 0xFF.toByte() || bytes[1] != 0xD8.toByte() || bytes[2] != 0xFF.toByte()) return false
+            val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+            if (bounds.outWidth <= 0 || bounds.outHeight <= 0 || max(bounds.outWidth, bounds.outHeight) > maxEdge) return false
+            if (bounds.outMimeType != null && bounds.outMimeType != "image/jpeg") return false
+            // an EXIF rotation is baked into the pixels by re-encoding, so only upright photos are kept as they are
+            val orientation = runCatching {
+                ExifInterface(ByteArrayInputStream(bytes)).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
+            }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+            return orientation == ExifInterface.ORIENTATION_NORMAL || orientation == ExifInterface.ORIENTATION_UNDEFINED
+        }
+
         /** Decodes with sub-sampling, applies EXIF rotation and re-encodes as JPEG. */
         fun downscaleToJpeg(bytes: ByteArray, maxEdge: Int, quality: Int): ByteArray {
             val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }

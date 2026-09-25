@@ -12,6 +12,7 @@ import com.coffeejournal.data.backup.ImportMode
 import com.coffeejournal.data.backup.ImportResult
 import com.coffeejournal.data.backup.RestoreRunner
 import com.coffeejournal.data.backup.RestoreState
+import com.coffeejournal.ui.platform.OpenedFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -88,6 +89,9 @@ class BackupViewModel(
                 _state.update { it.copy(exporting = false, export = result, saveRequested = true) }
             } catch (e: Exception) {
                 _state.update { it.copy(exporting = false, error = BackupError(restore = false, detail = e.message ?: e::class.simpleName ?: "")) }
+            } catch (e: Error) {
+                if (!e.isOutOfMemory()) throw e
+                _state.update { it.copy(exporting = false, error = BackupError(restore = false, detail = EXPORT_OUT_OF_MEMORY)) }
             }
         }
     }
@@ -101,10 +105,22 @@ class BackupViewModel(
         _state.update { it.copy(saveStatus = if (ok) SaveStatus.SAVED else SaveStatus.FAILED) }
     }
 
-    /** Parses a chosen file completely before anything is written; a null text means the file could not be read. */
+    /** The document picker's result: a file too large to parse safely is refused before it is read completely. */
+    fun onFileOpened(file: OpenedFile) {
+        when (file) {
+            is OpenedFile.Text -> onFileLoaded(file.text)
+            is OpenedFile.TooLarge -> showRestoreError(tooLargeMessage(file.bytes, file.limit))
+            OpenedFile.Unreadable -> onFileLoaded(null)
+        }
+    }
+
+    /**
+     * Parses a chosen file completely before anything is written; a null text means the file could not be read. A
+     * damaged file (see [BackupCodec.decode]) or one too large for the memory left shows an error and imports nothing.
+     */
     fun onFileLoaded(text: String?) {
         if (text == null) {
-            _state.update { it.copy(error = BackupError(restore = true, detail = "파일을 읽을 수 없어요.")) }
+            showRestoreError(UNREADABLE)
             return
         }
         _state.update { it.copy(error = null, importResult = null, export = null, saveStatus = null) }
@@ -114,11 +130,19 @@ class BackupViewModel(
                 val label = BackupDates.localLabel(snapshot.exportedAt) ?: "날짜 미상"
                 _state.update { it.copy(pending = PendingRestore(snapshot, label, snapshot.summaryLine())) }
             } catch (e: BackupFormatException) {
-                _state.update { it.copy(error = BackupError(restore = true, detail = e.message ?: "")) }
+                showRestoreError(e.message ?: "")
             } catch (e: Exception) {
-                _state.update { it.copy(error = BackupError(restore = true, detail = e.message ?: e::class.simpleName ?: "")) }
+                showRestoreError(e.message ?: e::class.simpleName ?: "")
+            } catch (e: Error) {
+                if (!e.isOutOfMemory()) throw e
+                showRestoreError(OUT_OF_MEMORY)
             }
         }
+    }
+
+    /** A file refused before the restore started: nothing was written, which the panel says too. */
+    private fun showRestoreError(detail: String) {
+        _state.update { it.copy(pending = null, error = BackupError(restore = true, detail = detail, untouched = true)) }
     }
 
     fun cancelRestore() { _state.update { it.copy(pending = null) } }
@@ -132,4 +156,19 @@ class BackupViewModel(
     }
 
     fun dismissError() { _state.update { it.copy(error = null) } }
+
+    companion object {
+        const val UNREADABLE = "파일을 읽을 수 없어요."
+        const val OUT_OF_MEMORY = "백업 파일이 너무 커서 이 기기의 메모리로는 읽을 수 없어요."
+        const val EXPORT_OUT_OF_MEMORY = "사진이 너무 많아 이 기기의 메모리로는 백업 파일을 만들 수 없어요."
+
+        /** "백업 파일이 너무 커서 불러올 수 없어요. (파일 120.50MB, 이 기기에서는 51.20MB까지 불러올 수 있어요)" */
+        fun tooLargeMessage(bytes: Long, limit: Long): String {
+            val size = if (bytes > 0) "파일 ${BackupService.formatBytes(bytes)}, " else ""
+            return "백업 파일이 너무 커서 불러올 수 없어요. (${size}이 기기에서는 ${BackupService.formatBytes(limit)}까지 불러올 수 있어요)"
+        }
+    }
 }
+
+/** OutOfMemoryError is platform-only; common code recognises it by name (also when wrapped). */
+internal fun Throwable.isOutOfMemory(): Boolean = generateSequence(this) { it.cause }.take(8).any { it::class.simpleName == "OutOfMemoryError" }

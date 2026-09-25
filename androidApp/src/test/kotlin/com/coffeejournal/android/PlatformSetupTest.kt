@@ -8,12 +8,15 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.stopKoin
+import org.robolectric.Robolectric
 import org.robolectric.annotation.Config
+import org.xmlpull.v1.XmlPullParser
 import org.robolectric.annotation.GraphicsMode
 import java.io.File
 
@@ -50,6 +53,61 @@ class PlatformSetupTest {
                 assertTrue("dark navigation-bar buttons", bars.isAppearanceLightNavigationBars)
             }
         }
+    }
+
+    // ───────────────────────── gap #13: Android system integration ─────────────────────────
+
+    /** Resizing in multi-window, unfolding or a display-size change keeps the activity (and a half-filled form). */
+    @Test
+    fun multiWindowFoldAndDensityChanges_doNotRecreateTheActivity() {
+        val controller = Robolectric.buildActivity(MainActivity::class.java).setup()
+        val first = controller.get()
+        val changed = Configuration(first.resources.configuration).apply {
+            screenWidthDp = 720; screenHeightDp = 600; smallestScreenWidthDp = 600
+            screenLayout = (screenLayout and Configuration.SCREENLAYOUT_SIZE_MASK.inv()) or Configuration.SCREENLAYOUT_SIZE_LARGE
+            densityDpi = 320
+        }
+        controller.configurationChange(changed)
+        assertSame("handled in place", first, controller.get())
+        assertEquals(600, controller.get().resources.configuration.smallestScreenWidthDp)
+        controller.pause().stop().destroy()
+    }
+
+    private data class Rule(val domain: String, val path: String)
+
+    /** The <include> rules under [section] (or the whole file when null) of a packaged backup-rules XML. */
+    private fun includes(resId: Int, section: String?): Set<Rule> {
+        val parser = ApplicationProvider.getApplicationContext<android.content.Context>().resources.getXml(resId)
+        val out = mutableSetOf<Rule>()
+        var inSection = section == null
+        while (parser.next() != XmlPullParser.END_DOCUMENT) {
+            if (parser.eventType == XmlPullParser.START_TAG) {
+                if (parser.name == section) inSection = true
+                if (inSection && parser.name == "include") out += Rule(parser.getAttributeValue(null, "domain"), parser.getAttributeValue(null, "path"))
+                assertFalse("no exclude-by-default gaps: ${parser.name}", parser.name == "include" && parser.getAttributeValue(null, "domain") in setOf("root", "external"))
+            } else if (parser.eventType == XmlPullParser.END_TAG && parser.name == section) {
+                inSection = false
+            }
+        }
+        return out
+    }
+
+    /** Auto Backup / device transfer carry the Room database and the photos, never the caches (25 MB cloud quota). */
+    @Test
+    fun autoBackupRules_keepDatabaseAndPhotos_notCaches() {
+        val dbName = Regex("""getDatabasePath\("([^"]+)"\)""").find(File(root, "shared/src/androidMain/kotlin/com/coffeejournal/data/db/DatabaseBuilder.android.kt").readText())!!.groupValues[1]
+        val photoDir = Regex("""File\([^,]+filesDir, "([^"]+)"\)""").find(File(root, "shared/src/androidMain/kotlin/com/coffeejournal/data/photo/AndroidPhotoStore.kt").readText())!!.groupValues[1]
+        val expected = setOf(Rule("database", dbName), Rule("database", "$dbName-wal"), Rule("file", "$photoDir/"))
+        assertEquals(expected, includes(R.xml.data_extraction_rules, "cloud-backup"))
+        assertEquals(expected, includes(R.xml.data_extraction_rules, "device-transfer"))
+        assertEquals(expected, includes(R.xml.backup_rules, null))
+        val manifest = File(root, "androidApp/src/main/AndroidManifest.xml").readText()
+        assertTrue(manifest.contains("""android:dataExtractionRules="@xml/data_extraction_rules""""))
+        assertTrue(manifest.contains("""android:fullBackupContent="@xml/backup_rules""""))
+        // the caches the app writes live under cacheDir, which no rule includes
+        val cachePaths = File(root, "androidApp/src/main/res/xml/file_paths.xml").readText()
+        assertTrue(cachePaths.contains("<cache-path"))
+        assertFalse(expected.any { it.domain == "cache" || it.path.startsWith("cache") })
     }
 
     // ───────────────────────── iOS target ─────────────────────────
