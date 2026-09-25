@@ -113,7 +113,7 @@ coffee-journal/
 |---|---|---|
 | `entries` | id PK, created_at, category('원두'/'카페'/'커핑'), bean_mode, name, country, region, altitude, variety, farm_producer, roastery, selection, washing_station, process, process_other, package_type, moisture, density, score, arrival, roast_date, roaster_desc, roast, bag_weight, price, cafe_name, expected_notes, actual_notes, dripper, filter, dose, water, temp, grind, water_type, time, notes, cupping_type, cupping_place, steps(JSON), recipe_ref(JSON), blend_components(JSON), attributes(JSON), attribute_notes(JSON), tags(JSON), legacy_extra(JSON: beanGuidance·photoFeedback·adviceChat·consultation·practice·noteChat 보존) | 인덱스: created_at, category, lower(name) |
 | `cupping_beans` | id PK, entry_id FK(CASCADE), position, name, country, region, roastery, farm_producer, altitude, variety, price, rank, process, roast, expected_notes, actual_notes, evaluation(JSON), evaluation_scores(JSON), memo, bean_mode, blend_components_text | |
-| `entry_photos` | id PK, entry_id FK, kind('bag'/'grounds'), position, file_name | 파일은 PhotoStore |
+| (사진) | `entries.bag_photos`(JSON 파일명 목록, 최대 2) · `entries.grounds_photo` | 구현 시 별도 테이블 대신 컬럼으로 단순화. 파일은 PhotoStore |
 | `pantry_items` | id, name, roastery, package_type, weight, price, roast_level, roast_date, purchase_date, peak_start, peak_end, expected_notes, notes, status('unopened'/'opened'), opened_at, created_at, source_entry_id | |
 | `misc_items` | id, type, name, notes, since, status, scope, location, favorite, photos(JSON 파일명 목록), created_at | type: dripper, filter, kettle, thermometer, scale, water, source, selection, process, variety, farm |
 | `books` | id, created_at, title, author, status, start_date, end_date, rating, notes | |
@@ -127,6 +127,7 @@ coffee-journal/
 | `settings` | key PK, value | `brew-start-date`, 마지막 필터 등 |
 
 - 마이그레이션: `room-gradle-plugin` 스키마 export(`shared/schemas`) + `autoMigrations`.
+- 커핑 원두 이외의 목록형 필드(steps, recipeRef, blendComponents, attributes, attributeNotes, tags, 사진 파일명)와 웹 전용 필드(`legacy_extra`: beanGuidance·photoFeedback·adviceChat 등)는 kotlinx-serialization JSON 컬럼으로 저장한다.
 - 사진: `PhotoStore`가 `photos/<uuid>.jpg`로 저장, DB에는 파일명만. 삭제 시 파일도 삭제.
 - 성능 가정: 개인 저널(수천 건 이하) → 기록 전체를 메모리에 로드해 웹과 같은 방식으로 파생 통계를 계산(Flow combine).
 
@@ -200,7 +201,8 @@ coffee-journal/
 ## 8. 테스트·품질
 - `commonTest`: 도메인 규칙(이름 정규화, 범위 계산, 피크, SCA, 단계 요약·차이, 노트 정규화, 국가 판별), 백업 코덱 왕복(웹 샘플 JSON 포함), 저장 파이프라인.
 - Android 계측: Room 마이그레이션·DAO 스모크(선택).
-- 빌드 게이트: `:shared:allTests`(JVM/Android unit) + `:androidApp:assembleDebug`.
+- 빌드 게이트: `:shared:testDebugUnitTest` + `:androidApp:assembleDebug`.
+- 화면 검증: 에뮬레이터 없이 Robolectric + Roborazzi로 실제 Compose 화면을 JVM에서 렌더해 PNG로 남긴다(`./gradlew :androidApp:recordRoborazziDebug` → `androidApp/screenshots/`). 테스트는 인메모리 Room(프레임워크 SQLite 드라이버)과 샘플 데이터(`SampleData`)를 주입한다.
 - 접근성: 최소 터치 48dp, 대비 4.5:1(잉크/아이보리), 콘텐츠 설명.
 
 ## 9. iOS 확장 경로 (2차)
