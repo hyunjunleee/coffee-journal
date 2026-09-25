@@ -2,6 +2,7 @@ package com.coffeejournal.ui.form
 
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.Entry
+import com.coffeejournal.domain.reference.ScaForm
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.CuppingTypes
 import com.coffeejournal.domain.rules.Dates
@@ -65,8 +66,27 @@ internal object EntryDisplay {
     /** Web scaScoreHtml with the app rule: only when one of the 7 scored attributes was set. */
     fun scaTotalText(en: Entry): String? {
         if (en.isCupping) return null
-        return ScaScoring.effectiveTotal(en.attributes)?.let { "${ScaScoring.format2(it)} / 100" }
+        return ScaScoring.effectiveTotal(FormNumbers.finiteAttributes(en.attributes))?.let { "${ScaScoring.format2(it)} / 100" }
     }
+
+    /**
+     * Whether the detail shows its SCA block: when the record was scored (design §2.3.3), or when an intensity or an
+     * attribute memo was entered without scoring. The three default 10s alone do not count.
+     */
+    fun showsScaBlock(attributes: Map<String, Double>, attributeNotes: Map<String, String>): Boolean =
+        ScaScoring.isScored(attributes) ||
+            ScaForm.intensities.any { (attributes[it.key] ?: 0.0) > 0 } ||
+            ScaForm.attrs.any { !attributeNotes[it.key].isNullOrBlank() }
+
+    /** Web confirmEntryDeletion, plus the app's note that the bag photos go too (design §2.3.4). */
+    fun deleteConfirmText(en: Entry): String {
+        val name = en.name.ifBlank { en.cafeName.ifBlank { en.cuppingPlace } }.trim()
+        return (if (name.isNotEmpty()) "“$name” " else "") + "기록을 정말 삭제할까요?\n\n삭제한 기록은 복구할 수 없어요. 봉투 사진도 함께 지워져요."
+    }
+
+    /** Web saveAsMyRecipe alert; the recipe comes back through the record form's "⭐ 내 레시피" button. */
+    fun recipeSavedText(name: String): String =
+        "\"$name\" 이름으로 내 레시피에 저장했어요. 새 기록의 \"⭐ 내 레시피\" 버튼에서 다시 꺼내 쓰실 수 있어요."
 
     fun priceText(price: String): String? = Prices.normalize(price).takeIf { it.isNotEmpty() }?.let { Prices.format(it.toDouble()) + "원" }
 
@@ -90,7 +110,8 @@ internal object EntryDisplay {
         add("물 온도", en.temp.takeIf { it.isNotBlank() }?.let { "$it°C" })
         add("분쇄도", en.grind)
         add("사용한 물", en.waterType)
-        add("총 시간", en.time)
+        // the cupping form has no 총 추출시간; older cupping records (and web ones) carry the example steps' 2:10
+        if (!en.isCupping) add("총 시간", en.time)
         add("필터", en.filter)
         add("예상 노트", en.expectedNotes)
         add("내가 느낀 노트", en.actualNotes)

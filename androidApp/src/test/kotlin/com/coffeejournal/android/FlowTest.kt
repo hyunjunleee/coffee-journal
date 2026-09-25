@@ -127,10 +127,10 @@ class FlowTest : FlowTestBase() {
         createBrewFromHome()
 
         clickText("삭제")
-        waitForText("이 기록을 삭제할까요? 봉투 사진도 함께 지워져요.")
+        waitForText("“$newBean” 기록을 정말 삭제할까요?", substring = true) // web confirmEntryDeletion wording
         // cancel first: nothing happens
         clickNode(dialogButton("취소"))
-        waitGone(hasText("이 기록을 삭제할까요? 봉투 사진도 함께 지워져요."))
+        waitGone(hasText("기록을 정말 삭제할까요?", substring = true))
         assertTrue(onDetailOf(newBean))
 
         clickText("삭제")

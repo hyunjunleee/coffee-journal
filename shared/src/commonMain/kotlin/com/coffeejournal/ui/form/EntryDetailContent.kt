@@ -43,6 +43,9 @@ import com.coffeejournal.ui.theme.SectionLabel
 @Composable
 internal fun EntryDetailContent(en: Entry, siblings: List<Entry>, isBest: Boolean, photoPath: (String) -> String) {
     DetailHeader(en, siblings, isBest)
+    val notes = EntryDisplay.splitFinalEvaluation(en.notes)
+    // web finalEvaluationHtml: the day's conclusion opens the detail, before the bag photos and the info grid
+    if (notes.hasFinal) DetailFinalEvaluation(notes.final)
     if (en.bagPhotos.isNotEmpty()) {
         Row(Modifier.fillMaxWidth().padding(top = 14.dp).horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             en.bagPhotos.take(2).forEach { name ->
@@ -65,7 +68,7 @@ internal fun EntryDetailContent(en: Entry, siblings: List<Entry>, isBest: Boolea
     }
     DetailSca(en)
     DetailSteps(en)
-    DetailNotes(en)
+    DetailNotes(en, notes.before)
     en.groundsPhoto?.let { name ->
         SectionLabel("추출 후 가루 사진")
         AsyncImage(model = photoPath(name), contentDescription = "가루 사진", modifier = Modifier.fillMaxWidth().height(220.dp), contentScale = ContentScale.Crop)
@@ -94,26 +97,33 @@ private fun DetailHeader(en: Entry, siblings: List<Entry>, isBest: Boolean) {
     }
 }
 
-/** SCA 항목별 점수 + 강도 + 메모 + TOTAL (web attrsHtml). */
+/**
+ * SCA 항목별 점수 + 강도 + 메모 + TOTAL (web attrsHtml), with the app rule of design §2.3.3: a record where none of the
+ * 7 scored attributes was entered has no score, so its three default 10s and the total are not shown. Intensities and
+ * attribute memos entered without scoring still are.
+ */
 @Composable
 private fun DetailSca(en: Entry) {
-    val attrs = en.attributes
-    if (ScaForm.attrs.none { (attrs[it.key] ?: 0.0) > 0 }) return
+    val attrs = FormNumbers.finiteAttributes(en.attributes)
+    if (!EntryDisplay.showsScaBlock(attrs, en.attributeNotes)) return
+    val scored = ScaScoring.isScored(attrs)
     SectionLabel("SCA CUPPING FORM")
     Column(Modifier.fillMaxWidth().background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape).padding(12.dp)) {
         ScaForm.attrs.forEach { a ->
             val score = attrs[a.key] ?: 0.0
-            if (score > 0) ScoreRow(a.label, ScaScoring.format2(score))
+            if (score > 0 && scored) ScoreRow(a.label, ScaScoring.format2(score))
             ScaForm.intensities.firstOrNull { it.after == a.key }?.let { i ->
                 val v = attrs[i.key] ?: 0.0
                 if (v > 0) ScoreRow(i.label, ScaScoring.format1(v), secondary = true)
             }
             en.attributeNotes[a.key]?.trim()?.takeIf { it.isNotEmpty() }?.let { Text(it, style = AppType.small, modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)) }
         }
-        Hairline(color = Ink.text, thickness = Dimens.rule, modifier = Modifier.padding(top = 4.dp))
-        Row(Modifier.fillMaxWidth().padding(top = 7.dp)) {
-            Text("TOTAL SCORE", style = AppType.cardTitle, modifier = Modifier.weight(1f))
-            Text(ScaScoring.total(attrs)?.let { ScaScoring.format2(it) } ?: "–", style = AppType.cardTitle)
+        ScaScoring.effectiveTotal(attrs)?.let { total ->
+            Hairline(color = Ink.text, thickness = Dimens.rule, modifier = Modifier.padding(top = 4.dp))
+            Row(Modifier.fillMaxWidth().padding(top = 7.dp)) {
+                Text("TOTAL SCORE", style = AppType.cardTitle, modifier = Modifier.weight(1f))
+                Text(ScaScoring.format2(total), style = AppType.cardTitle)
+            }
         }
     }
 }
@@ -144,16 +154,17 @@ private fun DetailSteps(en: Entry) {
     StepsSummaryBox(en.steps, en.water, en.time, en.recipeRef)
 }
 
-/** 메모, with the "Final Evaluation" / "최종 평가" section split out (web splitFinalEvaluation). */
+/** The "Final Evaluation" / "최종 평가" part of the notes (web splitFinalEvaluation / finalEvaluationHtml). */
 @Composable
-private fun DetailNotes(en: Entry) {
-    val sections = EntryDisplay.splitFinalEvaluation(en.notes)
-    if (sections.hasFinal) {
-        SectionLabel("FINAL EVALUATION")
-        Text(sections.final.ifBlank { "아직 작성하지 않았어요." }, style = AppType.body, modifier = Modifier.fillMaxWidth().background(Ink.surfaceRaised).padding(12.dp))
-    }
-    if (sections.before.isNotBlank()) {
-        SectionLabel(if (en.isCupping) "전체적인 경험" else "메모")
-        Text(sections.before, style = AppType.body)
-    }
+private fun DetailFinalEvaluation(text: String) {
+    SectionLabel("FINAL EVALUATION")
+    Text(text.ifBlank { "아직 작성하지 않았어요." }, style = AppType.body, modifier = Modifier.fillMaxWidth().background(Ink.surfaceRaised).padding(12.dp))
+}
+
+/** 메모 / 전체적인 경험: the notes before any Final Evaluation section. */
+@Composable
+private fun DetailNotes(en: Entry, before: String) {
+    if (before.isBlank()) return
+    SectionLabel(if (en.isCupping) "전체적인 경험" else "메모")
+    Text(before, style = AppType.body)
 }

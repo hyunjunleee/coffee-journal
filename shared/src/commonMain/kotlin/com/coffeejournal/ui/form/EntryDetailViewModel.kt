@@ -11,6 +11,8 @@ import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
+import com.coffeejournal.domain.rules.Packages
+import com.coffeejournal.ui.extract.ExtractGrouping
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -37,6 +39,8 @@ class EntryDetailViewModel(
         /** Other records of the same bean (web siblings), used to complete missing bag info. */
         val siblings: List<Entry> = emptyList(),
         val isBest: Boolean = false,
+        /** Home group keys this record is listed under (each component for a custom blend); empty when it cannot be best. */
+        val bestKeys: List<String> = emptyList(),
     )
 
     private var deleting = false
@@ -46,11 +50,13 @@ class EntryDetailViewModel(
         if (en == null) UiState(loading = deleting, entry = null)
         else {
             val key = BeanNames.coreBeanName(en.name)
+            val keys = bestKeysOf(en)
             UiState(
                 loading = false,
                 entry = en,
                 siblings = if (key.isBlank()) emptyList() else all.filter { it.id != en.id && BeanNames.coreBeanName(it.name) == key },
-                isBest = best[key] == en.id,
+                isBest = keys.any { best[it] == en.id },
+                bestKeys = keys,
             )
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), UiState())
@@ -68,12 +74,22 @@ class EntryDetailViewModel(
         }
     }
 
+    /**
+     * Sets or clears this record as the best recipe under the same keys the home groups read, so the ⭐ badge on the
+     * detail and the group's best card always agree. Clearing only touches keys that point at this record.
+     */
     fun toggleBest() {
         val s = state.value
         val en = s.entry ?: return
-        val key = BeanNames.coreBeanName(en.name)
-        if (key.isBlank()) return
-        viewModelScope.launch { beanMeta.setBest(key, if (s.isBest) null else en.id) }
+        if (s.bestKeys.isEmpty()) return
+        viewModelScope.launch {
+            if (s.isBest) {
+                val best = beanMeta.getBest().associate { it.beanKey to it.entryId }
+                s.bestKeys.filter { best[it] == en.id }.forEach { beanMeta.setBest(it, null) }
+            } else {
+                s.bestKeys.forEach { beanMeta.setBest(it, en.id) }
+            }
+        }
     }
 
     /** Web saveAsMyRecipe: the record's brew parameters and steps become a reusable recipe. */
@@ -94,3 +110,10 @@ class EntryDetailViewModel(
         }
     }
 }
+
+/**
+ * Best-recipe keys of a record: the home group keys (ExtractGrouping.groupKeys: the core name, or each component's for a
+ * custom blend), only for brew records, which are the group's recipe candidates.
+ */
+internal fun bestKeysOf(en: Entry): List<String> =
+    if (Packages.isBrew(en)) ExtractGrouping.groupKeys(en) else emptyList()

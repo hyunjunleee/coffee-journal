@@ -14,7 +14,8 @@ import org.koin.dsl.module
 /** Record form, entry detail and my recipes: Koin module (view models) and full-screen routes. */
 object RecordFormFeature : Feature {
     override val module: Module = module {
-        viewModel { (args: FormArgs) -> RecordFormViewModel(args, get(), get(), get(), get(), get(), get()) }
+        // the last get() is the destination's SavedStateHandle, created by Koin from the view model's CreationExtras
+        viewModel { (args: FormArgs) -> RecordFormViewModel(args, get(), get(), get(), get(), get(), get(), get()) }
         viewModel { (entryId: String) -> EntryDetailViewModel(entryId, get(), get(), get(), get()) }
         viewModelOf(::MyRecipesViewModel)
     }

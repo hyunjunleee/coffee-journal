@@ -51,7 +51,7 @@ internal fun CuppingBeanCard(
                 value = bean.name, onValueChange = { onChange(bean.copy(name = it)) }, modifier = Modifier.weight(1f),
                 placeholder = "원두 이름 (예: 에티오피아 예가체프)", focusRequester = nameFocus, error = error,
             )
-            RemoveButton(onRemove, Modifier.padding(top = 12.dp))
+            RemoveButton(onRemove, Modifier.padding(top = 4.dp))
         }
         Spacer(Modifier.height(8.dp))
         Seg(
@@ -82,9 +82,11 @@ private fun CuppingBeanGrid(bean: CuppingBeanForm, suggestions: FormSuggestions,
         { m -> AutocompleteField(bean.roastery, { onChange(bean.copy(roastery = it)) }, suggestions.roasteries, m, placeholder = "로스터리 (선택)") },
         { m -> AutocompleteField(bean.farmProducer, { onChange(bean.copy(farmProducer = it)) }, suggestions.farms, m, placeholder = "농장(생산자)") },
     )
-    TwoUp(
-        { m -> FormTextField(bean.altitude, { onChange(bean.copy(altitude = it)) }, m, placeholder = "재배 고도") },
-        { m -> FormTextField(bean.variety, { onChange(bean.copy(variety = it)) }, m, placeholder = "품종 (예: Heirloom(74110))") },
+    // web .cupping-bean-card-grid: altitude alone, variety across the whole row (grid-column: 1 / -1)
+    TwoUp({ m -> FormTextField(bean.altitude, { onChange(bean.copy(altitude = it)) }, m, placeholder = "재배 고도") })
+    FormTextField(
+        bean.variety, { onChange(bean.copy(variety = it)) }, Modifier.fillMaxWidth().padding(bottom = 10.dp),
+        placeholder = "품종 (예: Heirloom(74110))",
     )
     TwoUp(
         { m ->

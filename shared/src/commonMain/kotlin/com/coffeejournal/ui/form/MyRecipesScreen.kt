@@ -20,11 +20,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -38,14 +42,19 @@ import com.coffeejournal.ui.theme.HairlineCard
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
+import kotlinx.serialization.json.Json
 import org.koin.compose.viewmodel.koinViewModel
 
-/** Route.MyRecipes — saved recipes plus the "새 레시피 만들기" form (web 내 레시피 panel). */
+/**
+ * Route.MyRecipes — saved recipes plus the "새 레시피 만들기" form (web 내 레시피 panel). The screen is opened from the
+ * form's "+ 새 레시피 만들기" button, so the new-recipe form starts open with the name focused (web toggles it inline).
+ */
 @Composable
 fun MyRecipesScreen(nav: NavHostController) {
     val vm = koinViewModel<MyRecipesViewModel>()
     val recipes by vm.recipes.collectAsStateWithLifecycle()
-    var showForm by remember { mutableStateOf(false) }
+    val equipment by vm.equipment.collectAsStateWithLifecycle()
+    var showForm by rememberSaveable { mutableStateOf(true) }
     var pendingDelete by remember { mutableStateOf<MyRecipe?>(null) }
 
     Column(Modifier.fillMaxSize().background(Ink.bg).statusBarsPadding()) {
@@ -59,7 +68,9 @@ fun MyRecipesScreen(nav: NavHostController) {
             )
             Spacer(Modifier.height(12.dp))
             GhostButton("+ 새 레시피 만들기", small = true, onClick = { showForm = !showForm })
-            if (showForm) NewRecipeForm(onSave = { draft -> vm.create(draft).also { ok -> if (ok) showForm = false } }, onCancel = { showForm = false })
+            if (showForm) {
+                NewRecipeForm(equipment, onSave = { draft -> vm.create(draft).also { ok -> if (ok) showForm = false } }, onCancel = { showForm = false })
+            }
             Spacer(Modifier.height(16.dp))
             recipes.forEach { r ->
                 RecipeCard(r, onDelete = { pendingDelete = r })
@@ -93,16 +104,27 @@ private fun RecipeCard(r: MyRecipe, onDelete: () -> Unit) {
     }
 }
 
+/** Keeps the typed draft through configuration changes and process death. */
+private val DraftSaver: Saver<MyRecipeDraft, String> = Saver(
+    save = { Json.encodeToString(MyRecipeDraft.serializer(), it) },
+    restore = { runCatching { Json.decodeFromString(MyRecipeDraft.serializer(), it) }.getOrNull() },
+)
+
 /** Web #new-my-recipe-form: name is required, everything else optional. */
 @Composable
-private fun NewRecipeForm(onSave: (MyRecipeDraft) -> Boolean, onCancel: () -> Unit) {
-    var d by remember { mutableStateOf(MyRecipeDraft()) }
-    var nameError by remember { mutableStateOf<String?>(null) }
+private fun NewRecipeForm(equipment: RecipeEquipment, onSave: (MyRecipeDraft) -> Boolean, onCancel: () -> Unit) {
+    var d by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf(MyRecipeDraft()) }
+    var nameError by rememberSaveable { mutableStateOf<String?>(null) }
+    val nameFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { nameFocus.requestFocus() } }
     Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
-        FormTextField(d.name, { d = d.copy(name = it); nameError = null }, label = "레시피 이름", placeholder = "예: 밝은 산미용 3단 푸어", error = nameError, modifier = Modifier.padding(bottom = 10.dp))
+        FormTextField(
+            d.name, { d = d.copy(name = it); nameError = null }, label = "레시피 이름", placeholder = "예: 밝은 산미용 3단 푸어",
+            error = nameError, focusRequester = nameFocus, modifier = Modifier.padding(bottom = 10.dp),
+        )
         TwoUp(
-            { m -> FormTextField(d.dripper, { d = d.copy(dripper = it) }, m, label = "드리퍼") },
-            { m -> FormTextField(d.filter, { d = d.copy(filter = it) }, m, label = "필터") },
+            { m -> AutocompleteField(d.dripper, { d = d.copy(dripper = it) }, equipment.drippers, m, label = "드리퍼") },
+            { m -> AutocompleteField(d.filter, { d = d.copy(filter = it) }, equipment.filters, m, label = "필터") },
         )
         TwoUp(
             { m -> FormTextField(d.grind, { d = d.copy(grind = it) }, m, label = "분쇄도") },

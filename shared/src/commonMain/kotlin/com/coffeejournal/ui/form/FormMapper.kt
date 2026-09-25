@@ -16,6 +16,7 @@ import com.coffeejournal.domain.reference.Processes
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.CuppingTypes
 import com.coffeejournal.domain.rules.Dates
+import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.domain.rules.NoteCanon
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.Prices
@@ -33,7 +34,14 @@ internal object FormMapper {
 
     // ---------- opening ----------
 
-    fun newState(mode: String, cuppingType: String?, now: Long, lastGrind: String = "", lastWaterType: String = ""): FormState {
+    fun newState(
+        mode: String,
+        cuppingType: String?,
+        now: Long,
+        lastGrind: String = "",
+        lastWaterType: String = "",
+        draftId: String = Ids.newId(now),
+    ): FormState {
         val category = when (mode) {
             FormMode.CAFE -> Category.CAFE
             FormMode.CUPPING -> Category.CUPPING
@@ -42,6 +50,7 @@ internal object FormMapper {
         val brewLike = mode != FormMode.CAFE
         return FormState(
             mode = mode,
+            draftId = draftId,
             category = category,
             createdAt = now,
             cuppingType = cuppingType?.takeIf { it in CuppingType.all } ?: CuppingType.PUBLIC,
@@ -104,11 +113,21 @@ internal object FormMapper {
             waterType = entry.waterType,
             steps = entry.steps.map(StepForm::from),
             appliedRecipeRef = entry.recipeRef,
-            attributes = if (entry.attributes.any { it.value > 0 }) entry.attributes else ScaScoring.defaultAttributes(),
+            attributes = FormNumbers.finiteAttributes(entry.attributes).let { a -> if (a.any { it.value > 0 }) a else ScaScoring.defaultAttributes() },
             attributeNotes = entry.attributeNotes,
             actualNotes = NoteCanon.parseChips(entry.actualNotes),
             notes = if (isCupping) "" else entry.notes,
         )
+    }
+
+    /**
+     * Web editEntry: when an earlier (non-cupping) record of the same bean exists, the bag info and bag photos belong
+     * to that first registration, so the form shows the lock banner and hides the bag-photo slots.
+     */
+    fun hasEarlierSameBean(entry: Entry, all: List<Entry>): Boolean {
+        val key = BeanNames.coreBeanName(entry.name)
+        if (key.isBlank()) return false
+        return all.any { it.id != entry.id && !it.isCupping && it.createdAt < entry.createdAt && BeanNames.coreBeanName(it.name) == key }
     }
 
     // ---------- saving ----------
@@ -147,9 +166,9 @@ internal object FormMapper {
         val isCupping = s.isCupping
         val isCafe = s.isCafe
         val isBrew = s.isBrew
-        val beanMode = if (isCupping) BeanMode.SINGLE else s.beanMode.ifBlank { BeanMode.SINGLE }
+        val beanMode = s.effectiveBeanMode
         val blendComponents = if (beanMode == BeanMode.CUSTOM_BLEND) {
-            s.blendRows.filter { it.name.isNotBlank() }.map { BlendComponent(it.name.trim(), it.grams.trim()) }
+            s.blendRows.filter { it.name.isNotBlank() }.map { BlendComponent(it.name.trim(), FormNumbers.finiteText(it.grams.trim())) }
         } else emptyList()
         val cuppingBeans = if (isCupping) s.cuppingBeans.filter { it.name.isNotBlank() }.map(::cuppingBeanModel) else existing?.cuppingBeans ?: emptyList()
         val name = if (isCupping) {
@@ -158,9 +177,9 @@ internal object FormMapper {
             s.name.trim().ifBlank { if (beanMode == BeanMode.CUSTOM_BLEND) customBlendName(blendComponents) else "" }
         }
         val dose = if (beanMode == BeanMode.CUSTOM_BLEND) {
-            val sum = blendComponents.sumOf { it.grams.trim().toDoubleOrNull() ?: 0.0 }
-            if (sum > 0) Prices.trimNumber(sum) else s.dose.trim()
-        } else s.dose.trim()
+            val sum = blendComponents.sumOf { FormNumbers.finiteOrNull(it.grams) ?: 0.0 }
+            if (sum > 0) Prices.trimNumber(sum) else FormNumbers.finiteText(s.dose.trim())
+        } else FormNumbers.finiteText(s.dose.trim())
         return Entry(
             id = id,
             createdAt = s.createdAt.takeIf { it > 0 } ?: existing?.createdAt ?: now,
@@ -186,19 +205,23 @@ internal object FormMapper {
             roastDate = s.roastDate.trim(),
             roasterDesc = s.roasterDesc.trim(),
             roast = s.roast,
-            bagWeight = s.bagWeight.trim(),
+            // the cupping form never shows the bag fields (the fresh form still carries the 100 g default)
+            bagWeight = if (isCupping) "" else FormNumbers.finiteText(s.bagWeight.trim()),
             price = if (isCupping) "" else Prices.normalize(s.price),
             cafeName = if (isCafe) s.cafeName.trim() else existing?.cafeName ?: "",
             expectedNotes = NoteCanon.joinChips(s.expectedNotes),
             actualNotes = NoteCanon.joinChips(s.actualNotes),
-            dripper = s.dripper.trim(),
-            filter = s.filter.trim(),
-            dose = dose,
-            water = s.water.trim(),
-            temp = s.temp.trim(),
+            // Recipe fields are saved only where the form shows them: all of them for 원두, 드리퍼/필터 also for 카페,
+            // none for 커핑. Hidden ones would otherwise store invented values, such as the 2:10 총 추출시간 computed
+            // from the example steps every fresh form is seeded with.
+            dripper = if (isCupping) "" else s.dripper.trim(),
+            filter = if (isCupping) "" else s.filter.trim(),
+            dose = if (isBrew) dose else "",
+            water = if (isBrew) FormNumbers.finiteText(s.water.trim()) else "",
+            temp = if (isBrew) FormNumbers.finiteText(s.temp.trim()) else "",
             grind = if (isBrew) s.grind.trim() else "",
             waterType = if (isBrew) s.waterType.trim() else "",
-            time = s.time.trim(),
+            time = if (isBrew) FormNumbers.safeTime(s.time.trim()) else "",
             notes = if (isCupping) s.cuppingNotes.trim() else s.notes.trim(),
             cuppingType = if (isCupping) s.cuppingType.ifBlank { CuppingType.PUBLIC } else existing?.cuppingType ?: "",
             cuppingPlace = if (isCupping) s.cuppingPlace.trim() else existing?.cuppingPlace ?: "",
@@ -325,7 +348,7 @@ internal object FormMapper {
      * everything, only fields that are still empty are filled (the default bag weight counts as empty).
      */
     fun autofill(state: FormState, matches: List<Entry>): FormState {
-        if (matches.isEmpty()) return state.copy(autofillBanner = false)
+        if (matches.isEmpty()) return state.copy(autofillBanner = false, repeatBean = false)
         val sorted = matches.sortedBy { it.createdAt }
         val first = sorted.first()
         fun registered(pick: (Entry) -> String): String = sorted.firstOrNull { pick(it).isNotBlank() }?.let(pick) ?: ""
@@ -357,8 +380,8 @@ internal object FormMapper {
         if (state.isBrew && state.price.isBlank()) {
             sorted.firstOrNull { it.isBrew && it.price.isNotBlank() }?.let { s = s.copy(price = Prices.formatInput(it.price)) }
         }
-        val changed = s != state
-        return s.copy(autofillBanner = changed)
+        // Web lockBeanInfoFields + hideBagPhotoSection: shown for every repeat of a known bean, filled or not.
+        return s.copy(autofillBanner = true, repeatBean = true)
     }
 
     // ---------- recipes ----------

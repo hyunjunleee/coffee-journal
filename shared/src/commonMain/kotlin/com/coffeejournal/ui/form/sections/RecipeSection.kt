@@ -16,6 +16,7 @@ import com.coffeejournal.domain.model.RecipeStep
 import com.coffeejournal.domain.reference.GenericSteps
 import com.coffeejournal.domain.rules.RecipeSteps
 import com.coffeejournal.ui.form.AutocompleteField
+import com.coffeejournal.ui.form.FormNumbers
 import com.coffeejournal.ui.form.FormState
 import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
@@ -85,12 +86,15 @@ internal fun StepHeaderRow(a: String, b: String, c: String, d: String) {
 
 /** Web #steps-summary: totals, recipe warnings and the diff against the applied recipe. */
 @Composable
-internal fun StepsSummaryBox(steps: List<RecipeStep>, targetWater: String, targetTime: String, ref: RecipeRef?) {
-    if (steps.isEmpty()) return
+internal fun StepsSummaryBox(rawSteps: List<RecipeStep>, targetWater: String, targetTime: String, rawRef: RecipeRef?) {
+    if (rawSteps.isEmpty()) return
+    // Stored records (e.g. restored from a backup) may still hold "NaN"-like numbers; they count as missing here.
+    val steps = FormNumbers.finiteSteps(rawSteps)
+    val ref = FormNumbers.finiteRef(rawRef)
     val summary = RecipeSteps.summary(steps)
     Column(Modifier.fillMaxWidth().padding(top = 10.dp).background(Ink.surfaceRaised).padding(12.dp)) {
         Text(RecipeSteps.summaryLine(summary), style = AppType.small.copy(color = Ink.text))
-        RecipeSteps.warnings(summary, targetWater, targetTime).forEach { Text(it, style = AppType.small.copy(color = Ink.bad), modifier = Modifier.padding(top = 4.dp)) }
+        RecipeSteps.warnings(summary, FormNumbers.finiteText(targetWater), FormNumbers.safeTime(targetTime)).forEach { Text(it, style = AppType.small.copy(color = Ink.bad), modifier = Modifier.padding(top = 4.dp)) }
         if (ref != null && ref.steps.isNotEmpty()) {
             val diffs = RecipeSteps.diff(steps, ref)
             if (diffs.isEmpty()) {

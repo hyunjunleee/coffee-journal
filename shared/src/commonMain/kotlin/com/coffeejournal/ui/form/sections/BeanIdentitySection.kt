@@ -1,7 +1,6 @@
 package com.coffeejournal.ui.form.sections
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -30,6 +29,7 @@ import com.coffeejournal.ui.form.FormState
 import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
 import com.coffeejournal.ui.form.RemoveButton
+import com.coffeejournal.ui.form.TextLink
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GhostButton
@@ -80,7 +80,8 @@ internal fun BeanIdentitySection(
         focusRequester = nameFocus,
         onFocusChanged = { focused -> if (!focused) onNameBlur() },
         error = if (state.error?.field == FormField.NAME) state.error.message else null,
-        hint = if (state.isCustomBlend) "비워두면 구성 원두 이름으로 자동 생성돼요." else "마시는 중인 원두에서 선택하거나, 목록에 없는 이름을 입력해 새 원두로 등록할 수 있어요.",
+        // web setBeanMode: the static HTML hint is always replaced by one of these two
+        hint = if (state.isCustomBlend) "비워두면 구성 원두 이름으로 자동 생성돼요." else "목록에 없는 이름을 입력하면 새 원두로 등록돼요.",
         modifier = Modifier.padding(bottom = 4.dp),
     )
     FormMapper.nameParenHint(state.name)?.let { HintText(it) }
@@ -108,11 +109,11 @@ private fun BlendRows(state: FormState, suggestions: FormSuggestions, blendFocus
                 Spacer(Modifier.width(8.dp))
                 CompactField(
                     value = row.grams, onValueChange = { v -> update { s -> s.copy(blendRows = s.blendRows.replaceAt(index, row.copy(grams = v))) } },
-                    placeholder = "그램(g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.width(78.dp).padding(top = 10.dp),
+                    placeholder = "그램(g)", keyboardType = KeyboardType.Decimal, modifier = Modifier.width(78.dp).padding(top = 4.dp),
                 )
                 RemoveButton(
                     onClick = { update { s -> val rest = s.blendRows.filterIndexed { i, _ -> i != index }; s.copy(blendRows = rest.ifEmpty { listOf(BlendRowForm()) }) } },
-                    modifier = Modifier.padding(top = 12.dp),
+                    modifier = Modifier.padding(top = 4.dp),
                 )
             }
         }
@@ -132,8 +133,8 @@ private fun AutofillBanner(onClose: () -> Unit) {
             "✓ 처음 등록한 날 입력했던 원두 정보를 자동으로 불러왔어요. 필요하면 그냥 고쳐서 입력하시면 돼요.",
             style = AppType.small.copy(color = Ink.text), modifier = Modifier.weight(1f),
         )
-        Spacer(Modifier.width(10.dp))
-        Text("닫기", style = AppType.small.copy(color = Ink.textMuted), modifier = Modifier.clickable(onClick = onClose).padding(4.dp))
+        Spacer(Modifier.width(2.dp))
+        TextLink("닫기", Ink.textMuted, onClose)
     }
 }
 
