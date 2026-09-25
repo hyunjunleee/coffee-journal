@@ -107,14 +107,14 @@ internal fun FormTextField(
             // a wrapping placeholder would make a one-line field taller than its neighbours in a two-column row
             placeholder = {
                 Text(
-                    placeholder, style = AppType.body.copy(color = Ink.textFaint),
+                    placeholder, style = AppType.input.copy(color = Ink.textFaint),
                     maxLines = if (singleLine) 1 else Int.MAX_VALUE, overflow = if (singleLine) TextOverflow.Ellipsis else TextOverflow.Clip,
                 )
             },
             singleLine = singleLine,
             minLines = minLines,
             isError = error != null,
-            textStyle = AppType.body,
+            textStyle = AppType.input,
             shape = RectangleShape,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = if (singleLine) ImeAction.Next else ImeAction.Default),
             trailingIcon = trailing,
@@ -205,12 +205,12 @@ internal fun CompactField(
         onValueChange = { edited -> sync.onEdit(edited, inputFilter)?.let(onValueChange) },
         modifier = m,
         singleLine = true,
-        textStyle = AppType.small.copy(color = Ink.text, textAlign = textAlign),
+        textStyle = AppType.inputSmall.copy(color = Ink.text, textAlign = textAlign),
         cursorBrush = SolidColor(Ink.accent),
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Next),
         decorationBox = { inner ->
             Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), contentAlignment = if (textAlign == TextAlign.Center) Alignment.Center else Alignment.CenterStart) {
-                if (sync.value.text.isEmpty()) Text(placeholder, style = AppType.small.copy(color = Ink.textFaint), maxLines = 1)
+                if (sync.value.text.isEmpty()) Text(placeholder, style = AppType.inputSmall.copy(color = Ink.textFaint), maxLines = 1)
                 inner()
             }
         },

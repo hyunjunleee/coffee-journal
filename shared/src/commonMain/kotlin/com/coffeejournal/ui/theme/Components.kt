@@ -513,14 +513,14 @@ private fun AppTextFieldValue(
             // a wrapping placeholder would make a one-line field taller than its neighbours
             placeholder = {
                 Text(
-                    placeholder, style = AppType.body.copy(color = Ink.textFaint),
+                    placeholder, style = AppType.input.copy(color = Ink.textFaint),
                     maxLines = if (singleLine) 1 else Int.MAX_VALUE, overflow = if (singleLine) TextOverflow.Ellipsis else TextOverflow.Clip,
                 )
             },
             singleLine = singleLine,
             minLines = minLines,
             enabled = enabled,
-            textStyle = AppType.body,
+            textStyle = AppType.input,
             shape = RectangleShape,
             keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
             keyboardActions = KeyboardActions(onAny = { onImeAction?.invoke() }),

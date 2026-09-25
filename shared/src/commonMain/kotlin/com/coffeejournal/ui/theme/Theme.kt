@@ -14,6 +14,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -73,6 +74,16 @@ object AppType {
     val body = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Ink.text, lineHeight = 21.sp)
     val bodyMuted = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Ink.textMuted, lineHeight = 20.sp)
     val small = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Ink.textMuted, lineHeight = 18.sp)
+
+    /**
+     * Text inside input boxes: [body] / [small] with an untrimmed line box. The default trim fits the first and last
+     * line to the font actually drawn, and the Hangul fallback font is taller than the Latin one, so at a large font
+     * scale a box holding "V60 표백" grew taller than its neighbour holding "V60". Untrimmed, every line is exactly
+     * its line height whatever the script, so boxes in one row stay level.
+     */
+    private val fieldLines = LineHeightStyle(alignment = LineHeightStyle.Alignment.Center, trim = LineHeightStyle.Trim.None)
+    val input = body.copy(lineHeightStyle = fieldLines)
+    val inputSmall = small.copy(lineHeightStyle = fieldLines)
     val faint = TextStyle(fontFamily = sans, fontSize = 11.5.sp, color = Ink.textFaint, lineHeight = 17.sp)
     val title = TextStyle(fontFamily = sans, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink.text, lineHeight = 24.sp)
     val cardTitle = TextStyle(fontFamily = sans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink.text, lineHeight = 22.sp)

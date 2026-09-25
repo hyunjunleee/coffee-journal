@@ -16,3 +16,5 @@ iosApp/*.xcworkspace/xcuserdata/
 androidApp/screenshots/*_compare.png
 androidApp/screenshots/*_actual.png
 .claude/worktrees/
+# Render matrix (320dp, font scale 1.3/2.0, page-by-page): regenerate with recordRoborazziDebug, not committed
+androidApp/screenshots/matrix/
