@@ -53,11 +53,11 @@ fun EntryDetailScreen(nav: NavHostController, entryId: String) {
         vm.events.collect { ev ->
             when (ev) {
                 DetailEvent.Deleted -> nav.popBackStack()
-                is DetailEvent.RecipeSaved -> flash = "\"${ev.name}\" 이름으로 내 레시피에 저장했어요."
+                is DetailEvent.RecipeSaved -> flash = EntryDisplay.recipeSavedText(ev.name)
             }
         }
     }
-    LaunchedEffect(flash) { if (flash != null) { delay(3_000); flash = null } }
+    LaunchedEffect(flash) { if (flash != null) { delay(5_000); flash = null } }
 
     Column(Modifier.fillMaxSize().background(Ink.bg).statusBarsPadding()) {
         ScreenTitleBar(title = "기록", onBack = { nav.popBackStack() })
@@ -69,7 +69,7 @@ fun EntryDetailScreen(nav: NavHostController, entryId: String) {
                 EntryDetailContent(en, ui.siblings, ui.isBest, vm::photoPath)
                 flash?.let { Text(it, style = AppType.small.copy(color = Ink.good), modifier = Modifier.padding(top = 12.dp)) }
                 DetailActions(
-                    en = en, isBest = ui.isBest,
+                    en = en, isBest = ui.isBest, canBeBest = ui.bestKeys.isNotEmpty(),
                     onEdit = { nav.navigate(Route.RecordForm(mode = EntryDisplay.formModeFor(en.category), entryId = en.id)) },
                     onDelete = { confirmDelete = true },
                     onSaveRecipe = { recipeDialog = true },
@@ -84,7 +84,7 @@ fun EntryDetailScreen(nav: NavHostController, entryId: String) {
         AlertDialog(
             onDismissRequest = { confirmDelete = false }, shape = RectangleShape, containerColor = Ink.bg,
             title = { Text("기록 삭제", style = AppType.title) },
-            text = { Text("이 기록을 삭제할까요? 봉투 사진도 함께 지워져요.", style = AppType.body) },
+            text = { Text(ui.entry?.let(EntryDisplay::deleteConfirmText) ?: "기록을 정말 삭제할까요?", style = AppType.body) },
             confirmButton = { PrimaryButton("삭제", small = true, onClick = { confirmDelete = false; vm.delete() }) },
             dismissButton = { GhostButton("취소", small = true, onClick = { confirmDelete = false }) },
         )
@@ -100,10 +100,18 @@ fun EntryDetailScreen(nav: NavHostController, entryId: String) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DetailActions(en: Entry, isBest: Boolean, onEdit: () -> Unit, onDelete: () -> Unit, onSaveRecipe: () -> Unit, onToggleBest: () -> Unit) {
+private fun DetailActions(
+    en: Entry,
+    isBest: Boolean,
+    canBeBest: Boolean,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit,
+    onSaveRecipe: () -> Unit,
+    onToggleBest: () -> Unit,
+) {
     FlowRow(Modifier.fillMaxWidth().padding(top = 18.dp), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (en.steps.isNotEmpty()) GhostButton("⭐ 내 레시피로 저장", small = true, onClick = onSaveRecipe)
-        if (en.isBrew && en.name.isNotBlank()) {
+        if (canBeBest) {
             GhostButton(if (isBest) "⭐ 베스트 레시피 해제" else "이 원두의 베스트 레시피로 지정", small = true, onClick = onToggleBest)
         }
         GhostButton("수정", small = true, onClick = onEdit)

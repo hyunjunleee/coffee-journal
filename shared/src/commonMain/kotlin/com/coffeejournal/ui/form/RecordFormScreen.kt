@@ -77,15 +77,17 @@ fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cup
         runCatching { requester.requestFocus() }
     }
 
+    // The title-bar back and 취소 wait while "저장 중..." is shown (the save itself also survives leaving, see save()).
+    val leave = { if (!vm.state.value.saving) nav.popBackStack() }
     Column(Modifier.fillMaxSize().background(Ink.bg).statusBarsPadding()) {
-        ScreenTitleBar(title = if (state.isEdit) "기록 수정" else "새 기록", onBack = { nav.popBackStack() })
+        ScreenTitleBar(title = if (state.isEdit) "기록 수정" else "새 기록", onBack = { leave() })
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             if (loaded) {
                 RecordFormBody(state, suggestions, vm, nav, nameFocus, blendFocus, cuppingFocus)
             }
             Spacer(Modifier.height(96.dp))
         }
-        FormActions(state, onSave = vm::save, onCancel = { nav.popBackStack() })
+        FormActions(state, onSave = vm::save, onCancel = { leave() })
     }
 }
 
@@ -119,7 +121,9 @@ private fun RecordFormBody(
     }
     BeanIdentitySection(state, suggestions, nameFocus, blendFocus, vm::onNameTyped, vm::onNameBlur, update)
     BeanInfoSection(state, suggestions, update)
-    if (!state.isCafe) BagPhotoSection(state.bagPhotos, vm::photoModel, vm::setPhoto, vm::removePhoto)
+    // Web hideBagPhotoSection: a repeat brew of a known bean has no bag photos of its own (photos it already has stay).
+    val bagPhotosHidden = state.repeatBean && state.bagPhotos.none { it.hasImage }
+    if (!state.isCafe && !bagPhotosHidden) BagPhotoSection(state.bagPhotos, vm::photoModel, vm::setPhoto, vm::removePhoto)
     RecipeSection(state, suggestions, update)
     TastingSection(state, update)
 }
@@ -136,7 +140,7 @@ private fun FormActions(state: FormState, onSave: () -> Unit, onCancel: () -> Un
                 text = when { state.saving -> "저장 중..."; state.isEdit -> "수정 저장"; else -> "저장" },
                 onClick = onSave, enabled = !state.saving, modifier = Modifier.weight(1f),
             )
-            GhostButton("취소", onClick = onCancel)
+            GhostButton("취소", onClick = onCancel, enabled = !state.saving)
         }
     }
 }

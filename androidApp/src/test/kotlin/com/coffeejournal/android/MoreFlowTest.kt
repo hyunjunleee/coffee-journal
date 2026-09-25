@@ -105,7 +105,6 @@ class MoreFlowTest : FlowTestBase() {
 
     // ───────────── design §2.3.3: no SCA total for unscored records ─────────────
 
-    @Ignore("app defect: detail shows the SCA block with TOTAL SCORE 30.00 for an unscored record (total() instead of effectiveTotal(), design §2.3.3)")
     @Test
     fun more02_unscoredRecord_detailShowsNoScaTotal() {
         launchApp()
@@ -118,6 +117,7 @@ class MoreFlowTest : FlowTestBase() {
                 "but the detail shows 'SCA CUPPING FORM … TOTAL SCORE 30.00'",
             has(hasText("TOTAL SCORE")) && has(hasText("30.00")),
         )
+        assertFalse("nor the SCA block with only the default 10s", has(hasText("SCA CUPPING FORM")))
     }
 
     // ───────────── design §2.3.4: photos survive edits and are deleted with the record ─────────────
@@ -211,9 +211,11 @@ class MoreFlowTest : FlowTestBase() {
         clickText("⭐ 내 레시피")
         clickText("+ 새 레시피 만들기")
         waitForText("내 레시피")
-        clickText("+ 새 레시피 만들기")
+        // form-10: the screen opens with the new-recipe form already open (web toggles it open inline)
         typeInto("예: 밝은 산미용 3단 푸어", "산미용 3단 푸어")
         // name, dripper, filter, grind, dose, water, temp, time
+        node(hasSetTextAction(), 1).performClick()
+        waitFor(button("오리가미 드리퍼 S"), "owned dripper suggested (web dripper-datalist)")
         node(hasSetTextAction(), 1).performTextInput("V60")
         node(hasSetTextAction(), 4).performTextInput("16")
         node(hasSetTextAction(), 5).performTextInput("250")

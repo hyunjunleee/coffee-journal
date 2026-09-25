@@ -51,4 +51,54 @@ class EntryDisplayTest {
         assertEquals(FormMode.EXTRACT, EntryDisplay.formModeFor(""))
         assertEquals("케냐 (7/15)", EntryDisplay.defaultRecipeName(en))
     }
+
+    // form-2 / flows-2: the three default 10s are not a score (design §2.3.3)
+    @Test fun scaBlockOnlyForScoredOrAnnotatedRecords() {
+        val defaults = com.coffeejournal.domain.rules.ScaScoring.defaultAttributes()
+        assertFalse(EntryDisplay.showsScaBlock(defaults, emptyMap()))
+        assertFalse(EntryDisplay.showsScaBlock(emptyMap(), mapOf("flavor" to "  ")))
+        assertTrue(EntryDisplay.showsScaBlock(defaults + ("flavor" to 8.0), emptyMap()))
+        assertTrue(EntryDisplay.showsScaBlock(defaults + ("acidityIntensity" to 3.0), emptyMap()), "an intensity alone keeps the block")
+        assertTrue(EntryDisplay.showsScaBlock(defaults, mapOf("acidity" to "밝다")), "a memo alone keeps the block")
+        assertNull(EntryDisplay.scaTotalText(Entry(id = "u", createdAt = created, attributes = defaults)))
+    }
+
+    // NaN from a backup file must not crash the header score
+    @Test fun nonFiniteAttributesAreIgnored() {
+        val en = Entry(id = "n", createdAt = created, attributes = mapOf("flavor" to 8.0, "uniformity" to Double.NaN, "body" to Double.POSITIVE_INFINITY))
+        assertEquals("8.00 / 100", EntryDisplay.scaTotalText(en))
+    }
+
+    // form-12
+    @Test fun deleteConfirmationNamesTheRecord() {
+        assertEquals(
+            "“케냐 AA” 기록을 정말 삭제할까요?\n\n삭제한 기록은 복구할 수 없어요. 봉투 사진도 함께 지워져요.",
+            EntryDisplay.deleteConfirmText(Entry(id = "a", createdAt = created, name = "케냐 AA")),
+        )
+        assertTrue(EntryDisplay.deleteConfirmText(Entry(id = "b", createdAt = created, category = Category.CAFE, cafeName = "OO카페")).startsWith("“OO카페” 기록을"))
+        assertTrue(EntryDisplay.deleteConfirmText(Entry(id = "c", createdAt = created, cuppingPlace = "FELT")).startsWith("“FELT” 기록을"))
+        assertTrue(EntryDisplay.deleteConfirmText(Entry(id = "d", createdAt = created)).startsWith("기록을 정말 삭제할까요?"))
+    }
+
+    // form-13
+    @Test fun recipeSavedMessageSaysWhereToFindIt() {
+        assertEquals(
+            "\"아침 레시피\" 이름으로 내 레시피에 저장했어요. 새 기록의 \"⭐ 내 레시피\" 버튼에서 다시 꺼내 쓰실 수 있어요.",
+            EntryDisplay.recipeSavedText("아침 레시피"),
+        )
+    }
+
+    // data-5: the detail's best key is the home group key (each component of a custom blend)
+    @Test fun bestKeysFollowTheHomeGroups() {
+        val single = Entry(id = "s", createdAt = created, name = "벤사 (리브레)")
+        assertEquals(listOf("벤사"), bestKeysOf(single))
+        val blend = Entry(
+            id = "b", createdAt = created, name = "아침 블렌드", beanMode = com.coffeejournal.domain.model.BeanMode.CUSTOM_BLEND,
+            blendComponents = listOf(com.coffeejournal.domain.model.BlendComponent("벤사", "10"), com.coffeejournal.domain.model.BlendComponent("게이샤 (프릳츠)", "8")),
+        )
+        assertEquals(listOf("벤사", "게이샤"), bestKeysOf(blend))
+        assertEquals(com.coffeejournal.ui.extract.ExtractGrouping.groupKeys(blend), bestKeysOf(blend))
+        assertTrue(bestKeysOf(Entry(id = "c", createdAt = created, category = Category.CAFE, name = "벤사")).isEmpty())
+        assertTrue(bestKeysOf(Entry(id = "e", createdAt = created, name = "")).isEmpty())
+    }
 }

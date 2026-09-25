@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
@@ -24,6 +25,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,6 +44,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppType
@@ -84,7 +87,13 @@ internal fun FormTextField(
             value = value,
             onValueChange = onValueChange,
             modifier = fieldModifier,
-            placeholder = { Text(placeholder, style = AppType.body.copy(color = Ink.textFaint)) },
+            // a wrapping placeholder would make a one-line field taller than its neighbours in a two-column row
+            placeholder = {
+                Text(
+                    placeholder, style = AppType.body.copy(color = Ink.textFaint),
+                    maxLines = if (singleLine) 1 else Int.MAX_VALUE, overflow = if (singleLine) TextOverflow.Ellipsis else TextOverflow.Clip,
+                )
+            },
             singleLine = singleLine,
             minLines = minLines,
             isError = error != null,
@@ -166,7 +175,8 @@ internal fun CompactField(
     focusRequester: FocusRequester? = null,
     textAlign: TextAlign = TextAlign.Start,
 ) {
-    var m = modifier.heightIn(min = 36.dp).background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
+    // the box stays 36 dp tall; the surrounding layout reserves a 48 dp touch target
+    var m = modifier.minimumInteractiveComponentSize().heightIn(min = 36.dp).background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
     if (focusRequester != null) m = m.focusRequester(focusRequester)
     BasicTextField(
         value = value,
@@ -272,20 +282,32 @@ internal fun LauncherCard(
         }
         Text(spec, style = AppType.monoValue, modifier = Modifier.padding(top = 4.dp))
         if (!desc.isNullOrBlank()) Text(desc, style = AppType.bodyMuted, modifier = Modifier.padding(top = 6.dp))
-        Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(applyLabel, style = AppType.small.copy(color = Ink.text), modifier = Modifier.clickable(onClick = onApply).padding(vertical = 4.dp))
+        Row(Modifier.padding(top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+            TextLink(applyLabel, Ink.text, onApply)
             if (onDelete != null) {
-                Spacer(Modifier.width(14.dp))
-                Text("삭제", style = AppType.small.copy(color = Ink.bad), modifier = Modifier.clickable(onClick = onDelete).padding(vertical = 4.dp))
+                // kept well apart so the delete dialog is not opened by a slightly missed "apply" tap
+                Spacer(Modifier.width(20.dp))
+                TextLink("삭제", Ink.bad, onDelete)
             }
         }
     }
 }
 
-/** Small "×" remove control used by rows. */
+/** Minimum touch target of the small text / glyph controls below (design §8: 48 dp). */
+internal val MinTouch = 48.dp
+
+/** Plain text action (web text link): the text looks the same, the tappable area around it is at least 48 dp. */
+@Composable
+internal fun TextLink(text: String, color: Color, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(modifier.sizeIn(minWidth = MinTouch, minHeight = MinTouch).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+        Text(text, style = AppType.small.copy(color = color))
+    }
+}
+
+/** Small "✕" remove control used by rows: the glyph is unchanged, the tappable box around it is 48 dp. */
 @Composable
 internal fun RemoveButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
-    Box(modifier.size(32.dp).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
+    Box(modifier.size(MinTouch).clickable(onClick = onClick), contentAlignment = Alignment.Center) {
         Text("✕", style = AppType.small.copy(color = Ink.textFaint))
     }
 }
