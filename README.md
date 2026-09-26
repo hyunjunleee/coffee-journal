@@ -41,7 +41,7 @@ export ANDROID_HOME=/opt/android-sdk          # Android SDK 위치 (local.proper
 - GitHub Actions(`.github/workflows/android.yml`): 푸시·PR마다 전체 테스트 → 서명된 릴리스 APK를 아티팩트로 올린다. `v*` 태그를 푸시하면 GitHub Release에 APK가 첨부된다. 서명된 APK는 푸시할 때마다 GitHub의 **APK builds** 릴리스(태그 `apk-builds`) 한 곳에 `coffee-journal-<버전 코드>-<커밋>.apk`로 계속 쌓인다(만료 없음, 버전 코드가 클수록 최신). 저장소 Secrets에 `COFFEEJOURNAL_KEYSTORE_BASE64`(키 파일의 base64), `COFFEEJOURNAL_KEYSTORE_PASSWORD`, `COFFEEJOURNAL_KEY_ALIAS`, `COFFEEJOURNAL_KEY_PASSWORD`를 등록해야 서명된다.
 - 키를 잃어버리면 같은 앱으로 업데이트할 수 없으니 키 파일과 비밀번호는 따로 안전하게 보관한다.
 
-- 상세 지도(MapLibre)의 네이티브 라이브러리가 4개 ABI(arm64-v8a, armeabi-v7a, x86, x86_64) 모두 들어 있어(압축 전 약 49 MB) 하나의 APK로 어느 기기에나 설치됩니다. 네이티브 라이브러리는 압축해 넣어(`jniLibs.useLegacyPackaging`) 릴리스 APK는 약 33 MiB(상세 지도 전 약 18 MiB)이고, 설치할 때 기기에 맞는 것만 풀립니다.
+- APK에는 휴대폰용 ARM 네이티브 라이브러리(arm64-v8a, armeabi-v7a)만 들어 있어 하나의 APK로 거의 모든 휴대폰·태블릿에 설치됩니다. 에뮬레이터·일부 크롬북용 x86·x86_64는 뺐습니다(약 10 MB 절약). 네이티브 라이브러리(상세 지도의 MapLibre 등)는 압축해 넣어(`jniLibs.useLegacyPackaging`) 릴리스 APK는 약 23 MiB(상세 지도 전 약 18 MiB)이고, 설치할 때 기기에 맞는 것만 풀립니다.
 
 ### 알림 · 홈 화면 위젯 (Android)
 - 기타 탭 맨 아래 "알림 설정"에서 켜면 하루 한 번(기본 09:00) 보관함 원두의 예상 피크 시작일, 마시는 중 원두의 소진 임박(평소 원두량 기준 2잔 이하), Coffee D-day 마일스톤(30·100일 단위)을 알립니다. 종류별로 끌 수 있고, 같은 알림은 두 번 보내지 않습니다. Android 13 이상은 켤 때 알림 권한을 묻습니다(거절하면 꺼진 채로 안내). 알림을 누르면 원두 보관함 또는 홈이 열립니다.
