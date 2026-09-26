@@ -15,6 +15,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.coffeejournal.data.backup.BackupService
 import com.coffeejournal.ui.settings.DisplayPrefs
 import com.coffeejournal.ui.settings.SettingsTexts
+import com.coffeejournal.ui.theme.AppHeader
 import com.coffeejournal.ui.theme.BodyFont
 import com.coffeejournal.ui.theme.Display
 import com.coffeejournal.ui.theme.DisplaySettings
@@ -41,7 +42,7 @@ import org.robolectric.annotation.GraphicsMode
 class SettingsFlowTest : CoverageFlowBase() {
     private val prefs get() = koinGet<DisplayPrefs>()
     private val gear = hasTestTag("open-settings")
-    private val header = "coffee_journal / 2026"
+    private val header = AppHeader.TITLE
 
     private fun openSettings() {
         tap(gear)

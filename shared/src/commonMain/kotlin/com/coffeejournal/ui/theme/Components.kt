@@ -709,6 +709,12 @@ fun FitText(text: String, style: TextStyle, modifier: Modifier = Modifier, minFo
 @Composable
 fun Dp.fontScaled(cap: Float = 1.6f): Dp = this * LocalDensity.current.fontScale.coerceIn(1f, cap)
 
+/** The tab header's words. The web's title reads "coffee_journal / 2026"; the app drops the year (user request). */
+object AppHeader {
+    const val TITLE = "coffee_journal"
+    const val TAGLINE = "[ personal coffee archive ]"
+}
+
 /** Top header shared by all tabs: title, tagline, a right-hand count and the small gear that opens 설정. */
 @Composable
 fun TopHeader(title: String, tagline: String, right: String?, modifier: Modifier = Modifier, onSettings: (() -> Unit)? = null) {

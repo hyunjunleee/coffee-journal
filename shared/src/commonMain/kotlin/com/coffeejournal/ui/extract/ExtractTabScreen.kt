@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextAlign
+import com.coffeejournal.ui.theme.AppHeader
 import com.coffeejournal.ui.theme.FitText
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -72,7 +73,7 @@ fun ExtractTabScreen(nav: NavHostController) {
     Box(Modifier.fillMaxSize()) {
         // ends at the keyboard, so the search / D-day / summary fields scroll above it
         LazyColumn(Modifier.fillMaxSize().imeOverlapPadding(), contentPadding = PaddingValues(bottom = 96.dp)) {
-            item { TopHeader("coffee_journal / 2026", "[ personal coffee archive ]", if (state.loaded) "${state.entryCount} entries" else null, onSettings = { nav.navigate(Route.Settings) }) }
+            item { TopHeader(AppHeader.TITLE, AppHeader.TAGLINE, if (state.loaded) "${state.entryCount} entries" else null, onSettings = { nav.navigate(Route.Settings) }) }
             item {
                 if (state.loaded) DdaySection(
                     start = state.ddayStart, label = state.ddayLabel, milestone = state.ddayMilestone, onSave = vm::saveDday,

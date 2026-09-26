@@ -37,6 +37,7 @@ import androidx.navigation.NavHostController
 import coil3.compose.AsyncImage
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.ui.nav.Route
+import com.coffeejournal.ui.theme.AppHeader
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Badge
@@ -58,7 +59,7 @@ fun MiscTabScreen(nav: NavHostController) {
 
     Column(Modifier.fillMaxSize()) {
         // the web header is global: every tab shows the record count
-        TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = state.entryCount?.let { "$it entries" }, onSettings = { nav.navigate(Route.Settings) })
+        TopHeader(title = AppHeader.TITLE, tagline = AppHeader.TAGLINE, right = state.entryCount?.let { "$it entries" }, onSettings = { nav.navigate(Route.Settings) })
         Box(Modifier.fillMaxSize()) {
             LazyColumn(Modifier.fillMaxSize().testTag("misc-list"), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, top = 12.dp, bottom = 96.dp)) {
                 item(key = "type-tabs") {
