@@ -15,13 +15,24 @@ on:
     tags: ['v*']
   pull_request:
   workflow_dispatch:
+    inputs:
+      dependency_verification:
+        description: >-
+          strict: stop on any dependency without a recorded checksum (pushes and PRs always run strict).
+          lenient: log every missing or wrong checksum and keep building, to audit gradle/verification-metadata.xml.
+        type: choice
+        options: [strict, lenient]
+        default: strict
 
 permissions:
   contents: read
 
 concurrency:
-  group: android-${{ github.ref }}
+  group: android-${{ github.ref }}-${{ github.event_name }}
   cancel-in-progress: true
+
+env:
+  VERIFICATION_MODE: ${{ inputs.dependency_verification || 'strict' }}
 
 jobs:
   build:
@@ -40,16 +51,7 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       - name: Unit and flow tests
-        run: ./gradlew :shared:testDebugUnitTest :androidApp:testDebugUnitTest --no-daemon
-
-      - name: Keep test reports
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: test-reports
-          path: |
-            shared/build/reports/tests/
-            androidApp/build/reports/tests/
+        run: ./gradlew :shared:testDebugUnitTest :androidApp:testDebugUnitTest --no-daemon --dependency-verification="$VERIFICATION_MODE"
 
       - name: Decode the release keystore
         env:
@@ -67,7 +69,18 @@ jobs:
           COFFEEJOURNAL_KEYSTORE_PASSWORD: ${{ secrets.COFFEEJOURNAL_KEYSTORE_PASSWORD }}
           COFFEEJOURNAL_KEY_ALIAS: ${{ secrets.COFFEEJOURNAL_KEY_ALIAS }}
           COFFEEJOURNAL_KEY_PASSWORD: ${{ secrets.COFFEEJOURNAL_KEY_PASSWORD }}
-        run: ./gradlew :androidApp:assembleRelease --no-daemon
+        run: ./gradlew :androidApp:assembleRelease --no-daemon --dependency-verification="$VERIFICATION_MODE"
+
+      - name: Keep test and dependency-verification reports
+        if: failure() || env.VERIFICATION_MODE == 'lenient'
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            shared/build/reports/tests/
+            androidApp/build/reports/tests/
+            build/reports/dependency-verification/
+          if-no-files-found: ignore
 
       - name: Name the APK
         run: |
