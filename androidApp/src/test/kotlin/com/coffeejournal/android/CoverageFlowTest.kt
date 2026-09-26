@@ -91,34 +91,36 @@ class CoverageFlowTest : CoverageFlowBase() {
         clickText("☕ 카페 레시피")
         waitForText("유명 스페셜티 카페들이 공개한 브루 가이드예요.", substring = true)
         val glitch = CafeRecipes.all.single { it.id == "glitch" }
-        waitForText("15g : 240g · 86°C · 오리가미 드리퍼") // web champ-spec, no grind for glitch
+        waitForText("14.5g : 260g · 86°C · 오리가미 드리퍼 (칼리타 웨이브 필터)") // web champ-spec, no grind for glitch
+        waitForText("출처: shop.glitchcoffee.com ↗")
         clickNode(button("이 레시피 적용 →"), CafeRecipes.all.indexOf(glitch))
 
-        waitForText("권장 범위: 86~93°C")
-        assertTrue(has(field("15")) && has(field("240")) && has(field("86")) && has(field("오리가미 드리퍼")))
+        waitForText("권장 범위: 86~90°C")
+        assertTrue(has(field("14.5")) && has(field("260")) && has(field("86")) && has(field("오리가미 드리퍼")) && has(field("칼리타 웨이브 필터")))
         assertEquals("f-grind = c.grind ('' for glitch)", 0, count(field("20")))
-        assertTrue("its time", has(field("2:25")))
+        assertTrue("the time the log gives", has(field("1:35")))
         waitForText("추출 예시: ${glitch.name} (참고, 수정 불가)")
-        waitForText("총 3차 추출 · 합계 물량 240g · 총 시간 2:25")
+        waitForText("총 4차 추출 · 합계 물량 260g · 총 시간 1:35")
         waitForText("✓ ${glitch.name} 그대로 부었어요")
-        assertTrue("the glitch steps are in the log", has(field("2차 푸어 (누적 140g)")))
+        assertTrue("the glitch steps are in the log", has(field("2차 푸어 (누적 60g)")))
 
         // a second recipe clears the log first (web clearSteps) and replaces the reference
         clickText("☕ 카페 레시피")
-        val wave = CafeRecipes.all.single { it.id == "kurasu-origami-wave-15g" }
-        waitForText("15g : 250g · 오리가미 드리퍼 (웨이브 필터) · 15 (클릭 기준)")
-        clickNode(button("이 레시피 적용 →"), CafeRecipes.all.indexOf(wave))
-        waitForText("추출 예시: ${wave.name} (참고, 수정 불가)")
-        assertFalse("no temp and no hint for this recipe", has(hasText("권장 범위", substring = true)))
-        assertFalse("old steps are gone", has(field("2차 푸어 (누적 140g)")))
-        assertTrue(has(field("웨이브 필터")) && has(field("15 (클릭 기준)")) && has(field("1:30")))
+        val origami = CafeRecipes.all.single { it.id == "kurasu-origami" }
+        waitForText("15g : 270g · 88°C · 오리가미 드리퍼 · 가늘게 (EK43 약 6.5)")
+        clickNode(button("이 레시피 적용 →"), CafeRecipes.all.indexOf(origami))
+        waitForText("추출 예시: ${origami.name} (참고, 수정 불가)")
+        waitForText("권장 범위: 88~90°C")
+        assertFalse("old steps are gone", has(field("2차 푸어 (누적 60g)")))
+        assertTrue(has(field("가늘게 (EK43 약 6.5)")) && has(field("1:20")))
 
         saveForm("카페 레시피 테스트 원두")
-        waitForText("✓ ${wave.name} 그대로 부었어요")
+        waitForText("✓ ${origami.name} 그대로 부었어요")
         val saved = entries().single { it.name == "카페 레시피 테스트 원두" }
-        assertEquals(listOf("15", "250", "", "오리가미 드리퍼", "웨이브 필터", "15 (클릭 기준)", "1:30"), listOf(saved.dose, saved.water, saved.temp, saved.dripper, saved.filter, saved.grind, saved.time))
-        assertEquals(RecipeRef(wave.name, wave.steps), saved.recipeRef)
-        assertEquals(wave.steps, saved.steps)
+        // no filter in this recipe: the one the first recipe set stays (web applies c.filter only when given)
+        assertEquals(listOf("15", "270", "88", "오리가미 드리퍼", "칼리타 웨이브 필터", "가늘게 (EK43 약 6.5)", "1:20"), listOf(saved.dose, saved.water, saved.temp, saved.dripper, saved.filter, saved.grind, saved.time))
+        assertEquals(RecipeRef(origami.name, origami.steps), saved.recipeRef)
+        assertEquals(origami.steps, saved.steps)
     }
 
     // ───────────── web 6696-6930: editing the steps log, the summary and the recipe diff ─────────────

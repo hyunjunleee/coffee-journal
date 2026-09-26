@@ -241,16 +241,20 @@ class FormMapperTest {
         assertNull(champ.openLauncher)
         assertEquals(6, champ.steps.size)
 
+        // Glitch's published guide (shop.glitchcoffee.com/en/pages/brew-guide): 14.5g, 260g poured, 86-90℃, Kalita Wave
         val glitch = FormMapper.applyCafeRecipe(base, CafeRecipes.all.first { it.id == "glitch" })
-        assertEquals("권장 범위: 86~93°C", glitch.tempHint)
+        assertEquals(listOf("14.5", "260", "86"), listOf(glitch.dose, glitch.water, glitch.temp))
+        assertEquals("권장 범위: 86~90°C", glitch.tempHint)
         assertEquals("글리치 커피 (Glitch Coffee & Roasters)", glitch.appliedRecipeRef?.name)
-        assertEquals(6, glitch.steps.size)
-        assertEquals("2:25", glitch.time)
-        assertEquals("내 필터", glitch.filter)
+        assertEquals(7, glitch.steps.size)
+        assertEquals("1:35", glitch.time) // no total time in the guide: the log ends with the last pour
+        assertEquals("칼리타 웨이브 필터", glitch.filter)
         assertEquals("", glitch.grind)
 
-        val wave = FormMapper.applyCafeRecipe(base, CafeRecipes.all.first { it.id == "kurasu-origami-wave-15g" })
-        assertEquals("웨이브 필터", wave.filter)
+        // a recipe without a filter keeps the one already in the form (web: only a given c.filter is applied)
+        val origami = FormMapper.applyCafeRecipe(base, CafeRecipes.all.first { it.id == "kurasu-origami" })
+        assertEquals("내 필터", origami.filter)
+        assertEquals(listOf("15", "270", "88", "1:20"), listOf(origami.dose, origami.water, origami.temp, origami.time))
     }
 
     @Test fun nameTypingFillsFarmFromParensOnlyWhenEmpty() {

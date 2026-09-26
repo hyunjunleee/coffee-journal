@@ -69,6 +69,8 @@ private fun Intro(text: String) {
 @Composable
 private fun ChampionsPanel(onApply: (Champions.Champion) -> Unit) {
     Intro("역대 월드 브루어스컵 우승자들의 실제 레시피예요. 대부분 희귀한 게이샤 등 특수한 원두 기준이라 그대로 따라 하기보다는, 비율·온도·붓는 방식의 아이디어를 참고용으로 보시면 좋아요. \"이 비율 적용\"을 누르면 새 기록 폼에 원두량/물량/온도가 채워져요.")
+    // the web calls these the champions' actual recipes; the numbers come from interviews and videos, not the WBrC
+    Text("우승 연도·이름·국가는 World Brewers Cup 대회 기록이고, 레시피 수치는 인터뷰·영상 등 공개 자료를 정리한 값이라 대회 공식 자료는 아니에요.", style = AppType.faint, modifier = Modifier.padding(bottom = 10.dp))
     Champions.all.asReversed().forEach { c ->
         LauncherCard(
             title = "${c.name} · ${c.country}", right = "WBrC ${c.year}",
@@ -89,7 +91,7 @@ private fun CafePanel(onApply: (CafeRecipes.Recipe) -> Unit) {
             if (!c.filter.isNullOrBlank()) append(" (${c.filter})")
             if (c.grind.isNotBlank()) append(" · ${c.grind}")
         }
-        LauncherCard(title = c.name, right = c.place, spec = spec, desc = c.desc, applyLabel = "이 레시피 적용 →", onApply = { onApply(c) })
+        LauncherCard(title = c.name, right = c.place, spec = spec, desc = c.desc, applyLabel = "이 레시피 적용 →", onApply = { onApply(c) }, sourceUrl = c.sourceUrl)
     }
 }
 

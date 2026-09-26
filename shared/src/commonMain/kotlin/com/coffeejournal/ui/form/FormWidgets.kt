@@ -51,6 +51,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.coffeejournal.ui.platform.openUrl
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
@@ -298,6 +299,7 @@ internal fun LauncherCard(
     onApply: () -> Unit,
     highlight: Boolean = false,
     onDelete: (() -> Unit)? = null,
+    sourceUrl: String? = null,
 ) {
     Column(
         Modifier.fillMaxWidth().padding(bottom = 8.dp)
@@ -318,9 +320,16 @@ internal fun LauncherCard(
                 Spacer(Modifier.width(20.dp))
                 TextLink("삭제", Ink.bad, onDelete)
             }
+            if (sourceUrl != null) {
+                Spacer(Modifier.width(20.dp))
+                TextLink("출처: ${sourceHost(sourceUrl)} ↗", Ink.textMuted, { openUrl(sourceUrl) })
+            }
         }
     }
 }
+
+/** "kurasu.kyoto" for a recipe's source link. */
+internal fun sourceHost(url: String): String = url.substringAfter("://").substringBefore('/').removePrefix("www.")
 
 /** Minimum touch target of the small text / glyph controls below (design §8: 48 dp). */
 internal val MinTouch = 48.dp

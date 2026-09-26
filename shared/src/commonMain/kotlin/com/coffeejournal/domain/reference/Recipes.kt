@@ -1,4 +1,5 @@
-// Generated from the web app reference data by scratchpad/site/gen_refs.py. Do not edit by hand.
+// Generated from the web app reference data by scratchpad/site/gen_refs.py. CafeRecipes were then corrected by hand
+// against the cafés' own published guides (each carries its sourceUrl); keep those corrections when regenerating.
 package com.coffeejournal.domain.reference
 
 import com.coffeejournal.domain.model.RecipeStep
@@ -25,6 +26,8 @@ object CafeRecipes {
         val id: String, val name: String, val place: String, val dripper: String, val filter: String?,
         val dose: String, val water: String, val temp: String?, val tempRange: String?, val time: String, val grind: String,
         val desc: String, val steps: List<RecipeStep>,
+        /** The café's own page the numbers were checked against; null when the web template gave no source. */
+        val sourceUrl: String? = null,
     )
 
     val all: List<Recipe> = listOf(
@@ -34,30 +37,32 @@ object CafeRecipes {
             RecipeStep("0:50", "190", "30", "2차 푸어"),
             RecipeStep("1:20", "", "70", "드로우다운"),
         )),
-        Recipe("glitch", "글리치 커피 (Glitch Coffee & Roasters)", "도쿄, 일본", "오리가미 드리퍼", null, "15", "240", "86", "86~93°C", "2:25", "", "글리치 커피 공식 레시피(Our Recipe). 물 온도는 86~93도 범위로 안내되는데, 낮은 쪽 기준으로 넣어뒀어요. 총 물량 240g을 붓고 최종 190~200g을 받아내는 방식이고, 2:20~2:30 사이에 마무리돼요.", listOf(
-            RecipeStep("0:00", "40", "10", "1차 푸어"),
-            RecipeStep("0:10", "", "25", "뜸들이기"),
-            RecipeStep("0:35", "100", "15", "2차 푸어 (누적 140g)"),
-            RecipeStep("0:50", "", "30", "1차 추출"),
-            RecipeStep("1:20", "100", "15", "3차 푸어 (누적 240g)"),
-            RecipeStep("1:35", "", "50", "마무리 추출"),
-        )),
-        Recipe("kurasu", "큐라스 (Kurasu Kyoto)", "교토, 일본", "V60", null, "13", "200", "91", null, "2:00", "중간 굵기", "교토의 스페셜티 카페 큐라스가 공개한 기본 V60 레시피. 라이트 로스트에 맞춘 표준형 3단계 붓기로, 원두나 로스팅에 따라 비율을 조금씩 조정해서 쓰는 걸 추천해요.", listOf(
+        // shop.glitchcoffee.com/en/pages/brew-guide, ORIGAMI DRIP 【HOT DRIP】: Paper Karita Wave, 86-90℃, 14.5g, yield
+        // 200-210g, ①0:00-0:05 30g ②0:20-0:25 30g ③0:50-1:05 100g ④1:20-1:35 100g (total 260g). No grind or total time.
+        Recipe("glitch", "글리치 커피 (Glitch Coffee & Roasters)", "도쿄, 일본", "오리가미 드리퍼", "칼리타 웨이브 필터", "14.5", "260", "86", "86~90°C", "", "", "글리치 커피 공식 브루 가이드의 오리가미 핫 드립 레시피. 물 온도는 86~90도로 안내되는데, 낮은 쪽 기준으로 넣어뒀어요. 30·30·100·100g 네 번에 나눠 총 260g을 붓고 추출액 200~210g을 받아요. 가이드에 분쇄도와 전체 추출시간은 없어서, 단계는 마지막 붓기가 끝나는 1:35까지예요.", listOf(
             RecipeStep("0:00", "30", "5", "1차 푸어"),
-            RecipeStep("0:05", "", "25", "뜸들이기"),
-            RecipeStep("0:30", "100", "15", "2차 푸어"),
-            RecipeStep("0:45", "", "15", "추출 대기"),
-            RecipeStep("1:00", "70", "10", "3차 푸어"),
-            RecipeStep("1:10", "", "50", "드로우다운"),
-        )),
-        Recipe("kurasu-origami-wave-15g", "큐라스 오리가미 웨이브 15g", "교토, 일본", "오리가미 드리퍼", "웨이브 필터", "15", "250", null, null, "1:30", "15 (클릭 기준)", "Kurasu Origami Wave 15g 레시피. 원두 15g에 물 250ml를 사용하고, 40ml·110ml·100ml로 세 번 나눠 부어요. 최종 추출액은 약 200ml, 표기 비율은 16ml/g이에요.", listOf(
-            RecipeStep("0:00", "40", "10", "1차 푸어"),
-            RecipeStep("0:10", "", "30", "뜸들이기"),
-            RecipeStep("0:40", "110", "10", "2차 푸어 (누적 150ml)"),
-            RecipeStep("0:50", "", "10", "대기"),
-            RecipeStep("1:00", "100", "10", "3차 푸어 (누적 250ml)"),
-            RecipeStep("1:10", "", "20", "마무리 추출"),
-        )),
+            RecipeStep("0:05", "", "15", "대기"),
+            RecipeStep("0:20", "30", "5", "2차 푸어 (누적 60g)"),
+            RecipeStep("0:25", "", "25", "대기"),
+            RecipeStep("0:50", "100", "15", "3차 푸어 (누적 160g)"),
+            RecipeStep("1:05", "", "15", "대기"),
+            RecipeStep("1:20", "100", "15", "4차 푸어 (누적 260g)"),
+        ), sourceUrl = "https://shop.glitchcoffee.com/en/pages/brew-guide"),
+        // kurasu.kyoto (2020): Coffee 13g, Water 200g, 90c~91c, "30g water 30sec bloom / Pour up to 100g / 60 sec /
+        // Pour up to 200g". Pour speed, grind and total time are left to the beans.
+        Recipe("kurasu", "큐라스 (Kurasu Kyoto)", "교토, 일본", "V60", null, "13", "200", "90", "90~91°C", "", "", "교토의 스페셜티 카페 큐라스가 매장에서 쓰는 기본 V60 레시피. 30g으로 30초 뜸을 들이고, 100g까지 부은 뒤 60초에 200g까지 채워요. 붓는 속도와 분쇄도, 전체 추출시간은 원두와 로스팅에 맞춰 조정한다고 안내돼요.", listOf(
+            RecipeStep("0:00", "30", "30", "뜸 (30초)"),
+            RecipeStep("0:30", "70", "30", "2차 푸어 (누적 100g)"),
+            RecipeStep("1:00", "100", "", "3차 푸어 (누적 200g)"),
+        ), sourceUrl = "https://kurasu.kyoto/blogs/kurasu-journal/how-to-brew-with-hario-v60-recipe-by-kurasu-kyoto"),
+        // kurasu.kyoto (2024, Kurasu Fushimi Inari): Coffee 15g, Water 270g (88-90℃), 40g in the first 30 s, 130g slowly in
+        // the next 30 s, all 270g poured before 80 s, then the dripper comes off. Produces 170-180g; fine grind (EK #6.5).
+        Recipe("kurasu-origami", "큐라스 오리가미 (Kurasu)", "교토, 일본", "오리가미 드리퍼", null, "15", "270", "88", "88~90°C", "", "가늘게 (EK43 약 6.5)", "큐라스 후시미이나리점이 공개한 오리가미 레시피. 처음 30초 안에 40g, 다음 30초 동안 130g을 천천히 붓고, 1:20 전까지 270g을 모두 부은 뒤 물이 남아 있어도 드리퍼를 떼어내요. 추출액은 170~180g이고, V60보다 조금 가늘게 갈아요.", listOf(
+            RecipeStep("0:00", "40", "30", "1차 푸어 (30초 안에)"),
+            RecipeStep("0:30", "130", "30", "2차 푸어 · 천천히 (누적 170g)"),
+            RecipeStep("1:00", "100", "20", "3차 푸어 (누적 270g, 1:20 전에 마무리)"),
+            RecipeStep("1:20", "", "", "드리퍼 분리"),
+        ), sourceUrl = "https://kurasu.kyoto/blogs/kurasu-journal/origami-dripper-brewing-recipe-how-we-do-it-at-kurasu"),
     )
 }
 
