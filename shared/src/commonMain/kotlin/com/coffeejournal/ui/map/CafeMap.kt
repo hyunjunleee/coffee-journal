@@ -31,11 +31,16 @@ import com.coffeejournal.data.repo.EntryRepository
 import com.coffeejournal.domain.model.CafePlace
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.GeoPoint
+import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.KoreaProjection
 import com.coffeejournal.domain.rules.KoreaRegions
 import com.coffeejournal.domain.rules.MapXY
+import com.coffeejournal.ui.map.detail.DetailMapLayer
+import com.coffeejournal.ui.map.detail.DetailMapPins
+import com.coffeejournal.ui.map.detail.DetailMapRoutes
+import com.coffeejournal.ui.map.detail.rememberDetailMapSupported
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
@@ -109,6 +114,7 @@ fun CafeMapSection(nav: NavHostController, koreaState: KoreaMapState, modifier: 
     val vm = koinViewModel<CafeMapViewModel>()
     val loaded by vm.spots.collectAsStateWithLifecycle()
     val spots = loaded ?: return
+    val detailMap = rememberDetailMapSupported()
     var selected by rememberSaveable { mutableStateOf<String?>(null) }
     val pins = remember(spots) {
         spots.mapNotNull { s -> s.at?.let { MapPin(s.key, s.name, it, s.visits.size, "${s.name}, 방문 ${s.visits.size}회") } }
@@ -123,20 +129,22 @@ fun CafeMapSection(nav: NavHostController, koreaState: KoreaMapState, modifier: 
             koreaState, CafeMapLogic.mapDescription(spots), pins, selected,
             onPinTap = { key -> selected = if (key == selected) null else key },
             shaded = shaded, onBackgroundTap = { selected = null },
+            // "상세 지도": the selected café, else what the 시·도 map shows
+            onOpenDetail = if (detailMap) { bounds ->
+                val pin = spots.firstOrNull { it.key == selected }?.let { DetailMapPins.cafes(listOf(it)).firstOrNull() }
+                nav.navigate(if (pin != null) DetailMapRoutes.pin(DetailMapLayer.CAFE, Scope.DOMESTIC, pin) else DetailMapRoutes.area(DetailMapLayer.CAFE, Scope.DOMESTIC, bounds))
+            } else null,
         )
         if (spots.isEmpty()) {
             EmptyNote("아직 카페 기록이 없어요. 카페 기록에 카페 이름을 적으면 여기에 모여요.", Modifier.padding(top = 10.dp))
             return@Column
         }
         spots.firstOrNull { it.key == selected }?.let { spot ->
-            HairlineCard(Modifier.padding(top = 10.dp)) {
-                Text(spot.name, style = AppType.cardTitle)
-                spot.point?.let { Text("📍 ${CafeMapLogic.placeLabel(it)}", style = AppType.small) }
-                Text("방문 ${spot.visits.size}회", style = AppType.faint)
-                spot.visits.forEach { en -> VisitRow(en) { nav.navigate(Route.EntryDetail(en.id)) } }
-                MapLinkButtons(spot.name, spot.point?.let { KoreaRegions.locate(it.lat, it.lng, 3.0)?.label } ?: "", spot.point, overseas = false)
-                GhostButton("지도에서 위치 변경", small = true, onClick = { nav.pickCafe(spot.name) }, modifier = Modifier.padding(top = 8.dp))
-            }
+            val detailPin = if (detailMap) DetailMapPins.cafes(listOf(spot)).firstOrNull() else null
+            CafeSpotPanel(
+                spot, nav, Modifier.padding(top = 10.dp),
+                onOpenDetail = detailPin?.let { p -> { nav.navigate(DetailMapRoutes.pin(DetailMapLayer.CAFE, Scope.DOMESTIC, p)) } },
+            )
         }
         val unplaced = spots.filter { it.at == null }
         if (unplaced.isNotEmpty()) {
@@ -146,6 +154,23 @@ fun CafeMapSection(nav: NavHostController, koreaState: KoreaMapState, modifier: 
                 unplaced.forEach { spot -> CafeLocationLine(spot.name, spot.visits.size, null) { nav.pickCafe(spot.name) } }
             }
         }
+    }
+}
+
+/**
+ * The selected café (the café map's panel and the detail map's): where it is, its visits, the map-app links, the
+ * picker, and "상세 지도에서 보기" when [onOpenDetail] is given.
+ */
+@Composable
+fun CafeSpotPanel(spot: CafeSpot, nav: NavHostController, modifier: Modifier = Modifier, onOpenDetail: (() -> Unit)? = null) {
+    HairlineCard(modifier) {
+        Text(spot.name, style = AppType.cardTitle)
+        spot.point?.let { Text("📍 ${CafeMapLogic.placeLabel(it)}", style = AppType.small) }
+        Text("방문 ${spot.visits.size}회", style = AppType.faint)
+        spot.visits.forEach { en -> VisitRow(en) { nav.navigate(Route.EntryDetail(en.id)) } }
+        MapLinkButtons(spot.name, spot.point?.let { KoreaRegions.locate(it.lat, it.lng, 3.0)?.label } ?: "", spot.point, overseas = false)
+        GhostButton("지도에서 위치 변경", small = true, onClick = { nav.pickCafe(spot.name) }, modifier = Modifier.padding(top = 8.dp))
+        if (onOpenDetail != null) GhostButton("상세 지도에서 보기", small = true, onClick = onOpenDetail, modifier = Modifier.padding(top = 8.dp))
     }
 }
 

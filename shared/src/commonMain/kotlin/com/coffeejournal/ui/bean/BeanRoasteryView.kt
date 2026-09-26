@@ -25,6 +25,7 @@ import com.coffeejournal.ui.bean.b.RoasteryMapCard
 import com.coffeejournal.ui.bean.b.SourceBeansInfo
 import com.coffeejournal.ui.bean.b.StatusSplitList
 import com.coffeejournal.ui.map.CafeMapSection
+import com.coffeejournal.ui.map.detail.rememberDetailMapSupported
 import com.coffeejournal.ui.map.rememberKoreaMapState
 import com.coffeejournal.ui.map.rememberWorldPinMapState
 import com.coffeejournal.ui.nav.Route
@@ -55,6 +56,7 @@ fun BeanRoasteryView(nav: NavHostController, data: BeanData) {
     val worldState = rememberWorldPinMapState()
     val model = remember(data.miscItems, data.records, scopeFilter) { FlatItemLogic.roasteryMap(data.miscItems, data.records, scopeFilter) }
     val cafes = scopeFilter == Scope.DOMESTIC && layer == MapLayer.CAFE
+    val detailMap = rememberDetailMapSupported()
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
         SubTabs(
             items = listOf(Scope.DOMESTIC, Scope.OVERSEAS), selected = scopeFilter, onSelect = { scopeFilter = it; selected = null },
@@ -74,6 +76,7 @@ fun BeanRoasteryView(nav: NavHostController, data: BeanData) {
             RoasteryMapCard(
                 model, scopeFilter, data.records, selected, onSelect = { selected = it }, onOpenEntry = { nav.navigate(Route.EntryDetail(it)) },
                 koreaState = koreaState, worldState = worldState,
+                onOpenDetailMap = if (detailMap) { route -> nav.navigate(route) } else null,
             )
             PrimaryButton("+ 추가", onClick = { nav.navigate(Route.FlatItemForm(type = MiscType.SOURCE)) }, modifier = Modifier.padding(top = 18.dp))
             SectionLabel("로스터리")

@@ -2,7 +2,7 @@
 // (gradle/third-party-notices.gradle.kts). Do not edit by hand.
 package com.coffeejournal.ui.about
 
-/** Every library in the Android app (151), with the licenses its POM declares. */
+/** Every library in the Android app (166), with the licenses its POM declares. */
 actual val platformLibraries: List<Library> = listOf(
     Library("androidx.activity", "activity", "1.12.4", "Activity", "https://developer.android.com/jetpack/androidx/releases/activity#1.12.4", listOf("Apache-2.0")),
     Library("androidx.activity", "activity-compose", "1.12.4", "Activity Compose", "https://developer.android.com/jetpack/androidx/releases/activity#1.12.4", listOf("Apache-2.0")),
@@ -104,11 +104,16 @@ actual val platformLibraries: List<Library> = listOf(
     Library("androidx.window", "window-core-android", "1.5.0", "WindowManager Core", "https://developer.android.com/jetpack/androidx/releases/window#1.5.0", listOf("Apache-2.0")),
     Library("androidx.work", "work-runtime", "2.12.0", "WorkManager Runtime", "https://developer.android.com/jetpack/androidx/releases/work#2.12.0", listOf("Apache-2.0")),
     Library("androidx.work", "work-runtime-ktx", "2.12.0", "WorkManager Kotlin Extensions", "https://developer.android.com/jetpack/androidx/releases/work#2.12.0", listOf("Apache-2.0")),
+    Library("co.touchlab", "kermit-android", "2.0.8", "Kermit", "https://github.com/touchlab/Kermit", listOf("Apache-2.0")),
+    Library("co.touchlab", "kermit-core-android", "2.0.8", "Kermit", "https://github.com/touchlab/Kermit", listOf("Apache-2.0")),
     Library("co.touchlab", "stately-concurrency-jvm", "2.1.0", "Stately", "https://github.com/touchlab/Stately", listOf("Apache-2.0")),
     Library("co.touchlab", "stately-concurrent-collections-jvm", "2.1.0", "Stately", "https://github.com/touchlab/Stately", listOf("Apache-2.0")),
     Library("co.touchlab", "stately-strict-jvm", "2.1.0", "Stately", "https://github.com/touchlab/Stately", listOf("Apache-2.0")),
     Library("com.google.accompanist", "accompanist-drawablepainter", "0.37.3", "Accompanist Drawable Painter library", "https://github.com/google/accompanist/", listOf("Apache-2.0")),
+    Library("com.google.code.gson", "gson", "2.10.1", "Gson", "https://github.com/google/gson", listOf("Apache-2.0")),
     Library("com.google.guava", "listenablefuture", "1.0", "Guava ListenableFuture only", "https://github.com/google/guava", listOf("Apache-2.0")),
+    Library("com.jakewharton.timber", "timber", "5.0.1", "Timber", "https://github.com/JakeWharton/timber", listOf("Apache-2.0")),
+    Library("com.squareup.okhttp3", "okhttp", "4.12.0", "okhttp", "https://square.github.io/okhttp/", listOf("Apache-2.0")),
     Library("com.squareup.okio", "okio-jvm", "3.15.0", "okio", "https://github.com/square/okio/", listOf("Apache-2.0")),
     Library("io.coil-kt.coil3", "coil-android", "3.3.0", "coil", "https://github.com/coil-kt/coil", listOf("Apache-2.0")),
     Library("io.coil-kt.coil3", "coil-compose-android", "3.3.0", "coil-compose", "https://github.com/coil-kt/coil", listOf("Apache-2.0")),
@@ -119,7 +124,7 @@ actual val platformLibraries: List<Library> = listOf(
     Library("io.insert-koin", "koin-compose-viewmodel-android", "4.2.2", "Koin", "https://insert-koin.io/", listOf("Apache-2.0")),
     Library("io.insert-koin", "koin-core-jvm", "4.2.2", "Koin", "https://insert-koin.io/", listOf("Apache-2.0")),
     Library("io.insert-koin", "koin-core-viewmodel-android", "4.2.2", "Koin", "https://insert-koin.io/", listOf("Apache-2.0")),
-    Library("org.jetbrains", "annotations", "23.0.0", "JetBrains Java Annotations", "https://github.com/JetBrains/java-annotations", listOf("Apache-2.0")),
+    Library("org.jetbrains", "annotations", "26.0.2-1", "JetBrains Java Annotations", "https://github.com/JetBrains/java-annotations", listOf("Apache-2.0")),
     Library("org.jetbrains.androidx.lifecycle", "lifecycle-common", "2.9.6", "Lifecycle-Common", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.androidx.lifecycle", "lifecycle-runtime", "2.9.6", "Lifecycle Runtime", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.androidx.lifecycle", "lifecycle-runtime-compose", "2.9.6", "Lifecycle Runtime Compose", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
@@ -135,6 +140,7 @@ actual val platformLibraries: List<Library> = listOf(
     Library("org.jetbrains.compose.animation", "animation-core", "1.10.2", "Compose Animation Core", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.annotation-internal", "annotation", "1.10.2", "Annotation", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.collection-internal", "collection", "1.10.2", "collections", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
+    Library("org.jetbrains.compose.components", "components-resources-android", "1.9.2", "Resources for Compose JB", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.foundation", "foundation", "1.10.2", "Compose Foundation", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.foundation", "foundation-layout", "1.10.2", "Compose Layouts", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.material", "material-ripple", "1.9.1", "Compose Material Ripple", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
@@ -149,10 +155,19 @@ actual val platformLibraries: List<Library> = listOf(
     Library("org.jetbrains.compose.ui", "ui-unit", "1.10.2", "Compose Unit", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.ui", "ui-util", "1.10.2", "Compose Util", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.kotlin", "kotlin-stdlib", "2.3.20", "Kotlin Stdlib", "https://kotlinlang.org/", listOf("Apache-2.0")),
+    Library("org.jetbrains.kotlin", "kotlin-stdlib-jdk7", "1.8.21", "Kotlin Stdlib Jdk7", "https://kotlinlang.org/", listOf("Apache-2.0")),
+    Library("org.jetbrains.kotlin", "kotlin-stdlib-jdk8", "1.8.21", "Kotlin Stdlib Jdk8", "https://kotlinlang.org/", listOf("Apache-2.0")),
     Library("org.jetbrains.kotlinx", "kotlinx-coroutines-android", "1.10.2", "kotlinx-coroutines-android", "https://github.com/Kotlin/kotlinx.coroutines", listOf("Apache-2.0")),
     Library("org.jetbrains.kotlinx", "kotlinx-coroutines-core-jvm", "1.10.2", "kotlinx-coroutines-core", "https://github.com/Kotlin/kotlinx.coroutines", listOf("Apache-2.0")),
     Library("org.jetbrains.kotlinx", "kotlinx-datetime-jvm", "0.7.1", "kotlinx-datetime", "https://github.com/Kotlin/kotlinx-datetime", listOf("Apache-2.0")),
     Library("org.jetbrains.kotlinx", "kotlinx-serialization-core-jvm", "1.9.0", "kotlinx-serialization-core", "https://github.com/Kotlin/kotlinx.serialization", listOf("Apache-2.0")),
     Library("org.jetbrains.kotlinx", "kotlinx-serialization-json-jvm", "1.9.0", "kotlinx-serialization-json", "https://github.com/Kotlin/kotlinx.serialization", listOf("Apache-2.0")),
     Library("org.jspecify", "jspecify", "1.0.0", "JSpecify annotations", "http://jspecify.org/", listOf("Apache-2.0")),
+    Library("org.maplibre.compose", "maplibre-compose-android", "0.12.1", "MapLibre Compose", "https://github.com/maplibre/maplibre-compose", listOf("BSD-3-Clause")),
+    Library("org.maplibre.gl", "android-plugin-scalebar-v9", "3.0.2", "MapLibre Android Scalebar Plugin", "https://github.com/maplibre/maplibre-plugins-android", listOf("BSD-2-Clause")),
+    Library("org.maplibre.gl", "android-sdk", "12.0.1", "MapLibre Android", "https://github.com/maplibre/maplibre-native", listOf("BSD-2-Clause")),
+    Library("org.maplibre.gl", "android-sdk-geojson", "6.0.1", "MapLibre Android Java Utilities", "https://github.com/maplibre/maplibre-java", listOf("Apache-2.0")),
+    Library("org.maplibre.gl", "android-sdk-turf", "6.0.1", "MapLibre Android Java Utilities", "https://github.com/maplibre/maplibre-java", listOf("Apache-2.0")),
+    Library("org.maplibre.gl", "maplibre-android-gestures", "0.0.4", "MapLibre Android Gestures Library", "https://github.com/maplibre/maplibre-gestures-android", listOf("BSD-2-Clause")),
+    Library("org.maplibre.spatialk", "geojson-jvm", "0.6.0", "Spatial K GeoJSON", "https://maplibre.org/spatial-k/", listOf("MIT")),
 )

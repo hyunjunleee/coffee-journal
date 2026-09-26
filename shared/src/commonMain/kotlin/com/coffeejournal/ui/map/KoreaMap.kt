@@ -31,6 +31,8 @@ import com.coffeejournal.domain.rules.KoreaRegions
 import com.coffeejournal.domain.rules.KoreaShapes
 import com.coffeejournal.domain.rules.MapXY
 import com.coffeejournal.ui.bean.b.MapPalette
+import com.coffeejournal.ui.map.detail.DetailMapCamera
+import com.coffeejournal.ui.map.detail.GeoBounds
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Ink
@@ -91,6 +93,15 @@ class KoreaMapState(provinceCode: String? = null) {
         viewport.show(KoreaFrames.national)
     }
 
+    /** The part of the country the map shows now (degrees), for the detail map to open on; null before layout. */
+    fun visibleBounds(): GeoBounds? {
+        val size = viewport.canvasSize
+        if (size.width <= 0f || size.height <= 0f) return null
+        val a = viewport.toMap(Offset.Zero)
+        val b = viewport.toMap(Offset(size.width, size.height))
+        return GeoBounds.ofMapRect(a.x, a.y, b.x, b.y)
+    }
+
     /** The 시·도 under a national-map tap; a tap just off a coast or an islet (within 12 km) still finds it. */
     fun provinceAt(p: MapXY): String? {
         val shapes = KoreaShapes.provinces
@@ -140,6 +151,7 @@ fun KoreaMap(
     shaded: Set<String> = emptySet(),
     onPointTap: ((MapXY) -> Unit)? = null,
     onBackgroundTap: () -> Unit = {},
+    onOpenDetail: ((GeoBounds) -> Unit)? = null,
 ) {
     BackHandler(enabled = !state.isNational) { state.showNational() }
     val measurer = rememberTextMeasurer()
@@ -201,16 +213,24 @@ fun KoreaMap(
                 drawLabels(measurer, districtLabel, districts.map { it.info.name.substringAfterLast(' ') to it.labelPoint }, vp)
             }
         },
-        overlay = { KoreaMapOverlay(state) },
+        overlay = { KoreaMapOverlay(state, onOpenDetail.takeIf { !state.isNational || selectedKey != null }) },
     )
 }
 
 @Composable
-private fun BoxScope.KoreaMapOverlay(state: KoreaMapState) {
+private fun BoxScope.KoreaMapOverlay(state: KoreaMapState, onOpenDetail: ((GeoBounds) -> Unit)?) {
     val code = state.provinceCode
     if (code != null) {
         val name = KoreaShapes.province(code)?.info?.name ?: ""
         GhostButton("← 전국 · $name", onClick = { state.showNational() }, small = true, modifier = Modifier.align(Alignment.TopStart).padding(8.dp).background(Ink.surface))
+    }
+    if (onOpenDetail != null) {
+        // the street-level map (OpenStreetMap) of what this map shows
+        GhostButton(
+            "상세 지도", small = true,
+            onClick = { (state.visibleBounds() ?: code?.let { DetailMapCamera.provinceBounds(it) })?.let(onOpenDetail) },
+            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp).background(Ink.surface),
+        )
     }
     if (state.viewport.isZoomed) {
         GhostButton("전체 보기", onClick = { state.viewport.reset() }, small = true, modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).background(Ink.surface))

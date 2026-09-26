@@ -22,6 +22,8 @@ junit = "4.13.2"
 # reminders (daily WorkManager check) and the home-screen widget (Jetpack Glance)
 work = "2.12.0"
 glance = "1.2.0"
+# the last maplibre-compose release built with Kotlin 2.2.21 / Compose Multiplatform 1.9.x (0.13+ need Kotlin 2.3); brings MapLibre Native Android 12.0.1
+maplibreCompose = "0.12.1"
 minSdk = "26"
 compileSdk = "36"
 targetSdk = "36"
@@ -68,6 +70,8 @@ work-runtime = { module = "androidx.work:work-runtime", version.ref = "work" }
 work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 glance-appwidget-testing = { module = "androidx.glance:glance-appwidget-testing", version.ref = "glance" }
+# detail map (OpenStreetMap vector tiles from OpenFreeMap), Android only: MapLibre Native behind a Compose wrapper
+maplibre-compose = { module = "org.maplibre.compose:maplibre-compose", version.ref = "maplibreCompose" }
 
 [plugins]
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

@@ -53,6 +53,8 @@ kotlin {
             implementation(libs.kotlinx.coroutines.android)
             implementation(libs.koin.android)
             implementation(libs.work.runtime)
+            // the detail map's renderer (MapLibre Native); common code only sees DetailMapRenderer
+            implementation(libs.maplibre.compose)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

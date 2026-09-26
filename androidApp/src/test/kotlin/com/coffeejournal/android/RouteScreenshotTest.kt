@@ -35,6 +35,7 @@ import com.coffeejournal.domain.model.RecipeRef
 import com.coffeejournal.domain.reference.CafeRecipes
 import com.coffeejournal.ui.form.timer.BrewClock
 import com.coffeejournal.ui.form.timer.BrewTimerResult
+import com.coffeejournal.ui.map.detail.DetailMapCamera
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.ReminderKind
 import com.coffeejournal.ui.nav.FormMode
@@ -181,6 +182,32 @@ class RouteScreenshotTest {
     }
     @Test fun mapPicker() = show(Route.MapPicker(target = "roastery", name = "커피 리브레", scope = Scope.DOMESTIC, point = "37.5446,127.0557"), "48-map-picker.png") {
         compose.onNode(hasText("← 전국 · 서울특별시") and hasClickAction()).assertExists()
+    }
+    /**
+     * The detail map (feature-plan-v2 §1.7) without network: the notice and the way back to the SGIS map. MapLibre
+     * does not render on the JVM, so the map states below use the tests' stand-in renderer.
+     */
+    @Test fun detailMap_offline() {
+        seedMapPlaces()
+        installFakeDetailMap(FakeDetailMapRenderer(online = false))
+        show(Route.DetailMap(bounds = DetailMapCamera.provinceBounds("11")!!.encode()), "65-detail-map-offline.png") {
+            compose.onNode(hasText("← 한국 지도로 돌아가기") and hasClickAction()).assertExists()
+        }
+    }
+    /** The detail map's layout around the (stand-in, grey) map: attribution, a selected roastery's panel. */
+    @Test fun detailMap_placeholder() {
+        seedMapPlaces()
+        installFakeDetailMap()
+        show(Route.DetailMap(camera = "37.5680,126.9900,16.0", focus = "펠트 청계천"), "66-detail-map-placeholder.png") {
+            compose.onNode(hasText("📍 서울특별시 중구")).assertExists()
+        }
+    }
+    /** "상세 지도에서 정확히": the crosshair over the (stand-in) map and the point it sets. */
+    @Test fun detailMap_pick() {
+        installFakeDetailMap()
+        show(Route.DetailMap(mode = "pick", name = "커피 리브레", camera = "37.5446,127.0557,16.0"), "67-detail-map-pick.png") {
+            compose.onNode(hasText("📍 서울특별시 성동구")).assertExists()
+        }
     }
     @Test fun bean_selection() = show(Route.Bean, "39-bean-selection.png") { beanView("생두 수입사", "Nordic Approach") }
     @Test fun bean_blend() = show(Route.Bean, "40-bean-blend.png") { beanView("블렌드", "+ 블렌드 기록 추가") }

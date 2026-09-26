@@ -50,6 +50,12 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+    packaging {
+        // One APK for every device (it is sideloaded), so it carries the detail map's native library (MapLibre) for all
+        // four ABIs: about 49 MB stored uncompressed (the default since minSdk 23). Compressed, the APK is about 17 MB
+        // smaller than that and the installer extracts only the device's own ABI.
+        jniLibs { useLegacyPackaging = true }
+    }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     testOptions {

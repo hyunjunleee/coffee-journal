@@ -85,6 +85,8 @@ fun spdx(name: String, url: String?): String {
         "apache" in n && "2" in n || "apache.org/licenses/license-2.0" in u -> "Apache-2.0"
         n == "mit" || "mit license" in n || "opensource.org/licenses/mit" in u -> "MIT"
         "bsd" in n && ("3" in n || "new" in n || "revised" in n) -> "BSD-3-Clause"
+        // MapLibre Native Android and its gesture / scale-bar plugins declare "BSD" with the 2-clause license's URL
+        "bsd" in n && ("2" in n || "simplified" in n) || "bsd" in n && "bsd-2-clause" in u -> "BSD-2-Clause"
         "public domain" in n -> "Public-Domain"
         "eclipse public license" in n && "2.0" in n -> "EPL-2.0"
         else -> throw GradleException("Unknown license \"$name\" ($url): add it to spdx() in gradle/third-party-notices.gradle.kts and to LicenseTexts")
