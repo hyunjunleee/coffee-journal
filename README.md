@@ -37,7 +37,7 @@ export ANDROID_HOME=/opt/android-sdk          # Android SDK 위치 (local.proper
 ### 배포 (고정 서명 키 · CI)
 - 릴리스 APK는 프로젝트 고정 키로 서명된다. 키 파일과 비밀번호는 저장소에 넣지 않고, 환경 변수(`COFFEEJOURNAL_KEYSTORE_FILE`, `COFFEEJOURNAL_KEYSTORE_PASSWORD`, `COFFEEJOURNAL_KEY_ALIAS`, `COFFEEJOURNAL_KEY_PASSWORD`)나 `~/.gradle/gradle.properties`의 `coffeejournal.keystore.*`로 넘긴다. 없으면 릴리스 APK는 서명 없이 만들어진다.
 - 버전 코드는 커밋 시각(2026-01-01부터의 분)이라, 뒤 커밋의 APK가 항상 앞 APK 위에 설치된다. 버전 이름에는 커밋 해시가 붙는다.
-- GitHub Actions(`.github/workflows/android.yml`): 푸시·PR마다 전체 테스트 → 서명된 릴리스 APK를 아티팩트로 올린다. `v*` 태그를 푸시하면 GitHub Release에 APK가 첨부된다. 저장소 Secrets에 `COFFEEJOURNAL_KEYSTORE_BASE64`(키 파일의 base64), `COFFEEJOURNAL_KEYSTORE_PASSWORD`, `COFFEEJOURNAL_KEY_ALIAS`, `COFFEEJOURNAL_KEY_PASSWORD`를 등록해야 서명된다.
+- GitHub Actions(`.github/workflows/android.yml`): 푸시·PR마다 전체 테스트 → 서명된 릴리스 APK를 아티팩트로 올린다. `v*` 태그를 푸시하면 GitHub Release에 APK가 첨부된다. 서명된 APK는 푸시할 때마다 GitHub의 **APK builds** 릴리스(태그 `apk-builds`) 한 곳에 `coffee-journal-<버전 코드>-<커밋>.apk`로 계속 쌓인다(만료 없음, 버전 코드가 클수록 최신). 저장소 Secrets에 `COFFEEJOURNAL_KEYSTORE_BASE64`(키 파일의 base64), `COFFEEJOURNAL_KEYSTORE_PASSWORD`, `COFFEEJOURNAL_KEY_ALIAS`, `COFFEEJOURNAL_KEY_PASSWORD`를 등록해야 서명된다.
 - 키를 잃어버리면 같은 앱으로 업데이트할 수 없으니 키 파일과 비밀번호는 따로 안전하게 보관한다.
 
 ### 출처 · 라이선스

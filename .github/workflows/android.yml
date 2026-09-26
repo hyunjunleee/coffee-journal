@@ -6,7 +6,8 @@
 #   COFFEEJOURNAL_KEY_ALIAS          key alias
 #   COFFEEJOURNAL_KEY_PASSWORD       key password (same as the keystore password for a PKCS12 keystore)
 # Without them the tests still run and the release APK is built unsigned (not installable), with a warning.
-# A tag v* also attaches the signed APK to a GitHub Release.
+# Every signed APK from a push is also collected in the "APK builds" release (one place, no expiry);
+# a tag v* attaches the signed APK to its own GitHub Release.
 name: Android
 
 on:
@@ -82,11 +83,14 @@ jobs:
             build/reports/dependency-verification/
           if-no-files-found: ignore
 
+      # coffee-journal-<versionCode>-<commit>.apk: the version code is computed exactly as androidApp/build.gradle.kts
+      # does (minutes from 2026-01-01 to the commit time), so a larger number is always the newer build.
       - name: Name the APK
         run: |
           mkdir -p dist
           apk=$(ls androidApp/build/outputs/apk/release/*.apk | head -n1)
-          cp "$apk" "dist/coffee-journal-$(git rev-parse --short HEAD)$( [[ "$apk" == *unsigned* ]] && echo -unsigned ).apk"
+          code=$(( ($(git log -1 --format=%ct) - 1767225600) / 60 ))
+          cp "$apk" "dist/coffee-journal-${code}-$(git rev-parse --short HEAD)$( [[ "$apk" == *unsigned* ]] && echo -unsigned ).apk"
           ls -l dist
 
       - uses: actions/upload-artifact@v6
@@ -94,6 +98,41 @@ jobs:
           name: coffee-journal-apk
           path: dist/*.apk
           if-no-files-found: error
+
+  # Every signed APK built from a push is kept in one place: the "APK builds" release (tag apk-builds) collects them
+  # all as downloadable files, with no expiry (run artifacts are deleted after 90 days).
+  collect:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: apk-builds-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: coffee-journal-apk
+          path: dist
+      - name: Add the APK to the "APK builds" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          signed=()
+          for f in dist/*.apk; do
+            [[ -f "$f" && "$f" != *-unsigned.apk ]] && signed+=("$f")
+          done
+          if [ ${#signed[@]} -eq 0 ]; then
+            echo "::warning::The APK is unsigned (signing secrets missing); nothing added to APK builds."
+            exit 0
+          fi
+          if ! gh release view apk-builds --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create apk-builds --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest=false \
+              --title "APK builds" \
+              --notes "자동 빌드마다 서명된 APK가 이 한 곳에 쌓입니다. 파일 이름은 coffee-journal-<버전 코드>-<커밋>.apk이고, 버전 코드가 클수록 최신입니다. 모두 같은 키로 서명되어 뒤 버전을 앞 버전 위에 덮어 설치할 수 있어요."
+          fi
+          gh release upload apk-builds "${signed[@]}" --repo "$GITHUB_REPOSITORY" --clobber
 
   release:
     if: startsWith(github.ref, 'refs/tags/v')
