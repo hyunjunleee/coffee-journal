@@ -5,7 +5,7 @@
 - 노트 설명: `cases.json`의 `note`
 - 맛 묘사로 노트 찾기: `cases.json`의 `describe`
 
-시스템 지시는 `system_prompt_ko.txt`입니다. 평가 항목은 다음과 같습니다.
+시스템 지시는 `system_prompt_ko.txt`입니다. 앱은 같은 글을 "Gemini + Google 검색", GPT, Claude 방식의 지시로 쓰고, "Gemini 무료 + Tavily" 방식(Tavily가 찾은 글을 번호를 붙여 넘기는 방식)에는 `sources_prompt_ko.txt`를 씁니다. 두 파일은 앱의 `NoteHelperPrompts`와 글자 하나까지 같아야 하고, 앱 테스트(`AiPlatformTest`)가 확인합니다. 한쪽을 고치면 다른 쪽도 고칩니다. 평가 항목은 다음과 같습니다.
 
 - 출처가 붙은 답의 비율
 - 출처 수와 종류(기관 / 개인 글 / 기타)

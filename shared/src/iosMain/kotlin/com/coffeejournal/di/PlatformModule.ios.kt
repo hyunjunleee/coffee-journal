@@ -5,6 +5,10 @@ import com.coffeejournal.data.db.buildAppDatabase
 import com.coffeejournal.data.db.iosDatabaseBuilder
 import com.coffeejournal.data.photo.IosPhotoStore
 import com.coffeejournal.data.photo.PhotoStore
+import com.coffeejournal.ui.ai.AiHttp
+import com.coffeejournal.ui.ai.IosAiHttp
+import com.coffeejournal.ui.ai.IosSecretStore
+import com.coffeejournal.ui.ai.SecretStore
 import com.coffeejournal.ui.notify.IosReminderPlatform
 import com.coffeejournal.ui.notify.ReminderPlatform
 import org.koin.core.module.Module
@@ -14,4 +18,7 @@ actual val platformModule: Module = module {
     single<AppDatabase> { iosDatabaseBuilder().buildAppDatabase() }
     single<PhotoStore> { IosPhotoStore() }
     single<ReminderPlatform> { IosReminderPlatform() }
+    // AI 노트 도우미: not connected on iOS yet (Keychain and NSURLSession would go here)
+    single<AiHttp> { IosAiHttp() }
+    single<SecretStore> { IosSecretStore() }
 }

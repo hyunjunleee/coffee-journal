@@ -92,4 +92,14 @@ export ANDROID_HOME=/opt/android-sdk
 ## 웹 동작 이식 원칙
 - 데이터 필드명·값(카테고리 '원두/카페/커핑', 패키지 standard/dripbag/sample, 커핑 유형 퍼블릭/홈커핑/수업 등)은 웹과 동일하게 유지한다(백업 호환).
 - 웹의 버그로 확인된 항목(설계서 §2.3)은 고쳐서 구현한다.
-- AI 기능·숨김 기능은 구현하지 않는다.
+- 웹의 AI 기능·숨김 기능은 구현하지 않는다(데이터 필드는 백업 호환용으로 보존). 앱 고유의 AI 노트 도우미는 아래 절과 `docs/ai-note-helper-plan.md` 12장을 따른다.
+
+## AI 노트 도우미 헬퍼 (`ui/ai`, 재사용)
+- 키는 앱에 넣지 않는다. 사용자의 키는 `SecretStore`(platformModule: Android `AndroidSecretStore` = Android Keystore AES-256/GCM + `noBackupFilesDir/ai-keys`, iOS 미연결)로만 읽고 쓴다. DB·로그·SavedStateHandle·`rememberSaveable`에 두지 않는다(`AiHttpRequest.toString()`은 헤더 값을 찍지 않음). 키 이름은 `NoteHelperService.secretName(slot)`.
+- HTTP는 `AiHttp`(platformModule: Android `AndroidAiHttp` = `HttpURLConnection`, 연결 15초·읽기 120초; iOS 미연결). 새 HTTP 라이브러리를 넣지 않는다. 요청 본문은 kotlinx.serialization `buildJsonObject`, 응답은 `AiJson`(느슨한 `JsonElement` 읽기).
+- 방식별 요청·응답: `GeminiApi`(generateContent, 그라운딩 `groundedAnswer`, 위치는 세그먼트 글 먼저 찾고 없으면 UTF-8 바이트), `TavilyApi` + `SourcedAnswer`([n] 표시 해석, 인용 대조), `OpenAiApi`(Responses, url_citation → 문장 끝 번호, 글 속 마크다운 링크 제거), `ClaudeApi`(Messages, 웹 검색 도구 버전은 모델별, `claude-opus-5`만 fallbacks, pause_turn 재요청은 `NoteHelperService`). 모두 `GroundedAnswer`(문단 → 문장·간격 `AnswerRun`, 번호, 출처, 인용 확인)로 바꾼다. 번호 붙이기는 `AnswerComposer.compose(text, citations)` 하나로.
+- 오류는 `AiErrors.gemini/tavily/openAi/claude(status, body)` → `AiError`(한국어 안내, 힌트, 서비스 원문, 설정 링크, 키 확인 한 단어). 새 상태 코드는 여기에 더하고 `AiErrorsTest`에 고정한다.
+- 프롬프트는 `NoteHelperPrompts` 한 곳. 시스템 지시는 `tools/ai-eval/system_prompt_ko.txt`·`sources_prompt_ko.txt`와 글자까지 같아야 하고 질문 틀은 `eval.py question()`과 같아야 한다(`AiPlatformTest`). 한쪽을 고치면 둘 다 고친다.
+- 비밀이 아닌 설정은 `AiPrefs`(`device.ai.provider`, `device.ai.model.<방식>`, `device.ai.consent.<방식>`; 백업 제외).
+- 테스트: 공용 테스트는 `FakeAiHttp`/`MemorySecretStore`(commonTest), 흐름 테스트는 `testPlatformModule`이 묶는 같은 이름의 가짜(androidApp)와 `AiSetup.ready(방식)`, `AiReplies`(가짜 응답). 가짜 응답 JSON에는 "synthetic"이라고 적는다. Robolectric에는 AndroidKeyStore가 없다.
+- 기록 폼으로 돌려주기: 답 화면이 이전 목적지의 SavedStateHandle에 `NoteHelperResult.KEY`(JSON 목록)를 넣고, 폼이 `addActualNotes`로 중복 없이 붙인다(`BrewTimerResult`와 같은 방식).

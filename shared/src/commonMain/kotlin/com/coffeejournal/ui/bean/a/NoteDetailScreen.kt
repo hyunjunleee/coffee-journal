@@ -23,8 +23,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.BeanRecord
+import com.coffeejournal.ui.ai.AiTexts
+import com.coffeejournal.ui.ai.NoteMode
 import com.coffeejournal.ui.bean.BeanViewModel
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.AppIcons
@@ -58,14 +61,29 @@ fun NoteDetailScreen(nav: NavHostController, kind: String, noteKey: String) {
             // nothing until the records have loaded, instead of a flash of the empty copy
             !data.loaded -> Unit
             entry == null -> EmptyNote("이 노트로 기록된 원두가 아직 없어요.", Modifier.padding(Dimens.gutter))
-            else -> NoteCombinations(nav, kind, combinations, openGroups, onToggle = { index -> openGroups = if (index in openGroups) openGroups - index else openGroups + index })
+            else -> NoteCombinations(
+                nav, kind, combinations, openGroups,
+                onToggle = { index -> openGroups = if (index in openGroups) openGroups - index else openGroups + index },
+                // AI 노트 도우미, mode A: what this note means, from web sources
+                onAsk = dropUnlessResumed { nav.navigate(Route.NoteHelper(mode = NoteMode.NOTE.key, query = entry.label)) },
+            )
         }
     }
 }
 
 @Composable
-private fun NoteCombinations(nav: NavHostController, kind: String, combinations: List<NoteStats.Combination>, openGroups: Set<Int>, onToggle: (Int) -> Unit) {
+private fun NoteCombinations(
+    nav: NavHostController,
+    kind: String,
+    combinations: List<NoteStats.Combination>,
+    openGroups: Set<Int>,
+    onToggle: (Int) -> Unit,
+    onAsk: () -> Unit,
+) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, top = 12.dp, bottom = 96.dp)) {
+        item(key = "ask") {
+            GhostButton(AiTexts.ASK_FROM_NOTE, small = true, onClick = onAsk, modifier = Modifier.padding(bottom = 8.dp))
+        }
         combinations.forEachIndexed { index, group ->
             val open = index in openGroups
             item(key = "head$index") {
