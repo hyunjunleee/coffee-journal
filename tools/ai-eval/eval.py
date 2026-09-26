@@ -315,17 +315,47 @@ def selftest():
     print(f"selftest ok ({len(terms)} wheel terms, {len(subs)} note categories)")
 
 
+def probe(models, out_dir):
+    """One short question per model, without and with Google Search, to see which models this key may use and which
+    of them ground for free (new projects lose older models: gemini-2.5-flash answers 404 "no longer available to new
+    users")."""
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        sys.exit("GEMINI_API_KEY is not set")
+    ask = '커피 테이스팅 노트에서 "bergamot"은 무슨 뜻인지 한 문장으로.'
+    lines = ["# Model probe", "", "| model | plain | with google_search | sources | message |", "|---|---|---|---|---|"]
+    for model in models:
+        plain = {"contents": [{"role": "user", "parts": [{"text": ask}]}], "generationConfig": {"maxOutputTokens": 60}}
+        st1, r1, _ = call(model, key, plain, timeout=60)
+        time.sleep(3)
+        st2, r2, _ = call(model, key, request_body("짧게 답한다. 반드시 검색한다.", ask), timeout=90)
+        grounded = analyse(r2) if st2 == 200 else {}
+        msg = ""
+        for st, r in ((st2, r2), (st1, r1)):
+            if st != 200:
+                msg = (r.get("error", {}).get("message", "") if isinstance(r, dict) else str(r))[:220].replace("|", "/").replace("\n", " ")
+                break
+        lines.append(f"| {model} | {st1} | {st2} | {len(grounded.get('sources', []))} | {msg} |")
+        print(lines[-1], flush=True)
+        time.sleep(3)
+    Path(out_dir).mkdir(parents=True, exist_ok=True)
+    (Path(out_dir) / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--selftest", action="store_true")
-    p.add_argument("--model", default="gemini-2.5-flash")
+    p.add_argument("--model", default="gemini-3.8-flash")
     p.add_argument("--notes", type=int, default=12)
     p.add_argument("--describes", type=int, default=6)
     p.add_argument("--delay", type=float, default=7.0, help="seconds between requests (free tier per-minute limits)")
     p.add_argument("--out", default=str(HERE / "out"))
+    p.add_argument("--probe", default="", help="comma-separated models: one short question each, without and with search")
     args = p.parse_args()
     if args.selftest:
         selftest()
+    elif args.probe:
+        probe([m.strip() for m in args.probe.split(",") if m.strip()], args.out)
     else:
         run(args)
 
