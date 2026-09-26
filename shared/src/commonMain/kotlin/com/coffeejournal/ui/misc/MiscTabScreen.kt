@@ -28,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
@@ -36,6 +37,7 @@ import androidx.navigation.NavHostController
 import coil3.compose.AsyncImage
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.ui.nav.Route
+import com.coffeejournal.ui.form.TextLink
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Badge
@@ -59,7 +61,7 @@ fun MiscTabScreen(nav: NavHostController) {
         // the web header is global: every tab shows the record count
         TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = state.entryCount?.let { "$it entries" })
         Box(Modifier.fillMaxSize()) {
-            LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, top = 12.dp, bottom = 96.dp)) {
+            LazyColumn(Modifier.fillMaxSize().testTag("misc-list"), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, top = 12.dp, bottom = 96.dp)) {
                 item(key = "type-tabs") {
                     SubTabs(items = MiscListLogic.typeTabs, selected = state.type, onSelect = vm::selectType, labels = MiscListLogic.typeTabLabels)
                 }
@@ -91,6 +93,12 @@ fun MiscTabScreen(nav: NavHostController) {
                             onDelete = { deleteTarget = item },
                         )
                         Spacer(Modifier.height(10.dp))
+                    }
+                }
+                // not on the web: where the content, icons and libraries come from (출처 · 라이선스)
+                item(key = "about") {
+                    Box(Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
+                        TextLink("출처 · 오픈소스 라이선스 →", Ink.textMuted, { nav.navigate(Route.About) })
                     }
                 }
             }

@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.reference.FlavorWheel
+import com.coffeejournal.ui.about.Credits
 import com.coffeejournal.ui.form.Collapsible
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.CatDot
@@ -53,6 +54,8 @@ internal fun FlavorWheelSection(open: Boolean, actualNotes: List<String>, onTogg
         Spacer(Modifier.height(12.dp))
         val lower = actualNotes.map { it.lowercase() }
         FlavorWheel.categories.forEach { cat -> CategoryCard(cat, lower, onToggleTerm) }
+        // CC BY-NC-ND 4.0 asks for the attribution where the wheel is used
+        HintText(Credits.FLAVOR_WHEEL_ATTRIBUTION)
     }
 }
 

@@ -27,6 +27,7 @@ sealed interface Route {
     @Serializable data class VarietyDetail(val varietyKey: String) : Route
     @Serializable data class ProcessDetail(val name: String, val seg: String? = null) : Route
     @Serializable data class RoasteryDetail(val name: String) : Route
+    @Serializable data object About : Route
 }
 
 object FormMode {

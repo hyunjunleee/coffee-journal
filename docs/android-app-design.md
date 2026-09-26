@@ -69,6 +69,8 @@
 16. 원두 이름 입력 후 자동 채움(첫 등록 기록의 봉투 정보)은 빈 칸만 채운다. 웹은 이미 입력한 값까지 덮어써 사용자가 친 내용이 사라졌다(#6과 같은 원칙).
 17. 웹 데이터 이전은 웹처럼 "한 번만" 플래그로 막을 수 없어(백업마다 이전 전·후 데이터가 섞일 수 있음) 복원 때마다 멱등하게 적용한다. 그래서 1–5점 → 6–10점 변환은 7개 품질 항목에만 적용하고, 0–10점(2점 단위)인 Uniformity·Clean Cup·Sweetness의 2·4점은 실제 점수로 보고 그대로 둔다.
 18. 노트 칩 입력은 같은 노트를 중복으로 넣지 않는다(웹 "내가 느낀 노트"는 중복 허용).
+19. 카페 레시피 중 "공식"이라 적힌 3건(글리치 오리가미 핫, 큐라스 V60, 큐라스 오리가미)을 각 카페가 공개한 가이드 수치로 고쳤고(2026-09 확인), 카드에 출처 링크를 단다. 가이드에 없는 값(붓는 시간·분쇄도·전체 추출시간)은 비운다. 챔피언 레시피에는 "수치는 공개 자료 정리, 대회 공식 자료 아님" 안내를 붙인다.
+20. 기타 탭 맨 아래에 "출처 · 라이선스" 화면을 둔다: 데이터·디자인 출처와 조건(SCA·WCR 플레이버 휠 CC BY-NC-ND 4.0 표기 포함), 아이콘(Lucide ISC·Feather MIT) 전문, APK에 든 오픈소스 라이브러리 전체(빌드 시 생성). 플레이버 휠 아래에도 저작권 표기를 둔다.
 
 ---
 
@@ -218,6 +220,7 @@ coffee-journal/
 - `commonTest`: 도메인 규칙(이름 정규화, 범위 계산, 피크, SCA, 단계 요약·차이, 노트 정규화, 국가 판별), 백업 코덱 왕복(웹 샘플 JSON 포함), 저장 파이프라인.
 - Android 계측: Room 마이그레이션·DAO 스모크(선택).
 - 빌드 게이트: `:shared:testDebugUnitTest` + `:androidApp:testDebugUnitTest` + `:androidApp:assembleDebug`.
+- 공급망: 공식 저장소만 사용(Google Maven·Maven Central·Gradle Plugin Portal), 모든 의존성 파일은 `gradle/verification-metadata.xml`(SHA-256)로, Gradle 배포본은 `distributionSha256Sum`으로 검증. 앱 내 라이브러리 목록은 `checkThirdPartyNotices`가 빌드마다 의존성과 일치하는지 확인.
 - 화면 검증: 에뮬레이터 없이 Robolectric + Roborazzi로 실제 Compose 화면을 JVM에서 렌더해 PNG로 남긴다(`./gradlew :androidApp:recordRoborazziDebug` → `androidApp/screenshots/`). 테스트는 인메모리 Room(프레임워크 SQLite 드라이버)과 샘플 데이터(`SampleData`)를 주입한다.
 - 흐름 테스트: 같은 환경에서 실제 `App()`을 띄워 탭·입력으로 사용자 흐름 전체를 수행하고, 화면 문구와 저장된 데이터를 웹 원본 핸들러 기준으로 함께 검증한다(백업 왕복, 원자적 복원, 한글 IME 조합, 자정 전환, 연속 탭 경합, 저장 중 뒤로 가기 포함).
 - 렌더 매트릭스: 모든 라우트를 기본·320dp 폭·글자 1.3/2.0배로 렌더해 줄바꿈·잘림·겹침을 확인한다(`ScreenshotMatrixTest`).

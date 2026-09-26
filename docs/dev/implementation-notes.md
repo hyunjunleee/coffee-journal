@@ -10,6 +10,8 @@ export ANDROID_HOME=/opt/android-sdk
 - 커밋 전 반드시 위 명령이 exit 0 이어야 한다. 경고는 허용, 오류는 불가.
 - 단위 테스트는 `shared/src/commonTest/kotlin/com/coffeejournal/<패키지>/`에 둔다(kotlin-test). 화면 흐름·스크린샷 테스트는 `androidApp/src/test/kotlin/com/coffeejournal/android/`(Robolectric + Roborazzi, 인메모리 Room)에 둔다.
 - git 커밋: `git -c user.name=Claude -c user.email=noreply@anthropic.com commit -m "..."`.
+- 의존성 추가·버전 변경 시: ① `./gradlew :androidApp:updateThirdPartyNotices`(앱 내 라이브러리 목록 갱신, 안 하면 빌드가 실패) ② `./gradlew --write-verification-metadata sha256 help :androidApp:assembleRelease :shared:testDebugUnitTest :androidApp:testDebugUnitTest`(체크섬 기록) ③ 새로 생긴 `verification-metadata.xml` 항목의 그룹이 공식 배포처인지 확인 후 커밋. POM에 라이선스가 없거나 목록에 없는 라이선스면 ①이 실패하므로 `gradle/third-party-notices.gradle.kts`의 `spdx()`와 `LicenseTexts`에 추가한다.
+- 참고 데이터가 외부 기관·가게의 자료라고 적을 때는 그 공식 페이지와 수치를 대조하고 출처 URL을 남긴다(`CafeRecipes.sourceUrl`, `Credits`). 공식 자료에 없는 값은 지어내지 않고 비운다.
 
 ## 패키지 소유 규칙
 | 기능 | 패키지 | 소유 파일 |

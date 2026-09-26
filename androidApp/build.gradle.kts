@@ -31,9 +31,12 @@ android {
             isIncludeAndroidResources = true
             isReturnDefaultValues = true
             all { test ->
-                // Robolectric fetches android-all jars at runtime; use the Google mirror of Maven Central.
-                test.systemProperty("robolectric.dependency.repo.url", "https://maven-central.storage-download.googleapis.com/maven2")
-                test.systemProperty("robolectric.dependency.repo.id", "mavenCentralMirror")
+                // Robolectric fetches its android-all jars from Maven Central at run time; a build machine that set a
+                // mirror (settings.gradle.kts) hands it to Robolectric too.
+                providers.gradleProperty("coffeejournal.mavenCentralMirror").orNull?.let { mirror ->
+                    test.systemProperty("robolectric.dependency.repo.url", mirror.trimEnd('/'))
+                    test.systemProperty("robolectric.dependency.repo.id", "mavenCentralMirror")
+                }
                 test.maxHeapSize = "2g"
             }
         }
@@ -97,3 +100,6 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     sqliteHostNatives(libs.sqlite.bundled.jvm)
 }
+
+// In-app list of the libraries shipped in the APK (출처 · 라이선스 screen), kept in step with the dependencies.
+apply(from = rootProject.file("gradle/third-party-notices.gradle.kts"))

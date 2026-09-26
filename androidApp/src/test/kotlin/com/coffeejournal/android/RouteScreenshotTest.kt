@@ -111,6 +111,7 @@ class RouteScreenshotTest {
     @Test fun blendForm() = show(Route.BlendForm("bl1"), "41-blend-form.png")
     @Test fun flatItemForm() = show(Route.FlatItemForm(type = "source", itemId = "m4"), "42-flat-item-form.png")
     @Test fun countryDetail() = show(Route.CountryDetail("Ethiopia"), "43-country-detail.png")
+    @Test fun about() = show(Route.About, "45-about.png")
     @Test fun variety_detail() = show(Route.VarietyDetail("gesha"), "35-variety-detail.png")
     @Test fun process_detail() = show(Route.ProcessDetail("워시드", "워시드"), "36-process-detail.png")
 }
