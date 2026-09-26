@@ -475,6 +475,123 @@ def run_sources(args):
     (out / "report.md").write_text("\n".join(lines + ["", "## Answers", ""] + answers) + "\n", encoding="utf-8")
 
 
+# --- the real "Gemini 무료 + Tavily" pipeline (needs TAVILY_API_KEY as well) --------------------------------------
+
+TAVILY_URL = "https://api.tavily.com/search"
+
+FALLBACK_QUERY_PROMPT = (
+    "Turn the coffee flavor note or taste description into at most 2 short English web-search queries that find coffee "
+    "tasting-note pages. Keep flavor words literal. Answer as JSON {\"queries\": [...]}."
+)
+
+
+def query_prompt():
+    f = HERE / "query_prompt_ko.txt"
+    return f.read_text(encoding="utf-8") if f.exists() else FALLBACK_QUERY_PROMPT
+
+
+def template_query(mode, case):
+    """The app's fallback when the query step fails (NoteHelperPrompts.tavilyQuery)."""
+    if mode == "note":
+        m = re.match(r"^(.*?)\s*[(（]([^()（）]+)[)）]\s*$", case.strip())
+        name = m.group(2).strip() if m and re.search(r"[A-Za-z]", m.group(2)) else (m.group(1).strip() if m else case.strip())
+        return f'"{name}" coffee flavor note meaning tasting notes'
+    return ("coffee tasting notes " + case.strip())[:300]
+
+
+def write_queries(model, key, mode, case):
+    """The query-writing step: the free model, JSON output, at most 2 queries; the template when anything is off."""
+    body = {
+        "system_instruction": {"parts": [{"text": query_prompt()}]},
+        "contents": [{"role": "user", "parts": [{"text": ("노트: " if mode == "note" else "맛 묘사: ") + case}]}],
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 200, "responseMimeType": "application/json",
+                             "responseSchema": {"type": "OBJECT", "properties": {"queries": {"type": "ARRAY", "items": {"type": "STRING"}}},
+                                                "required": ["queries"]}},
+    }
+    status, resp, secs = call(model, key, body, timeout=60)
+    if status == 200:
+        try:
+            text = "".join(p.get("text", "") for p in resp["candidates"][0]["content"]["parts"])
+            qs = [q.strip() for q in json.loads(text)["queries"] if isinstance(q, str) and q.strip()][:2]
+            if qs and all(len(q) <= 200 for q in qs):
+                return qs, "model", secs
+        except (KeyError, IndexError, ValueError, TypeError):
+            pass
+    return [template_query(mode, case)], f"template (HTTP {status})", secs
+
+
+def tavily_search(key, query, depth):
+    req = urllib.request.Request(TAVILY_URL, method="POST", headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                                 data=json.dumps({"query": query, "search_depth": depth, "max_results": 5, "chunks_per_source": 3,
+                                                  "include_raw_content": "text", "include_answer": False}).encode("utf-8"))
+    try:
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.status, json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        return e.code, e.read().decode("utf-8", "replace")[:300]
+    except (urllib.error.URLError, TimeoutError) as e:
+        return 0, str(e)
+
+
+def run_tavily(args):
+    gkey = os.environ.get("GEMINI_API_KEY", "").strip()
+    tkey = os.environ.get("TAVILY_API_KEY", "").strip()
+    if not gkey or not tkey:
+        sys.exit("GEMINI_API_KEY and TAVILY_API_KEY are both needed")
+    cases = json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
+    plan = [("note", c) for c in cases["note"][: args.notes]] + [("describe", c) for c in cases["describe"][: args.describes]]
+    terms, subs = wheel_terms()
+    system = sources_prompt()
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    lines = [f"# Gemini free + Tavily: {args.model}", "",
+             "| # | mode | question | queries | sources | cited sentences | bad [n] | quotes verified | credits | s |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
+    answers, credits = [], 0
+    for n, (mode, case) in enumerate(plan, 1):
+        queries, how, qsecs = write_queries(args.model, gkey, mode, case)
+        sources, seen, errors, t0 = [], set(), [], time.monotonic()
+        for i, q in enumerate(queries):
+            depth = "advanced" if i == 0 else "basic"
+            status, resp = tavily_search(tkey, q, depth)
+            if status != 200:
+                errors.append(f"Tavily {status}: {resp}")
+                continue
+            credits += 2 if depth == "advanced" else 1
+            for r in resp.get("results", []):
+                if r.get("url") in seen or len(sources) >= 6:
+                    continue
+                seen.add(r.get("url"))
+                sources.append({"title": r.get("title") or r.get("url"), "url": r.get("url"),
+                                "domain": urllib.parse.urlparse(r.get("url") or "").hostname or "",
+                                "content": r.get("content") or "", "raw": r.get("raw_content") or r.get("content") or ""})
+        if not sources:
+            lines.append(f"| {n} | {mode} | {case} | {' · '.join(queries)} | 0 | - | - | - | {credits} | - |")
+            answers += [f"### {n}. {case}", "", "no sources: " + "; ".join(errors), ""]
+            continue
+        block = "\n\n".join(f"[{i}] {s['title']} — {s['domain']}\n{s['url']}\n{s['content']}" for i, s in enumerate(sources, 1))
+        body = {"system_instruction": {"parts": [{"text": system}]},
+                "contents": [{"role": "user", "parts": [{"text": question(mode, case, terms, subs) + "\n\n출처\n" + block}]}],
+                "generationConfig": {"temperature": 0.2}}
+        status, resp, secs = call(args.model, gkey, body)
+        total = qsecs + (time.monotonic() - t0)
+        if status == 200:
+            text = "".join(p.get("text", "") for p in ((resp.get("candidates") or [{}])[0].get("content") or {}).get("parts", []))
+            chk = check_cited(text, sources)
+            lines.append(f"| {n} | {mode} | {case} | {' · '.join(queries)} ({how}) | {len(sources)} | {chk['cited']}/{chk['sentences']} | "
+                         f"{chk['bad_refs']} | {chk['verified']}/{chk['quotes']} | {credits} | {total:.1f} |")
+            answers += [f"### {n}. {mode}: {case}", "", "검색어: " + " · ".join(queries), "", text, ""]
+            answers += [f"- {'✓' if ok else '✗'} \"{q}\" → {refs}" for q, refs, ok in chk["quote_detail"]]
+            answers += [""] + [f"[{i}] {s['title']} ({s['domain']}) {s['url']}" for i, s in enumerate(sources, 1)] + [""]
+        else:
+            err = resp.get("error", {}).get("message", "") if isinstance(resp, dict) else str(resp)
+            lines.append(f"| {n} | {mode} | {case} | {' · '.join(queries)} | {len(sources)} | HTTP {status} | - | - | {credits} | - |")
+            answers += [f"### {n}. {case}", "", f"Gemini HTTP {status}: {err[:300]}", ""]
+        print(lines[-1], flush=True)
+        time.sleep(args.delay)
+    (out / "report.md").write_text("\n".join(lines + ["", f"Tavily credits used: {credits}", "", "## Answers", ""] + answers) + "\n", encoding="utf-8")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--selftest", action="store_true")
@@ -485,9 +602,12 @@ def main():
     p.add_argument("--out", default=str(HERE / "out"))
     p.add_argument("--probe", default="", help="comma-separated models: one short question each, without and with search")
     p.add_argument("--sources", action="store_true", help="the Gemini free + Tavily pipeline with fetched pages (cases_sources.json)")
+    p.add_argument("--tavily", action="store_true", help="the real Gemini free + Tavily pipeline (needs TAVILY_API_KEY)")
     args = p.parse_args()
     if args.selftest:
         selftest()
+    elif args.tavily:
+        run_tavily(args)
     elif args.sources:
         run_sources(args)
     elif args.probe:

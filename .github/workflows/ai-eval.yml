@@ -4,6 +4,8 @@
 # Repository secret (Settings › Secrets and variables › Actions):
 #   GEMINI_API_KEY_DEBUG   a free Gemini API key for development only (a project without billing). It is never put
 #                          into the app: in the app every user enters their own key (docs/ai-note-helper-plan.md §5).
+#   TAVILY_API_KEY_DEBUG   a free Tavily API key for development only; with it the real "Gemini 무료 + Tavily" pipeline
+#                          runs (mode tavily), without it the fetched-pages stand-in (mode sources).
 # Without it only the parser self-test runs. The report goes to a short-lived artifact (7 days) and the job summary;
 # grounded answers are not committed to the repository.
 name: AI note helper eval
@@ -16,11 +18,12 @@ on:
     inputs:
       mode:
         description: >-
-          sources: the "Gemini 무료 + Tavily" pipeline with real pages (cases_sources.json) and the free model;
+          auto: tavily when the Tavily secret is set, else sources; tavily: the real "Gemini 무료 + Tavily" pipeline;
+          sources: the same with fetched pages standing in for Tavily (cases_sources.json);
           probe: which models answer with and without Google Search; full: Google Search grounded evaluation.
         type: choice
-        options: [sources, probe, full]
-        default: sources
+        options: [auto, tavily, sources, probe, full]
+        default: auto
       probe:
         description: >-
           Comma-separated models to probe (one short question each, without and with Google Search). Leave empty
@@ -56,18 +59,26 @@ jobs:
       - name: Ask Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_DEBUG }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY_DEBUG }}
           # a push runs the sources pipeline with the free model (the free key cannot use Google Search)
-          MODE: ${{ inputs.mode || 'sources' }}
+          MODE: ${{ inputs.mode || 'auto' }}
           PROBE: ${{ inputs.probe || 'gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite' }}
           MODEL: ${{ inputs.model || 'gemini-3.5-flash-lite' }}
-          NOTES: ${{ inputs.notes || '12' }}
-          DESCRIBES: ${{ inputs.describes || '6' }}
+          # a push asks fewer (Tavily: about 3 credits a question out of 1,000 a month)
+          NOTES: ${{ inputs.notes || '6' }}
+          DESCRIBES: ${{ inputs.describes || '4' }}
         run: |
           if [ -z "$GEMINI_API_KEY" ]; then
             echo "::warning::The GEMINI_API_KEY_DEBUG secret is not set; only the self-test ran."
             exit 0
           fi
-          if [ "$MODE" = "sources" ]; then
+          if [ "$MODE" = "auto" ]; then
+            if [ -n "$TAVILY_API_KEY" ]; then MODE=tavily; else MODE=sources; fi
+          fi
+          echo "mode: $MODE"
+          if [ "$MODE" = "tavily" ]; then
+            python3 tools/ai-eval/eval.py --tavily --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
+          elif [ "$MODE" = "sources" ]; then
             python3 tools/ai-eval/eval.py --sources --model "$MODEL" --out ai-eval-out
           elif [ "$MODE" = "probe" ]; then
             python3 tools/ai-eval/eval.py --probe "$PROBE" --out ai-eval-out
