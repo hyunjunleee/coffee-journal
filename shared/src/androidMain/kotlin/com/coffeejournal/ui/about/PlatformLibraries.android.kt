@@ -2,7 +2,7 @@
 // (gradle/third-party-notices.gradle.kts). Do not edit by hand.
 package com.coffeejournal.ui.about
 
-/** Every library in the Android app (137), with the licenses its POM declares. */
+/** Every library in the Android app (151), with the licenses its POM declares. */
 actual val platformLibraries: List<Library> = listOf(
     Library("androidx.activity", "activity", "1.12.4", "Activity", "https://developer.android.com/jetpack/androidx/releases/activity#1.12.4", listOf("Apache-2.0")),
     Library("androidx.activity", "activity-compose", "1.12.4", "Activity Compose", "https://developer.android.com/jetpack/androidx/releases/activity#1.12.4", listOf("Apache-2.0")),
@@ -33,12 +33,18 @@ actual val platformLibraries: List<Library> = listOf(
     Library("androidx.compose.ui", "ui-unit-android", "1.10.4", "Compose Unit", "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.10.4", listOf("Apache-2.0")),
     Library("androidx.compose.ui", "ui-util-android", "1.10.4", "Compose Util", "https://developer.android.com/jetpack/androidx/releases/compose-ui#1.10.4", listOf("Apache-2.0")),
     Library("androidx.concurrent", "concurrent-futures", "1.1.0", "AndroidX Futures", "https://developer.android.com/topic/libraries/architecture/index.html", listOf("Apache-2.0")),
+    Library("androidx.concurrent", "concurrent-futures-ktx", "1.1.0", "AndroidX Futures Kotlin Extensions", "https://developer.android.com/topic/libraries/architecture/index.html", listOf("Apache-2.0")),
     Library("androidx.core", "core", "1.16.0", "Core", "https://developer.android.com/jetpack/androidx/releases/core#1.16.0", listOf("Apache-2.0")),
     Library("androidx.core", "core-ktx", "1.16.0", "Core Kotlin Extensions", "https://developer.android.com/jetpack/androidx/releases/core#1.16.0", listOf("Apache-2.0")),
+    Library("androidx.core", "core-remoteviews", "1.1.0", "RemoteViews", "https://developer.android.com/jetpack/androidx/releases/core#1.1.0", listOf("Apache-2.0")),
     Library("androidx.core", "core-viewtree", "1.0.0", "androidx.core:core-viewtree", "https://developer.android.com/jetpack/androidx/releases/core#1.0.0", listOf("Apache-2.0")),
     Library("androidx.cursoradapter", "cursoradapter", "1.0.0", "Android Support Library Cursor Adapter", "http://developer.android.com/tools/extras/support-library.html", listOf("Apache-2.0")),
     Library("androidx.customview", "customview", "1.0.0", "Android Support Library Custom View", "http://developer.android.com/tools/extras/support-library.html", listOf("Apache-2.0")),
     Library("androidx.customview", "customview-poolingcontainer", "1.0.0", "androidx.customview:poolingcontainer", "https://developer.android.com/jetpack/androidx/releases/customview#1.0.0", listOf("Apache-2.0")),
+    Library("androidx.datastore", "datastore", "1.0.0", "Android DataStore", "https://developer.android.com/jetpack/androidx/releases/datastore#1.0.0", listOf("Apache-2.0")),
+    Library("androidx.datastore", "datastore-core", "1.0.0", "Android DataStore Core", "https://developer.android.com/jetpack/androidx/releases/datastore#1.0.0", listOf("Apache-2.0")),
+    Library("androidx.datastore", "datastore-preferences", "1.0.0", "Android Preferences DataStore", "https://developer.android.com/jetpack/androidx/releases/datastore#1.0.0", listOf("Apache-2.0")),
+    Library("androidx.datastore", "datastore-preferences-core", "1.0.0", "Android Preferences DataStore Core", "https://developer.android.com/jetpack/androidx/releases/datastore#1.0.0", listOf("Apache-2.0")),
     Library("androidx.documentfile", "documentfile", "1.0.0", "Android Support Library Document File", "http://developer.android.com/tools/extras/support-library.html", listOf("Apache-2.0")),
     Library("androidx.drawerlayout", "drawerlayout", "1.0.0", "Android Support Library Drawer Layout", "http://developer.android.com/tools/extras/support-library.html", listOf("Apache-2.0")),
     Library("androidx.dynamicanimation", "dynamicanimation", "1.0.0", "Android Support DynamicAnimation", "http://developer.android.com/tools/extras/support-library.html", listOf("Apache-2.0")),
@@ -47,6 +53,10 @@ actual val platformLibraries: List<Library> = listOf(
     Library("androidx.exifinterface", "exifinterface", "1.4.1", "ExifInterface", "https://developer.android.com/jetpack/androidx/releases/exifinterface#1.4.1", listOf("Apache-2.0")),
     Library("androidx.fragment", "fragment", "1.8.9", "fragment", "https://developer.android.com/jetpack/androidx/releases/fragment#1.8.9", listOf("Apache-2.0")),
     Library("androidx.fragment", "fragment-ktx", "1.8.9", "Fragment Kotlin Extensions", "https://developer.android.com/jetpack/androidx/releases/fragment#1.8.9", listOf("Apache-2.0")),
+    Library("androidx.glance", "glance", "1.2.0", "Glance", "https://developer.android.com/jetpack/androidx/releases/glance#1.2.0", listOf("Apache-2.0")),
+    Library("androidx.glance", "glance-appwidget", "1.2.0", "Glance For App Widgets", "https://developer.android.com/jetpack/androidx/releases/glance#1.2.0", listOf("Apache-2.0")),
+    Library("androidx.glance", "glance-appwidget-external-protobuf", "1.2.0", "Glance AppWidget External Protobuf", "https://developer.android.com/jetpack/androidx/releases/glance#1.2.0", listOf("BSD-3-Clause")),
+    Library("androidx.glance", "glance-appwidget-proto", "1.2.0", "Glance AppWidget Protos", "https://developer.android.com/jetpack/androidx/releases/glance#1.2.0", listOf("Apache-2.0")),
     Library("androidx.graphics", "graphics-path", "1.0.1", "Android Graphics Path", "https://developer.android.com/jetpack/androidx/releases/graphics#1.0.1", listOf("Apache-2.0")),
     Library("androidx.interpolator", "interpolator", "1.0.0", "Android Support Library Interpolators", "http://developer.android.com/tools/extras/support-library.html", listOf("Apache-2.0")),
     Library("androidx.legacy", "legacy-support-core-utils", "1.0.0", "Android Support Library core utils", "http://developer.android.com/tools/extras/support-library.html", listOf("Apache-2.0")),
@@ -59,6 +69,7 @@ actual val platformLibraries: List<Library> = listOf(
     Library("androidx.lifecycle", "lifecycle-runtime-android", "2.10.0", "Lifecycle Runtime", "https://developer.android.com/jetpack/androidx/releases/lifecycle#2.10.0", listOf("Apache-2.0")),
     Library("androidx.lifecycle", "lifecycle-runtime-compose-android", "2.10.0", "Lifecycle Runtime Compose", "https://developer.android.com/jetpack/androidx/releases/lifecycle#2.10.0", listOf("Apache-2.0")),
     Library("androidx.lifecycle", "lifecycle-runtime-ktx-android", "2.10.0", "Lifecycle Kotlin Extensions", "https://developer.android.com/jetpack/androidx/releases/lifecycle#2.10.0", listOf("Apache-2.0")),
+    Library("androidx.lifecycle", "lifecycle-service", "2.10.0", "Lifecycle Service", "https://developer.android.com/jetpack/androidx/releases/lifecycle#2.10.0", listOf("Apache-2.0")),
     Library("androidx.lifecycle", "lifecycle-viewmodel-android", "2.10.0", "Lifecycle ViewModel", "https://developer.android.com/jetpack/androidx/releases/lifecycle#2.10.0", listOf("Apache-2.0")),
     Library("androidx.lifecycle", "lifecycle-viewmodel-compose-android", "2.10.0", "Lifecycle ViewModel Compose", "https://developer.android.com/jetpack/androidx/releases/lifecycle#2.10.0", listOf("Apache-2.0")),
     Library("androidx.lifecycle", "lifecycle-viewmodel-ktx", "2.10.0", "Lifecycle ViewModel Kotlin Extensions", "https://developer.android.com/jetpack/androidx/releases/lifecycle#2.10.0", listOf("Apache-2.0")),
@@ -83,6 +94,7 @@ actual val platformLibraries: List<Library> = listOf(
     Library("androidx.sqlite", "sqlite-framework-android", "2.6.2", "SQLite Framework Integration", "https://developer.android.com/jetpack/androidx/releases/sqlite#2.6.2", listOf("Apache-2.0")),
     Library("androidx.startup", "startup-runtime", "1.1.1", "Android App Startup Runtime", "https://developer.android.com/jetpack/androidx/releases/startup#1.1.1", listOf("Apache-2.0")),
     Library("androidx.tracing", "tracing", "1.2.0", "Android Tracing", "https://developer.android.com/jetpack/androidx/releases/tracing#1.2.0", listOf("Apache-2.0")),
+    Library("androidx.tracing", "tracing-ktx", "1.2.0", "Android Tracing Runtime Kotlin Extensions", "https://developer.android.com/jetpack/androidx/releases/tracing#1.2.0", listOf("Apache-2.0")),
     Library("androidx.transition", "transition", "1.6.0", "Transition", "https://developer.android.com/jetpack/androidx/releases/transition#1.6.0", listOf("Apache-2.0")),
     Library("androidx.vectordrawable", "vectordrawable", "1.1.0", "Android Support VectorDrawable", "https://developer.android.com/jetpack/androidx", listOf("Apache-2.0")),
     Library("androidx.vectordrawable", "vectordrawable-animated", "1.1.0", "Android Support AnimatedVectorDrawable", "https://developer.android.com/jetpack/androidx", listOf("Apache-2.0")),
@@ -90,6 +102,8 @@ actual val platformLibraries: List<Library> = listOf(
     Library("androidx.viewpager", "viewpager", "1.0.0", "Android Support Library View Pager", "http://developer.android.com/tools/extras/support-library.html", listOf("Apache-2.0")),
     Library("androidx.window", "window", "1.5.0", "WindowManager", "https://developer.android.com/jetpack/androidx/releases/window#1.5.0", listOf("Apache-2.0")),
     Library("androidx.window", "window-core-android", "1.5.0", "WindowManager Core", "https://developer.android.com/jetpack/androidx/releases/window#1.5.0", listOf("Apache-2.0")),
+    Library("androidx.work", "work-runtime", "2.12.0", "WorkManager Runtime", "https://developer.android.com/jetpack/androidx/releases/work#2.12.0", listOf("Apache-2.0")),
+    Library("androidx.work", "work-runtime-ktx", "2.12.0", "WorkManager Kotlin Extensions", "https://developer.android.com/jetpack/androidx/releases/work#2.12.0", listOf("Apache-2.0")),
     Library("co.touchlab", "stately-concurrency-jvm", "2.1.0", "Stately", "https://github.com/touchlab/Stately", listOf("Apache-2.0")),
     Library("co.touchlab", "stately-concurrent-collections-jvm", "2.1.0", "Stately", "https://github.com/touchlab/Stately", listOf("Apache-2.0")),
     Library("co.touchlab", "stately-strict-jvm", "2.1.0", "Stately", "https://github.com/touchlab/Stately", listOf("Apache-2.0")),
