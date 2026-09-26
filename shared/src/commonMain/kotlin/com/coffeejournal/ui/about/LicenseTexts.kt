@@ -2,6 +2,7 @@
 //   Apache-2.0  https://www.apache.org/licenses/LICENSE-2.0.txt
 //   Lucide      https://cdn.jsdelivr.net/npm/lucide-static/LICENSE (npm package lucide-static; includes Feather's MIT notice)
 //   Feather     https://cdn.jsdelivr.net/npm/feather-icons@4.29.2/LICENSE (npm package feather-icons)
+//   MapLibre    see MapLibreNotices.kt
 package com.coffeejournal.ui.about
 
 object LicenseTexts {
@@ -10,6 +11,7 @@ object LicenseTexts {
         "Apache-2.0" -> "Apache License 2.0"
         "MIT" -> "MIT License"
         "BSD-3-Clause" -> "BSD 3-Clause License"
+        "BSD-2-Clause" -> "BSD 2-Clause License"
         "EPL-2.0" -> "Eclipse Public License 2.0"
         "Public-Domain" -> "Public Domain"
         else -> spdx
@@ -19,6 +21,7 @@ object LicenseTexts {
         "Apache-2.0" -> "https://www.apache.org/licenses/LICENSE-2.0"
         "MIT" -> "https://opensource.org/license/mit"
         "BSD-3-Clause" -> "https://opensource.org/license/bsd-3-clause"
+        "BSD-2-Clause" -> "https://opensource.org/license/bsd-2-clause"
         "EPL-2.0" -> "https://www.eclipse.org/legal/epl-2.0/"
         else -> null
     }
@@ -232,6 +235,9 @@ object LicenseTexts {
    See the License for the specific language governing permissions and
    limitations under the License.
 """
+
+    /** MapLibre Native Android's license file (with the notices of the code it bundles) and MapLibre Compose's. */
+    val MAPLIBRE: String get() = MapLibreNotices.text
 
     /** Lucide's LICENSE file, which also carries the MIT notice of the Feather icons Lucide derives from. */
     val LUCIDE: String = """ISC License

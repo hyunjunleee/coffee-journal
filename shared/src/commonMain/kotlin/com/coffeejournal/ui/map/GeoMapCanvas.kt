@@ -20,6 +20,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -41,6 +42,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -122,6 +124,8 @@ fun GeoMapCanvas(
     }
     val tap by rememberUpdatedState(onTap)
     val gap = with(density) { PIN_GAP.toPx() }
+    // TalkBack hears the zoom ("확대 2.5배"); rounded, so a pinch recomposes only at every tenth
+    val zoomState by remember(viewport) { derivedStateOf { MapViewportMath.zoomDescription(viewport.zoom) } }
     Box(
         modifier
             .fillMaxWidth()
@@ -135,7 +139,7 @@ fun GeoMapCanvas(
             Modifier
                 .fillMaxSize()
                 // TalkBack cannot tap a shape; the label says what the map shows, the pins are buttons of their own
-                .semantics { contentDescription = description }
+                .semantics { contentDescription = description; stateDescription = zoomState }
                 .pointerInput(viewport) { detectTapGestures { pos -> tap(viewport.toMap(pos)) } }
                 .pointerInput(viewport) { detectMapTransform(isZoomed = { abs(viewport.zoom - 1f) > 0.001f }, onTransform = viewport::transform) },
         ) {

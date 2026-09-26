@@ -47,6 +47,14 @@ object MapViewportMath {
         val r = if (oldZoom > 0f) newZoom / oldZoom else 1f
         return (pan - c) * r + c + panChange
     }
+
+    /** The map's zoom for TalkBack: "기본 배율" at the fitted zoom, else "확대 2.5배" / "축소 0.6배" (one decimal). */
+    fun zoomDescription(zoom: Float): String {
+        val tenths = kotlin.math.round(zoom * 10f).toInt()
+        if (tenths == 10) return "기본 배율"
+        val text = "${tenths / 10}.${tenths % 10}"
+        return if (tenths > 10) "확대 ${text}배" else "축소 ${text}배"
+    }
 }
 
 /** Zoom and pan of one map view; the frame changes when the Korea map drills into a 시·도. */

@@ -34,6 +34,18 @@
 ### 1.6 해외 로스터리 지도
 - 기존 "WORLD" 자리 표시 도형을 앱에 이미 있는 Natural Earth 세계지도로 바꾼다. 좌표가 있으면 그 위치, 없으면 위치 텍스트의 나라(기존 국가 판별 규칙) 중심에 핀. 위치 지정은 세계지도에서 탭.
 
+### 1.7 상세 지도 (하이브리드, 2026-09 사용자 결정 "A")
+- 결정: SGIS 한국 지도(전국 → 시·도 → 시·군·구, 앱 내장·오프라인)는 그대로 두고, 도로·하천·건물·지명이 보이는 **OpenStreetMap 상세 지도**를 더한다. 시·도/시·군·구 지도나 핀에서 "상세 지도"로 들어가고, 위치 지정에서는 상세 지도로 정확한 자리를 찍는다.
+- 데이터: [OpenFreeMap](https://openfreemap.org/) 공개 인스턴스의 벡터 타일(OpenStreetMap 데이터, 스키마는 수정 없는 OpenMapTiles). TileJSON `https://tiles.openfreemap.org/planet`, 라틴 글리프 `https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf`("Noto Sans Regular"). 키·계정·쿠키 없음, 상업적 사용 허용, 출처 표시 필수(2026-09 사이트·약관·개인정보 처리방침 확인). `tile.openstreetmap.org`는 쓰지 않는다(타일 정책상 앱의 대량·오프라인 사용 금지).
+- 요청 범위: 화면에 보이는 지역의 타일만 받는다. 미리 받기·일괄 다운로드 없음. MapLibre 기본 앰비언트 캐시(기기 안, 백업 규칙에 포함되지 않음)만 쓴다.
+- 렌더러: MapLibre Native Android 12.0.1(BSD-2-Clause) + MapLibre Compose 0.12.1(BSD-3-Clause, Kotlin 2.2.21·CMP 1.9.x로 빌드된 마지막 릴리스; 0.13부터 Kotlin 2.3 필요). 공용 코드는 `DetailMapRenderer` 인터페이스만 보고, Android 구현(`MapLibreDetailMapRenderer`)은 `androidMain`, iOS는 렌더러가 없다는 스텁(버튼 숨김, SGIS 지도 사용).
+- 스타일: 앱 코드의 `DetailMapStyle`(style spec v8) — 아이보리 #F5F4EF 땅, 청회색 물, 옅은 녹색 공원·숲, z14부터 옅은 회색 건물, 흰 도로 + 도로 등급별 잉크 테두리, `name:ko`(없으면 `name`) 잉크 #191916 한국어 라벨, 카페 POI는 갈색. 스프라이트(아이콘) 없음. 한글·한자·가나는 기기 글꼴로 그리므로(MapLibre local ideographs) 한글 글리프는 받지 않는다.
+- 핀: SGIS 지도와 같은 데이터·키(로스터리: 좌표, 없으면 지역 글의 시·군·구/시·도/나라 중심 — 중심 핀은 속 빈 원; 방문 카페: 위치 지정된 카페). 핀을 누르면 SGIS 지도와 같은 패널(기록, 네이버·카카오, 해외는 Google).
+- 출처 표시: 지도 위에 항상 "© OpenMapTiles © OpenStreetMap contributors"(누르면 OSM 저작권 페이지). `출처 · 라이선스`에 OpenStreetMap(ODbL 1.0)·OpenMapTiles·OpenFreeMap·MapLibre와 MapLibre Native가 함께 넣은 C++ 라이브러리 고지 원문.
+- 개인정보: 상세 지도를 열 때만 보이는 지역의 타일·글꼴 조각을 OpenFreeMap(Cloudflare CDN 경유 가능)에 요청한다. 요청에는 여느 HTTP 요청처럼 IP 주소와 User-Agent(앱 이름·버전, MapLibre·Android 버전)가 담기고, 기록·로스터리·카페 정보는 보내지 않는다. 위치 권한은 쓰지 않는다(MapLibre가 선언한 위치·Wi-Fi 권한은 매니페스트에서 제거).
+- 오프라인·실패: 열 때 네트워크가 없으면 안내 + "한국 지도로 돌아가기"·"다시 시도". 네이티브 라이브러리를 못 올리거나 스타일이 실패하면 같은 안내. 20초가 지나도 다 못 받으면 지도 위에 알림. SGIS 지도는 네트워크 없이 그대로 동작한다.
+- APK: 네이티브 라이브러리(4개 ABI, 압축 전 약 49 MB)를 압축 저장해 릴리스 APK가 약 15.9 MiB → 31.2 MiB(설치 시 기기 ABI만 풀림). 알림·위젯과 병합한 뒤에는 약 17.7 MiB → 33.0 MiB. 이후 x86·x86_64를 빼서(ARM 두 ABI만, 사용자 결정) 약 23.1 MiB.
+
 ## 2. 기록·분석
 
 ### 2.1 추출 타이머

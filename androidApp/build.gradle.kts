@@ -29,6 +29,9 @@ android {
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = commitEpochSeconds?.let { ((it - 1_767_225_600L) / 60L).toInt().coerceAtLeast(2) } ?: 1
         versionName = "1.1.0 ($commitShortSha)"
+        // Phones and tablets only: the x86 / x86_64 builds of the native libraries (MapLibre, SQLite) serve emulators
+        // and a few Chromebooks, and would add about 10 MB to the one sideloaded APK.
+        ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
     }
     signingConfigs {
         if (releaseKeystore != null) {
@@ -49,6 +52,12 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
+    }
+    packaging {
+        // One APK for every phone (it is sideloaded), so it carries the detail map's native library (MapLibre) for both
+        // ARM ABIs: about 22 MB stored uncompressed (the default since minSdk 23). Compressed, the APK is several MB
+        // smaller than that and the installer extracts only the device's own ABI.
+        jniLibs { useLegacyPackaging = true }
     }
     kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }

@@ -21,6 +21,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
@@ -31,6 +32,9 @@ import com.coffeejournal.domain.model.GeoPoint
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.rules.KoreaProjection
 import com.coffeejournal.domain.rules.KoreaRegions
+import com.coffeejournal.ui.map.detail.DetailMapPick
+import com.coffeejournal.ui.map.detail.DetailMapRoutes
+import com.coffeejournal.ui.map.detail.rememberDetailMapSupported
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.BlockBackWhile
 import com.coffeejournal.ui.theme.Dimens
@@ -121,13 +125,26 @@ class MapPickerViewModel(
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun MapPickerScreen(nav: NavHostController, vm: MapPickerViewModel) {
+fun MapPickerScreen(nav: NavHostController, vm: MapPickerViewModel, results: SavedStateHandle? = null) {
     val s by vm.state.collectAsStateWithLifecycle()
     val leave = dropUnlessResumed { nav.popBackStack() }
     BlockBackWhile(s.saving)
     val overseas = vm.overseas
     val koreaState = rememberKoreaMapState()
     val worldState = rememberWorldPinMapState()
+    val detailMap = rememberDetailMapSupported()
+    // the detail map's crosshair point ("이 위치로 지정") becomes the picked point, shown on the SGIS map as well
+    if (results != null) {
+        val fromDetail by results.getStateFlow<String?>(DetailMapPick.KEY, null).collectAsStateWithLifecycle()
+        LaunchedEffect(fromDetail) {
+            val p = MapPickResult.decode(fromDetail ?: return@LaunchedEffect)
+            results.remove<String>(DetailMapPick.KEY)
+            if (p != null) {
+                vm.setPoint(p)
+                if (!overseas) KoreaRegions.locate(p.lat, p.lng, 3.0)?.let { koreaState.showProvince(it.provinceCode) }
+            }
+        }
+    }
     // once the starting point is known (a café's is loaded), the map opens on its 시·도
     var framed by rememberSaveable { mutableStateOf(false) }
     LaunchedEffect(s.loaded) {
@@ -160,6 +177,17 @@ fun MapPickerScreen(nav: NavHostController, vm: MapPickerViewModel) {
                     marker = point?.takeIf { KoreaProjection.inKoreaBox(it) }?.let { KoreaProjection.toMap(it) },
                     onPointTap = { vm.setPoint(KoreaProjection.toGeo(it.x, it.y)) },
                 )
+            }
+            if (detailMap) {
+                GhostButton(
+                    "상세 지도에서 정확히", small = true,
+                    onClick = {
+                        val bounds = if (!overseas && !koreaState.isNational) koreaState.visibleBounds() else null
+                        nav.navigate(DetailMapRoutes.pick(vm.scope, vm.name, point, bounds))
+                    },
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                HintText("길·건물·지명이 보이는 지도(OpenStreetMap, 인터넷 필요)에서 가운데 십자로 정확한 자리를 맞출 수 있어요.")
             }
             Spacer(Modifier.height(12.dp))
             if (point == null) {

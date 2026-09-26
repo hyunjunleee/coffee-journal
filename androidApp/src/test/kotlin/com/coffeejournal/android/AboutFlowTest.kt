@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Intent
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasAnyChild
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.performScrollToNode
@@ -76,8 +78,13 @@ class AboutFlowTest : CoverageFlowBase() {
         assertEquals("https://creativecommons.org/licenses/by-nc-nd/4.0/", lastOpenedUrl())
         // the icon licenses open in full
         about(hasText("아이콘 · Lucide"))
-        tap(button("라이선스 전문 보기"))
+        tap(button("라이선스 전문 보기") and hasAnyAncestor(hasAnyChild(hasText("아이콘 · Lucide"))))
         waitForText("Copyright (c) 2013-present Cole Bemis", substring = true)
+        // the detail map's credit: MapLibre's notices in full, with the C++ libraries MapLibre Native bundles
+        about(hasText("상세 지도 · OpenStreetMap"))
+        tap(button("라이선스 전문 보기") and hasAnyAncestor(hasAnyChild(hasText("상세 지도 · OpenStreetMap"))))
+        waitForText("Copyright (c) 2021 MapLibre contributors", substring = true)
+        waitForText("kdbush.hpp", substring = true)
     }
 
     @Test

@@ -33,6 +33,7 @@
 | Coil 3 | 3.6.x | 사진 표시 (KMP) |
 | WorkManager / Jetpack Glance | 2.12.0 / 1.2.0 | 하루 한 번 알림 점검, 홈 화면 위젯 (Android 전용, 2차 §3) |
 | minSdk / targetSdk / compileSdk | 26 / 35 / 35 | Android 8.0+ |
+| MapLibre Compose / MapLibre Native Android | 0.12.1 / 12.0.1 | 상세 지도(2차 §1.7), Android 전용 의존성 |
 
 정확한 조합은 스캐폴드 빌드(`:androidApp:assembleDebug`)로 검증 후 `gradle/libs.versions.toml`에 고정한다.
 
@@ -78,6 +79,7 @@
 24. SCA CVA(§2.3): 테이스팅과 커핑 원두마다 "SCA 2004 | CVA". CVA는 SCA-103(묘사: 섹션 강도 0–15, 향·맛 CATA 최대 5, 주요 맛 최대 2, 마우스필 최대 2)과 SCA-104(정동: 8개 섹션 품질 인상 1–9, 5컵 중 균일하지 않은 컵·결점 컵, 결점 종류)의 결합 양식 배치를 따르고, 점수는 S = 0.65625·Σh + 52.75 − 2u − 4d를 0.25점 단위(반올림 half-up, 표준 §7.1 표와 일치)로. 결점 컵은 결점 종류를 함께 골라야 계산된다(SCA-104 §5.4.1). 한 기록에는 고른 양식 하나만 저장한다. 저장은 스키마 변경 없이 기존 JSON 맵(`attributes`/`attributeNotes`, 커핑 원두 `evaluationScores`/`evaluation`)의 `cva.` 접두 키. SCA 2004 합계·최고 점수·베스트 로직은 `cva.` 키를 보지 않고, CVA 점수는 "CVA 84.25 / 100", "CVA 최고 84.25"처럼 따로 표시한다. 웹은 모르는 키를 무시하며 웹 편집 시에도 `attributes`는 통째로 복사되어 보존된다(커핑 원두 평가는 웹에서 편집하면 CVA 키가 빠진다).
 25. 통계(§2.4): 홈 액션 줄의 "통계"(`Route.Stats`). 이번 달(일별)/3개월/올해/전체(월별) 잔 수 막대(집 추출·카페 누적), 원두 사용량, 지출(봉투 가격 ÷ 용량 × 원두량 — 기록에 없으면 같은 원두의 첫 기록, 보관함 봉투 순; 직접 블렌드는 구성 원두별; 카페는 한 잔 가격), 산지·가공·품종·로스터리 상위 5, 점수 추이(SCA 2004는 선으로 잇고 CVA는 속 빈 사각형), 비율·온도와 점수 산점도. 모두 기기에서 `deriveOffMain`으로 계산해 Compose Canvas로 그리고, 차트마다 요약 문장을 TalkBack 설명으로 단다.
 26. 앱 전용 알림·홈 화면 위젯(2차 §3, 웹에는 없음): 하루 한 번 보관함 피크 시작·원두 소진 임박·D-day 마일스톤을 알리고(기타 탭 하단 "알림 설정"), 위젯은 D-day·마시는 중 원두·잔여량과 "+ 새 기록"을 보여준다. 문구와 계산은 홈 화면(D-day 알약, 마시는 중 카드)과 같은 규칙을 쓴다. 알림 설정은 기기 설정이라 백업에 넣지 않는다.
+27. 상세 지도(2차 설계 §1.7, 하이브리드): SGIS 지도는 오프라인 기본 지도로 그대로 두고, 도로·하천·건물·지명이 보이는 OpenStreetMap 지도(`Route.DetailMap`)를 더했다. 시·도/시·군·구 지도의 "상세 지도" 버튼(보이는 범위로 맞춤)이나 로스터리·카페 패널의 "상세 지도에서 보기"(그 핀으로, 선택된 채)로 열고, 위치 지정에서는 "상세 지도에서 정확히"로 가운데 십자를 맞춰 "이 위치로 지정". 타일은 OpenFreeMap(키 없음, OpenMapTiles 스키마)에서 보이는 지역만 받고, 지도 위에 "© OpenMapTiles © OpenStreetMap contributors"를 항상 표시한다. 네트워크가 없거나 렌더러가 실패하면 안내와 "한국 지도로 돌아가기". 웹에는 없는 기능이고, 앱이 네트워크를 쓰는 유일한 곳이다.
 
 ---
 
@@ -126,6 +128,7 @@ coffee-journal/
 | `ReminderPlatform`(platformModule) | WorkManager 고유 주기 작업(24시간, 첫 실행 = 정한 시각) + 종류별 알림 채널, 알림을 누르면 보관함/홈 | 미연결 스텁(`IosReminderPlatform`, 알림 불가로 보고) — UNUserNotificationCenter·BGTaskScheduler 자리 |
 | `rememberNotificationPermissionRequest` | Android 13+ `POST_NOTIFICATIONS` 요청(그 전은 앱 알림 켜짐 여부) | 항상 거절로 응답(미연결) |
 | `openMapUri(uri, fallback)` | 암시적 VIEW 인텐트(BROWSABLE), `ActivityNotFoundException`이면 웹 대체 URL | `canOpenURL`(Info.plist `LSApplicationQueriesSchemes`: nmap) 후 `openURL`, 안 되면 웹 대체 URL |
+| `DetailMapRenderer`(Koin) | `MapLibreDetailMapRenderer`: MapLibre Compose + MapLibre Native, `ConnectivityManager`로 온라인 확인, 네이티브 라이브러리를 못 올리면 실패 보고 | `UnavailableDetailMapRenderer`(버튼 숨김, SGIS 지도 사용) — MapLibre iOS를 Xcode 프로젝트에 넣으면 교체 |
 
 ---
 
@@ -180,7 +183,7 @@ coffee-journal/
 
 ### 5.1 내비게이션
 - 하단 탭 4개: 새로운 추출 · 커피 달력 · 원두 · 기타 (웹 메인 탭 순서 유지, 탭별 백스택 보존).
-- 전체 화면 라우트: `RecordForm(entryId?, mode)`, `EntryDetail(id)`, `PantryEditor(id?)`, `BlendForm(id?)`, `BookForm(id?)`, `VideoForm(id?)`, `ClassForm(id?)`, `MiscForm(type, id?)`, `FlatItemForm(type, id?)`(로스터리·수입사·농장·가공), `RecipeLauncher(kind)`, `BackupRestore`, `CountryDetail(en)`, `NoteDetail(key)`, `VarietyDetail(key)`, `ProcessDetail(name)`, `MapPicker(target, name, scope, point?)`("지도에서 위치 지정": 로스터리는 폼으로 좌표를 돌려주고, 카페는 바로 저장), 2차: `BrewTimer(recipe?, hasLog)`(추출 타이머, 결과는 폼 목적지의 SavedStateHandle로 돌려줌), `BrewCompare(beanKey)`(추출 비교), `Stats`(통계), `NotificationSettings`(알림 설정).
+- 전체 화면 라우트: `RecordForm(entryId?, mode)`, `EntryDetail(id)`, `PantryEditor(id?)`, `BlendForm(id?)`, `BookForm(id?)`, `VideoForm(id?)`, `ClassForm(id?)`, `MiscForm(type, id?)`, `FlatItemForm(type, id?)`(로스터리·수입사·농장·가공), `RecipeLauncher(kind)`, `BackupRestore`, `CountryDetail(en)`, `NoteDetail(key)`, `VarietyDetail(key)`, `ProcessDetail(name)`, `MapPicker(target, name, scope, point?)`("지도에서 위치 지정": 로스터리는 폼으로 좌표를 돌려주고, 카페는 바로 저장), 2차: `BrewTimer(recipe?, hasLog)`(추출 타이머, 결과는 폼 목적지의 SavedStateHandle로 돌려줌), `BrewCompare(beanKey)`(추출 비교), `Stats`(통계), `NotificationSettings`(알림 설정), `DetailMap(mode, layer, scope, camera?, bounds?, focus?, name)`(상세 지도: 보기 또는 위치 지정 십자, 결과는 위치 지정 화면의 SavedStateHandle로).
 - 앱 밖에서 여는 화면(알림·위젯): `LaunchRequests`에 홈 / 보관함 / 새 기록을 넣으면 내비게이션이 한 번 받아 홈 탭 루트 위에 연다(`MainActivity`가 인텐트에서 읽음).
 - 웹의 "펼침 카드"는 모바일에서 `EntryDetail` 화면 + 목록의 접이식 요약으로 대체.
 
@@ -205,8 +208,11 @@ coffee-journal/
 - 선택 패널: 기존 로스터리 패널(위치, 연결된 기록) + 찾은 지역("📍 서울특별시 성동구" / "○○ 중심에 표시") + "네이버 지도에서 열기"·"카카오맵에서 열기"(해외는 "Google 지도에서 열기"가 먼저). 위치 미입력, 지도에서 찾지 못한 곳은 지도 아래 상자로.
 - 방문 카페 지도: 카페 기록(카테고리 카페, 카페 이름 있음)을 카페 이름별로 묶어 위치가 있는 카페를 방문 횟수와 함께 표시, 누르면 방문 기록 목록(→ 기록 상세)·지도 앱 링크·"지도에서 위치 변경". 위치 미지정 카페는 목록과 "지도에서 위치 지정" 버튼.
 - 해외 지도: 앱의 Natural Earth 세계지도(무채색)에 핀. 좌표 또는 지역 글의 나라 중심(웹 roasteryPoint의 나라 목록 + 생산국 45 + 지도 영문 국가명).
+- 상세 지도(§1.7): 시·도 지도(또는 핀 선택 중)의 오른쪽 위 "상세 지도"는 지금 보이는 범위(선택한 핀이 있으면 그 핀)로, 패널의 "상세 지도에서 보기"는 그 핀으로 연다. SGIS 지도의 확대 상태는 TalkBack에 "확대 2.5배"/"기본 배율"로 읽힌다.
 
-**위치 지정(MapPicker)**: 로스터리 폼("지도 위치" 칸의 "지도에서 위치 지정/변경", "위치 지우기"), 카페 기록 상세의 "카페 위치", 달력 카페 목록 아래 "카페 위치"에서 연다. 국내는 전국에서 시·도를 눌러 확대한 뒤 누른 곳이 위치(빨간 표식), 찾은 "시·도 시·군·구"와 좌표를 보여준다. 해외 로스터리는 세계지도에서 누르고 나라 이름을 보여준다. 로스터리는 "확인"으로 폼에 돌려주고(지역 칸이 비어 있으면 "서울특별시 성동구"나 "일본"으로 채움) 폼에서 저장해야 반영된다. 카페는 "저장"으로 바로 저장. 기존 위치가 있으면 그 시·도에서 시작한다.
+**상세 지도(DetailMap)**: 제목줄 → OpenStreetMap 지도(MapLibre, 회전·기울이기 없음, 두 손가락 확대·이동) + 왼쪽 아래 출처 줄 → 잉크 2dp 선 → 아래 패널(화면 높이 42%까지 스크롤): 선택한 핀의 패널(SGIS 지도와 같은 로스터리/카페 패널, "선택 해제") 또는 사용법과 "지도에 표시한 로스터리/카페" 칩 목록(누르면 그 핀으로 이동·선택), 그리고 네트워크 안내문. 좌표가 있는 핀은 잉크 점, 지역 중심 핀은 속 빈 원. 위치 지정 모드는 가운데 십자(흰 테두리 잉크 + 빨간 점), 찾은 "시·도 시·군·구"와 좌표, "이 위치로 지정"·"취소". 네트워크가 없으면 "인터넷에 연결되어 있지 않아요" 안내와 "← 한국 지도로 돌아가기"·"다시 시도", 렌더러 실패는 "상세 지도를 표시하지 못했어요", 20초 넘게 로딩이 끝나지 않으면 지도 위 알림.
+
+**위치 지정(MapPicker)**: 로스터리 폼("지도 위치" 칸의 "지도에서 위치 지정/변경", "위치 지우기"), 카페 기록 상세의 "카페 위치", 달력 카페 목록 아래 "카페 위치"에서 연다. 국내는 전국에서 시·도를 눌러 확대한 뒤 누른 곳이 위치(빨간 표식), 찾은 "시·도 시·군·구"와 좌표를 보여준다. 해외 로스터리는 세계지도에서 누르고 나라 이름을 보여준다. 로스터리는 "확인"으로 폼에 돌려주고(지역 칸이 비어 있으면 "서울특별시 성동구"나 "일본"으로 채움) 폼에서 저장해야 반영된다. 카페는 "저장"으로 바로 저장. 기존 위치가 있으면 그 시·도에서 시작한다. 지도 아래 "상세 지도에서 정확히"는 상세 지도(지정한 점, 없으면 보이는 시·도)를 십자 모드로 열고, "이 위치로 지정"한 가운데 좌표가 위치 지정 화면의 점이 된다(찾은 지역 표시·폼 채우기는 같은 규칙).
 
 **기타(장비)**: 유형 칩 → 정렬 토글 → 카드(사진·이름·시작일·메모) → FAB 추가. 목록 맨 아래 "알림 설정 →" · "출처 · 오픈소스 라이선스 →".
 
@@ -266,8 +272,9 @@ coffee-journal/
 - 흐름 테스트: 같은 환경에서 실제 `App()`을 띄워 탭·입력으로 사용자 흐름 전체를 수행하고, 화면 문구와 저장된 데이터를 웹 원본 핸들러 기준으로 함께 검증한다(백업 왕복, 원자적 복원, 한글 IME 조합, 자정 전환, 연속 탭 경합, 저장 중 뒤로 가기 포함).
 - 렌더 매트릭스: 모든 라우트를 기본·320dp 폭·글자 1.3/2.0배로 렌더해 줄바꿈·잘림·겹침을 확인한다(`ScreenshotMatrixTest`).
 - 알림·위젯(2차 §3): 규칙 단위 테스트(`RemindersTest`: 피크 시작일, 2잔 경계·중앙값 1잔, 마일스톤, 중복 방지, 종류 끄기, 홈 카드 잔여량 연결), `ReminderPrefsTest`·`WidgetSnapshotTest`, Robolectric에서 WorkManager 테스트 도구로 작업 예약·실행(`ReminderWorkerTest`: 알림 내용·한국어 채널·누르면 열리는 화면, 설정·권한·채널 끔 존중, 같은 시각은 유지·새 시각은 교체), 알림 설정 흐름(`ReminderSettingsFlowTest`: API 35 권한 요청 허용/거절, 시간 변경 재예약), 위젯(`HomeWidgetTest`: Glance 단위 테스트로 큰/작은 배치·빈 상태·"+ 새 기록" 인텐트, 홈 화면과 같은 문구, 앱 관찰자 갱신, RemoteViews PNG), 인텐트로 새 기록 폼·보관함 열기(`LaunchTargetFlowTest`, `LaunchIntentTest`), 백업 제외(`ReminderBackupTest`).
-- 현재 규모(지도·기록 분석·알림 병합 후): `shared` 단위 273개, `androidApp` 흐름·스크린샷·마이그레이션 317개, 모두 통과(건너뜀 0).
+- 현재 규모(지도·기록 분석·알림·상세 지도 병합 후): `shared` 단위 297개, `androidApp` 흐름·스크린샷·마이그레이션 329개, 모두 통과(건너뜀 0).
 - 접근성: 최소 터치 48dp, 대비 4.5:1(잉크/아이보리), 콘텐츠 설명, 토글·펼침 상태 노출.
+- 네트워크(상세 지도, §1.7): 앱에서 네트워크를 쓰는 곳은 상세 지도뿐이다(INTERNET·ACCESS_NETWORK_STATE; MapLibre가 선언한 위치·Wi-Fi 권한은 제거). 요청은 OpenFreeMap(tiles.openfreemap.org)의 보이는 지역 타일·글리프뿐, 미리 받기 없음, MapLibre 앰비언트 캐시만. 흐름 테스트는 MapLibre 네이티브 렌더러가 JVM에서 돌지 않으므로 `DetailMapRenderer`를 가짜로 바꿔(Koin) 핀·카메라·오프라인·실패·느린 로딩을 검증하고, 실제 렌더러는 네이티브 라이브러리를 못 올릴 때 안전하게 안내로 떨어지는지 확인한다. 스타일은 단위 테스트(구조·출처·팔레트)와 MapLibre style-spec 검증기(개발 중 수동)로 확인했다.
 
 ## 9. iOS 확장 경로 (2차)
 1. macOS에서 `coffeejournal.enableIos=true`로 iOS 타깃 활성화 → `shared` 프레임워크 생성.
