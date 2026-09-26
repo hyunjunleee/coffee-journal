@@ -7,6 +7,8 @@ import androidx.sqlite.driver.AndroidSQLiteDriver
 import com.coffeejournal.data.db.AppDatabase
 import com.coffeejournal.data.photo.PhotoStore
 import com.coffeejournal.di.dataModule
+import com.coffeejournal.ui.ai.AiHttp
+import com.coffeejournal.ui.ai.SecretStore
 import com.coffeejournal.ui.nav.Features
 import com.coffeejournal.ui.notify.AndroidReminderPlatform
 import com.coffeejournal.ui.notify.ReminderPlatform
@@ -27,7 +29,7 @@ class TestApp : Application() {
     }
 }
 
-/** In-memory Room database on the framework SQLite (Robolectric) plus a photo store in a temp dir. */
+/** In-memory Room database on the framework SQLite (Robolectric), a photo store in a temp dir, fake AI HTTP and key store. */
 fun testPlatformModule(context: Context) = module {
     single<AppDatabase> {
         Room.inMemoryDatabaseBuilder<AppDatabase>(context)
@@ -39,6 +41,9 @@ fun testPlatformModule(context: Context) = module {
     single<PhotoStore> { TempPhotoStore(File(context.cacheDir, "photos")) }
     // the production reminder platform: it touches WorkManager only when scheduling (tests that do install a test WorkManager)
     single<ReminderPlatform> { AndroidReminderPlatform(context) }
+    // AI 노트 도우미: no test reaches the network, and Robolectric has no AndroidKeyStore
+    single<AiHttp> { FakeAiHttp() }
+    single<SecretStore> { MemorySecretStore() }
 }
 
 class TempPhotoStore(private val dir: File) : PhotoStore {

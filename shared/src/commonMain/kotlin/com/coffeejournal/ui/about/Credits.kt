@@ -17,6 +17,7 @@ data class Credit(
 object Credits {
     const val WEB_TEMPLATE_URL = "https://coffee-journal-empty-template.divine-pear-1472.chatgpt.site/"
     const val FLAVOR_WHEEL_ATTRIBUTION = "Coffee Taster's Flavor Wheel © 2016 SCA · WCR, CC BY-NC-ND 4.0"
+    const val AI_HELPER_TITLE = "AI 노트 도우미 · Gemini · Tavily · OpenAI · Anthropic"
 
     val all: List<Credit> = listOf(
         Credit(
@@ -107,6 +108,25 @@ object Credits {
                 "MapLibre" to "https://maplibre.org/",
             ),
             licenseText = LicenseTexts.MAPLIBRE,
+        ),
+        Credit(
+            AI_HELPER_TITLE,
+            "노트 설명과 맛 묘사 → 노트 찾기는 설정에서 고른 방식에 따라 Google Gemini API(Google 검색 포함), Tavily 검색 API, " +
+                "OpenAI API(웹 검색), Anthropic API(Claude, 웹 검색)를 불러요. 앱에는 키가 없고, 사용자가 각 서비스에서 받은 자기 키를 넣어 써요. " +
+                "키는 이 휴대폰에만 암호화해 저장되고 백업에 들어가지 않아요.\n" +
+                "보내는 것은 질문 글(노트 이름이나 맛 묘사)과, Gemini 무료 + Tavily 방식에서는 Tavily가 찾은 글뿐이에요. 기록·원두·장소·사진은 보내지 않아요. " +
+                "Gemini 무료 등급에서는 보낸 질문과 받은 답이 Google의 제품 개선에 쓰이고 사람이 읽어 볼 수 있어요. " +
+                "Google 검색에 기댄 답은 Google 검색 제안과 함께 보여주고, 답과 출처는 화면을 닫으면 남기지 않아요. " +
+                "각 서비스의 약관과 개인정보 처리방침을 따라요.",
+            links = listOf(
+                "Gemini API 약관" to "https://ai.google.dev/gemini-api/terms",
+                "Tavily 약관" to "https://tavily.com/terms",
+                "Tavily 개인정보" to "https://tavily.com/privacy",
+                "OpenAI 이용약관" to "https://openai.com/policies/row-terms-of-use",
+                "OpenAI 개인정보" to "https://openai.com/policies/row-privacy-policy",
+                "Anthropic 상업 약관" to "https://www.anthropic.com/legal/commercial-terms",
+                "Anthropic 개인정보" to "https://www.anthropic.com/legal/privacy",
+            ),
         ),
         Credit(
             "아이콘 · Lucide",

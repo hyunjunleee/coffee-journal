@@ -26,6 +26,7 @@ import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.PantryRules
+import com.coffeejournal.ui.ai.NoteHelperResult
 import com.coffeejournal.ui.form.timer.BrewTimerResult
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.deriveOffMain
@@ -163,6 +164,9 @@ class RecordFormViewModel(
 
     /** The brew timer's rows replace the step log (the timer asked before replacing a log of the user's own). */
     fun applyTimerSteps(steps: List<RecipeStep>) = update { it.copy(steps = steps.map(StepForm::from)) }
+
+    /** Notes picked in the AI note helper go after 내가 느낀 노트, each only once (case-insensitive). */
+    fun addActualNotes(notes: List<String>) = update { it.copy(actualNotes = NoteHelperResult.merge(it.actualNotes, notes)) }
 
     /** Opens the brew timer with the applied recipe, telling it whether a log of the user's own would be replaced. */
     fun timerRoute(): Route.BrewTimer {

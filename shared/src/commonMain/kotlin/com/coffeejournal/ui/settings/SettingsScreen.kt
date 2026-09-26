@@ -18,6 +18,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
+import com.coffeejournal.ui.ai.AiSettingsSection
+import com.coffeejournal.ui.ai.AiTexts
 import com.coffeejournal.ui.form.TextLink
 import com.coffeejournal.ui.nav.Feature
 import com.coffeejournal.ui.nav.Route
@@ -42,7 +44,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
 
-/** 설정 (not on the web): display choices, reminders and sources, behind the small gear in each tab's header. */
+/** 설정 (not on the web): display choices, reminders, the AI helper and sources, behind the small gear in each tab's header. */
 object SettingsFeature : Feature {
     override val module = module {
         single { DisplayPrefs(get()) }
@@ -99,6 +101,9 @@ fun SettingsScreen(nav: NavHostController) {
 
             SectionLabel("알림")
             ReminderSettingsSection()
+
+            SectionLabel(AiTexts.SECTION)
+            AiSettingsSection()
 
             SectionLabel("정보")
             TextLink(SettingsTexts.SOURCES, Ink.text, { nav.navigate(Route.About) })

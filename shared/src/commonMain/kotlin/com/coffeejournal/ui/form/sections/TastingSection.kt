@@ -14,31 +14,44 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.reference.ScaForm
 import com.coffeejournal.domain.rules.ScaScoring
+import com.coffeejournal.ui.ai.AiTexts
 import com.coffeejournal.ui.form.FieldBlock
 import com.coffeejournal.ui.form.FormState
 import com.coffeejournal.ui.form.ScoreForm
 import com.coffeejournal.ui.form.FormTextField
 import com.coffeejournal.ui.form.SliderRow
+import com.coffeejournal.ui.form.TextLink
+import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Chip
 import com.coffeejournal.ui.theme.ChipInput
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
+import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.HintText
+import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.Seg
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.SectionLabel
 
-/** 테이스팅: SCA 커핑 폼, 플레이버 휠, 내가 느낀 노트, 추출 관련 메모. */
+/**
+ * 테이스팅: SCA 커핑 폼, 플레이버 휠, 내가 느낀 노트, 추출 관련 메모. [onAskAi] opens the AI note helper (mode B) with a
+ * described taste; the notes it finds come back through the form's back stack entry (NoteHelperResult).
+ */
 @Composable
-internal fun TastingSection(state: FormState, update: ((FormState) -> FormState) -> Unit) {
+internal fun TastingSection(state: FormState, update: ((FormState) -> FormState) -> Unit, onAskAi: ((String) -> Unit)? = null) {
     SectionLabel("테이스팅")
     FieldBlock {
         FieldLabel("SCA 커핑 평가 (100점)")
@@ -59,7 +72,12 @@ internal fun TastingSection(state: FormState, update: ((FormState) -> FormState)
     )
     Spacer(Modifier.height(12.dp))
     FieldBlock {
-        FieldLabel("내가 느낀 노트 — 실제로 맛본 것")
+        var askOpen by rememberSaveable { mutableStateOf(false) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            FieldLabel("내가 느낀 노트 — 실제로 맛본 것", Modifier.weight(1f))
+            if (onAskAi != null) TextLink(AiTexts.ASK_FROM_FORM, Ink.text, { askOpen = !askOpen })
+        }
+        if (onAskAi != null) AskAiPanel(askOpen, onToggle = { askOpen = !askOpen }, onAsk = onAskAi)
         ChipInput(
             chips = state.actualNotes, onChipsChange = { v -> update { it.copy(actualNotes = v) } },
             input = state.actualInput, onInputChange = { v -> update { it.copy(actualInput = v) } },
@@ -70,6 +88,35 @@ internal fun TastingSection(state: FormState, update: ((FormState) -> FormState)
         value = state.notes, onValueChange = { v -> update { it.copy(notes = v) } }, label = "추출 관련 메모",
         placeholder = "맛, 개선할 점, 다음에 시도할 것 등", singleLine = false, minLines = 3,
     )
+}
+
+/**
+ * "✦ AI에게 묻기" and its panel: the taste in the user's own words, then the helper's answer screen. A panel in the
+ * form rather than a dialog, like the brew timer's grams input: a text field in a dialog kept Compose from ever going
+ * idle in the Robolectric flow tests (docs/dev/implementation-notes.md).
+ */
+@Composable
+private fun AskAiPanel(open: Boolean, onToggle: () -> Unit, onAsk: (String) -> Unit) {
+    var text by rememberSaveable { mutableStateOf("") }
+    if (!open) return
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 8.dp)
+            .background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape).padding(12.dp)
+            .testTag("ask-ai-panel"),
+    ) {
+        Text(AiTexts.DESCRIBE_TITLE, style = AppType.cardTitle)
+        Spacer(Modifier.height(6.dp))
+        AppTextField(value = text, onValueChange = { text = it }, placeholder = AiTexts.DESCRIBE_PLACEHOLDER, singleLine = false, minLines = 2)
+        HintText(AiTexts.DESCRIBE_HINT)
+        Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PrimaryButton(AiTexts.DESCRIBE_SEND, small = true, enabled = text.isNotBlank(), onClick = {
+                onAsk(text.trim())
+                text = ""
+                onToggle()
+            })
+            GhostButton("닫기", small = true, onClick = onToggle)
+        }
+    }
 }
 
 /** "SCA 2004 | CVA": which cupping form this tasting (or cupping bean) is scored on. */

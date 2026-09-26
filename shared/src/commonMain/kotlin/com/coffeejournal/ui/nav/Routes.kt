@@ -48,8 +48,13 @@ sealed interface Route {
     @Serializable data class BrewTimer(val recipe: String? = null, val hasLog: Boolean = false) : Route
     @Serializable data class BrewCompare(val beanKey: String) : Route
     @Serializable data object Stats : Route
-    /** 설정: typefaces, text size, transitions, reminders and sources; the small gear in each tab's header. */
+    /** 설정: typefaces, text size, transitions, reminders, the AI helper and sources; the small gear in each tab's header. */
     @Serializable data object Settings : Route
+    /**
+     * AI 노트 도우미: mode "note" explains the note [query] with web sources, "describe" finds the app's notes for the
+     * taste described in [query]; [returnToForm] hands picked notes back to the record form (NoteHelperResult.KEY).
+     */
+    @Serializable data class NoteHelper(val mode: String, val query: String, val returnToForm: Boolean = false) : Route
 }
 
 object FormMode {
