@@ -6,11 +6,13 @@ import com.coffeejournal.domain.model.BestRecipe
 import com.coffeejournal.domain.model.Blend
 import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.model.Book
+import com.coffeejournal.domain.model.CafePlace
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.CoffeeClass
 import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.model.CuppingType
 import com.coffeejournal.domain.model.Entry
+import com.coffeejournal.domain.model.GeoPoint
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.MyRecipe
@@ -73,6 +75,7 @@ class BackupCodec {
                 put(BackupKeys.VIDEOS, JsonArray(s.videos.map { encodeVideo(it) }))
                 put(BackupKeys.PANTRY, JsonArray(s.pantryItems.map { encodePantry(it) }))
                 put(BackupKeys.SETTINGS, buildJsonObject { s.settings.forEach { (k, v) -> put(k, v) } })
+                put(BackupKeys.CAFE_PLACES, JsonArray(s.cafePlaces.map { encodeCafePlace(it) }))
             }
             putJsonObject("rawData") { put(BackupKeys.DDAY, s.ddayStart?.takeIf { it.isNotBlank() }) }
             putJsonObject("photos") {
@@ -172,6 +175,14 @@ class BackupCodec {
         put("photos", JsonArray(urls.map { JsonPrimitive(it) }))
         put("status", m.status); put("scope", m.scope); put("location", m.location); put("favorite", m.favorite)
         put("createdAt", m.createdAt)
+        // app extension (schema v2); the web ignores keys it does not know
+        m.point?.let { put("lat", it.lat); put("lng", it.lng) }
+    }
+
+    private fun encodeCafePlace(p: CafePlace): JsonObject = buildJsonObject {
+        put("name", p.name)
+        p.point?.let { put("lat", it.lat); put("lng", it.lng) }
+        put("createdAt", p.createdAt)
     }
 
     private fun encodeBlend(b: Blend): JsonObject = buildJsonObject {
@@ -257,6 +268,8 @@ class BackupCodec {
             }
             id.takeIf { it.isNotBlank() }?.let { BestRecipe(key, it) }
         } ?: emptyList()
+        val cafePlaces = data.objects(BackupKeys.CAFE_PLACES, BackupKeys.CAFE_PLACES).mapNotNull { (o, where) -> decodeCafePlace(o, where) }
+            .associateBy { CafePlace.key(it.name) }.values.toList()
         val settings = data.objOrNull(BackupKeys.SETTINGS, BackupKeys.SETTINGS)?.mapNotNull { (k, v) ->
             (v as? JsonPrimitive)?.takeUnless { it is JsonNull }?.let { k to it.content }
         }?.toMap() ?: emptyMap()
@@ -275,6 +288,7 @@ class BackupCodec {
             beanSummaries = summaries,
             bestRecipes = best,
             settings = settings,
+            cafePlaces = cafePlaces,
             ddayStart = rawData?.str(BackupKeys.DDAY)?.takeIf { it.isNotBlank() },
             exportedAt = root.str("exportedAt").takeIf { it.isNotBlank() },
             present = present,
@@ -402,11 +416,29 @@ class BackupCodec {
         val id = o.str("id").ifBlank { Ids.newId() }
         val urls = o.strList("photos").ifEmpty { listOfNotNull(o.str("photo").takeIf { it.isNotBlank() }) }
         urls.take(2).forEachIndexed { i, url -> decodeDataUrl(url)?.let { photosOut += PhotoBlob(id, PhotoKind.MISC, i, it) } }
+        val point = o.point()
         return MiscItem(
             id = id, type = type, name = o.str("name"), notes = o.str("notes"), since = o.str("since"), status = o.str("status"),
             scope = o.str("scope"), location = o.str("location"), favorite = o.bool("favorite"), photos = emptyList(),
-            createdAt = o.createdAt(where),
+            createdAt = o.createdAt(where), lat = point?.lat, lng = point?.lng,
         )
+    }
+
+    /** A `cafePlaces` row; one without a name has nothing to attach to and is skipped. */
+    private fun decodeCafePlace(o: JsonObject, where: String): CafePlace? {
+        val name = o.str("name").trim()
+        if (name.isEmpty()) return null
+        val point = o.point()
+        return CafePlace(name, point?.lat, point?.lng, o.createdAt(where))
+    }
+
+    /** `lat` / `lng` as a position: both finite and in range, else none (a damaged pair is dropped, not refused). */
+    private fun JsonObject.point(): GeoPoint? = GeoPoint.of(doubleOrNull("lat"), doubleOrNull("lng"))
+
+    private fun JsonObject.doubleOrNull(key: String): Double? {
+        val p = this[key] as? JsonPrimitive ?: return null
+        if (p is JsonNull) return null
+        return p.content.trim().toDoubleOrNull()?.takeIf { it.isFinite() }
     }
 
     private fun decodeBlend(o: JsonObject, where: String) = Blend(
@@ -604,7 +636,8 @@ class BackupCodec {
         const val APP_NAME = "coffee-journal-mobile"
         /** Web wording (script3.js 7892). */
         const val NO_DATA = "백업 파일 형식이 아니에요. (data 필드가 없어요)"
-        const val SCHEMA = 1
+        /** 2: miscItems carry optional lat / lng and data.cafePlaces exists (Room schema v2). Readers ignore what they do not know. */
+        const val SCHEMA = 2
         const val BAG_PREFIX = "bag-photo:"
         const val JOURNAL_PREFIX = "journal-photo:"
         private const val LEGACY_EQUIPMENT = "equipment"

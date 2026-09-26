@@ -71,6 +71,7 @@
 18. 노트 칩 입력은 같은 노트를 중복으로 넣지 않는다(웹 "내가 느낀 노트"는 중복 허용).
 19. 카페 레시피 중 "공식"이라 적힌 3건(글리치 오리가미 핫, 큐라스 V60, 큐라스 오리가미)을 각 카페가 공개한 가이드 수치로 고쳤고(2026-09 확인), 카드에 출처 링크를 단다. 가이드에 없는 값(붓는 시간·분쇄도·전체 추출시간)은 비운다. 챔피언 레시피에는 "수치는 공개 자료 정리, 대회 공식 자료 아님" 안내를 붙인다.
 20. 기타 탭 맨 아래에 "출처 · 라이선스" 화면을 둔다: 데이터·디자인 출처와 조건(SCA·WCR 플레이버 휠 CC BY-NC-ND 4.0 표기 포함), 아이콘(Lucide ISC·Feather MIT) 전문, APK에 든 오픈소스 라이브러리 전체(빌드 시 생성). 플레이버 휠 아래에도 저작권 표기를 둔다.
+21. 로스터리 지도는 웹의 % 좌표 자리 표시(KOREA/WORLD 도형) 대신 실제 지도를 쓴다(2차 설계 §1): 국내는 통계청 SGIS 경계 기반 한국 지도(시·도 → 시·군·구 확대), 해외는 Natural Earth 세계지도. 로스터리·카페 위치를 지도에 직접 찍어 저장하고 네이버 지도·카카오맵·Google 지도로 연다. 좌표는 앱 전용 값이라 웹 백업에는 선택 키(`lat`, `lng`, `cafePlaces`)로만 더한다.
 
 ---
 
@@ -85,7 +86,7 @@ coffee-journal/
 │     ├─ commonMain/kotlin/com/coffeejournal/
 │     │  ├─ domain/model/        # Entry, CuppingBean, PantryItem, MiscItem, Book, Video, CoffeeClass, Blend, MyRecipe, RoadmapPhase …
 │     │  ├─ domain/rules/        # BeanNames, BeanRecords, CalendarRanges, PantryRules, NoteCanon, CountryLookup, RoastFamily, ScaScoring, RecipeSteps, RegionHierarchy
-│     │  ├─ domain/reference/    # FlavorWheel, NoteCategories, Processes, Varieties, CoffeeCountries, WorldMap, Champions, CafeRecipes, RoasteryMapPoints
+│     │  ├─ domain/reference/    # FlavorWheel, NoteCategories, Processes, Varieties, CoffeeCountries, WorldMap, Champions, CafeRecipes, RoasteryMapPoints, KoreaMapData(생성)
 │     │  ├─ data/db/             # Room: AppDatabase, entities, DAOs, converters, migrations
 │     │  ├─ data/repo/           # EntryRepository, PantryRepository, MiscRepository, StudyRepository, BlendRepository, RoadmapRepository, SettingsRepository
 │     │  ├─ data/backup/         # BackupCodec (웹 호환 JSON), BackupService
@@ -115,6 +116,7 @@ coffee-journal/
 | `ImageResizer` | Bitmap 디코드·EXIF 회전·긴 변 1280px·JPEG 82 | UIImage |
 | `BackupFileIo` | SAF `CreateDocument`/`OpenDocument` + 공유 시트 | UIDocumentPicker / ShareSheet |
 | `Clock/Locale` | kotlinx-datetime 공통 | 공통 |
+| `openMapUri(uri, fallback)` | 암시적 VIEW 인텐트(BROWSABLE), `ActivityNotFoundException`이면 웹 대체 URL | `canOpenURL`(Info.plist `LSApplicationQueriesSchemes`: nmap) 후 `openURL`, 안 되면 웹 대체 URL |
 
 ---
 
@@ -128,7 +130,8 @@ coffee-journal/
 | `cupping_beans` | id PK, entry_id FK(CASCADE), position, name, country, region, roastery, farm_producer, altitude, variety, price, rank, process, roast, expected_notes, actual_notes, evaluation(JSON), evaluation_scores(JSON), memo, bean_mode, blend_components_text | |
 | (사진) | `entries.bag_photos`(JSON 파일명 목록, 최대 2) · `entries.grounds_photo` | 구현 시 별도 테이블 대신 컬럼으로 단순화. 파일은 PhotoStore |
 | `pantry_items` | id, name, roastery, package_type, weight, price, roast_level, roast_date, purchase_date, peak_start, peak_end, expected_notes, notes, status('unopened'/'opened'), opened_at, created_at, source_entry_id | |
-| `misc_items` | id, type, name, notes, since, status, scope, location, favorite, photos(JSON 파일명 목록), created_at | type: dripper, filter, kettle, thermometer, scale, water, source, selection, process, variety, farm |
+| `misc_items` | id, type, name, notes, since, status, scope, location, favorite, photos(JSON 파일명 목록), created_at, lat, lng | type: dripper, filter, kettle, thermometer, scale, water, source, selection, process, variety, farm. `lat`/`lng`(REAL, nullable, v2): "지도에서 위치 지정"으로 찍은 로스터리 좌표(WGS84), 둘 다 있거나 둘 다 없음 |
+| `cafe_places` | name PK, lat, lng, created_at | v2. 카페 기록의 카페 이름별 위치(카페 기록은 이름만 가지므로 이름당 1행, 이름은 앞뒤 공백·대소문자 무시로 대조) |
 | `books` | id, created_at, title, author, status, start_date, end_date, rating, notes | |
 | `videos` | id, created_at, title, channel, url, notes | |
 | `classes` | id, created_at, title, class_type, date, start_date, end_date, notes | |
@@ -139,7 +142,7 @@ coffee-journal/
 | `best_recipes` | bean_key PK, entry_id | |
 | `settings` | key PK, value | `brew-start-date`, 마지막 필터 등 |
 
-- 마이그레이션: `room-gradle-plugin` 스키마 export(`shared/schemas`) + `autoMigrations`.
+- 마이그레이션: `room-gradle-plugin` 스키마 export(`shared/schemas/…/1.json, 2.json`) + `autoMigrations`. v1 → v2(2차 지도 기능)는 `AutoMigration(1, 2)`: `misc_items`에 `lat`/`lng` 열 추가, `cafe_places` 생성. 기존 행은 그대로이고 좌표는 비어 있다(`DatabaseMigrationTest`가 1.json대로 만든 v1 파일을 앱의 빌더로 열어 확인). 실제 열 이름은 엔티티 속성 이름(`createdAt` 등)을 따른다.
 - 커핑 원두 이외의 목록형 필드(steps, recipeRef, blendComponents, attributes, attributeNotes, tags, 사진 파일명)와 웹 전용 필드(`legacy_extra`: beanGuidance·photoFeedback·adviceChat 등)는 kotlinx-serialization JSON 컬럼으로 저장한다.
 - 사진: `PhotoStore`가 `photos/<uuid>.jpg`로 저장, DB에는 파일명만. 삭제 시 파일도 삭제.
 - 성능 가정: 개인 저널(수천 건 이하) → 기록 전체를 메모리에 로드해 웹과 같은 방식으로 파생 통계를 계산(Flow combine).
@@ -151,9 +154,11 @@ coffee-journal/
             "videos": [...], "pantryItems": [...], "settings": {...} },          // 앱 확장 키
   "rawData": { "ddayStart": "YYYY-MM-DD" },
   "photos": { "bag-photo:<id>": "[dataURL,...]", "journal-photo:<id>": "dataURL" },
-  "app": { "name": "coffee-journal-mobile", "schema": 1 } }
+  "app": { "name": "coffee-journal-mobile", "schema": 2 } }
+// schema 2: miscItems 객체에 선택 키 "lat", "lng"(위치를 찍은 로스터리만), data에 앱 확장 키 "cafePlaces": [{ "name", "lat", "lng", "createdAt" }]
 ```
 - 가져오기: 웹 파일(확장 키 없음)도 그대로 수용하며, 웹이 앱 시작 시 수행하던 데이터 이전(`WebMigrations`: SCA 1–5점 척도 → 6–10점, 옛 `aroma` → `aromaIntensity`, 0–15 강도 → 1–5 0.5단위)을 복원 시 동일하게 적용하고, 손상된 항목은 건너뛰고 항목별 실패 수로 보고한다. `entries`는 모드와 무관하게 항상 id 기준 upsert(병합), 나머지 컬렉션은 "교체"/"병합" 중 선택(기본 병합). 사진 data URL은 파일로 복원(이미 규격(긴 변 1280px 이하·정방향 JPEG) 안인 사진은 재인코딩 없이 그대로 저장해 백업↔복원 왕복에도 화질이 떨어지지 않는다).
+- 지도 데이터(schema 2): `miscItems`의 `lat`/`lng`는 둘 다 유한하고 범위 안일 때만 좌표로 읽는다(깨진 값은 좌표 없음, 파일 거절 아님). 병합에서 백업 항목에 좌표가 없으면(웹 파일) 기존 좌표를 유지하고, 교체는 백업 값 그대로. `cafePlaces`는 이름으로 병합(백업 행이 이긴다), 교체는 표를 통째로 바꾸며, 키가 없는 파일(웹 백업)은 카페 위치를 건드리지 않는다. 결과 줄은 `cafePlaces: ✓ N개 복원됨`.
 - 원자성: 사진 파일 → DB 트랜잭션 1회 → 커밋 후 참조가 끊긴 옛 사진 파일 삭제. 도중 실패 시 롤백 + 이번 복원이 쓴 파일 삭제로 복원 전 상태를 그대로 유지한다. 결과는 웹과 같은 문구의 항목별 줄(`entries: ✓ 3개 복원됨` 등)로 보고한다.
 - 파일 크기 상한: `BackupFileLimits.maxFileBytes(힙)` = 힙/5, 16–256MB로 제한. 일반 기기(힙 256–512MB)에서 50–100MB 정도가 한계이며, 더 큰 웹 백업을 받으려면 `android:largeHeap` 사용 여부를 결정해야 한다(현재 미사용).
 - 기기 백업(Android Auto Backup / 기기 간 전송)은 DB·WAL·사진 폴더만 포함한다. 클라우드 백업은 앱당 25MB 할당량을 넘으면 Android가 통째로 건너뛰므로, 앱 내 JSON 백업이 기본 이전 수단이다.
@@ -165,7 +170,7 @@ coffee-journal/
 
 ### 5.1 내비게이션
 - 하단 탭 4개: 새로운 추출 · 커피 달력 · 원두 · 기타 (웹 메인 탭 순서 유지, 탭별 백스택 보존).
-- 전체 화면 라우트: `RecordForm(entryId?, mode)`, `EntryDetail(id)`, `PantryEditor(id?)`, `BlendForm(id?)`, `BookForm(id?)`, `VideoForm(id?)`, `ClassForm(id?)`, `MiscForm(type, id?)`, `FlatItemForm(type, id?)`(로스터리·수입사·농장·가공), `RecipeLauncher(kind)`, `BackupRestore`, `CountryDetail(en)`, `NoteDetail(key)`, `VarietyDetail(key)`, `ProcessDetail(name)`.
+- 전체 화면 라우트: `RecordForm(entryId?, mode)`, `EntryDetail(id)`, `PantryEditor(id?)`, `BlendForm(id?)`, `BookForm(id?)`, `VideoForm(id?)`, `ClassForm(id?)`, `MiscForm(type, id?)`, `FlatItemForm(type, id?)`(로스터리·수입사·농장·가공), `RecipeLauncher(kind)`, `BackupRestore`, `CountryDetail(en)`, `NoteDetail(key)`, `VarietyDetail(key)`, `ProcessDetail(name)`, `MapPicker(target, name, scope, point?)`("지도에서 위치 지정": 로스터리는 폼으로 좌표를 돌려주고, 카페는 바로 저장).
 - 웹의 "펼침 카드"는 모바일에서 `EntryDetail` 화면 + 목록의 접이식 요약으로 대체.
 
 ### 5.2 탭별 화면
@@ -175,7 +180,16 @@ coffee-journal/
 
 **커피 달력**: 상단 칩(전체/스터디/클래스/커핑/카페/원두) → 월 헤더(‹ 오늘 ›) → 그리드 → 날짜 패널(바텀시트) → Today 원두 → 범례 → 필터별 하단 섹션(카페·커핑 목록 / 이 달 추출 기록 / 커피 공부(로드맵·커핑 리뷰 모음)). 스터디·클래스는 같은 탭의 별도 뷰.
 
-**원두**: 상단 가로 스크롤 서브탭 9개(기본 커피 지도). 각 뷰는 웹 구성을 세로 스크롤 화면으로 재배치. 커피 지도는 Canvas에 SVG 폴리곤(M/L/Z만 사용, 175개국)을 그리고 탭 좌표를 point-in-polygon으로 판정, 핀치 줌 지원. 로스터리 지도는 웹처럼 % 좌표 핀 배치.
+**원두**: 상단 가로 스크롤 서브탭 9개(기본 커피 지도). 각 뷰는 웹 구성을 세로 스크롤 화면으로 재배치. 커피 지도는 Canvas에 SVG 폴리곤(M/L/Z만 사용, 175개국)을 그리고 탭 좌표를 point-in-polygon으로 판정, 핀치 줌 지원.
+
+**로스터리 지도(2차 §1)**: 한국 | 해외 탭. 한국은 "로스터리 지도 | 방문 카페 지도" 전환.
+- 한국 지도: 전국(16 시·도 경계, 핀이 있는 시·도는 옅은 갈색)에서 시·도를 누르면 그 시·도의 시·군·구 지도(주변 시·도는 옅게)로 확대, "← 전국"·시스템 뒤로 가기로 복귀. 두 손가락 확대·이동(확대 후 한 손가락 이동), "전체 보기". 멀리 떨어진 섬(울릉도·독도, 옹진 섬들)은 축소해서 본다.
+- 핀: 좌표가 있으면 그 자리, 없으면 지역 글에서 찾은 시·군·구(없으면 시·도) 중심. 이름 칩은 서로 겹치지 않게 비켜 놓고 점까지 지시선을 긋는다. 전국 지도에서는 한 시·도에 2곳 이상이면 "서울 3곳" 칩 하나로 묶고, 핀(또는 묶음)을 누르면 그 시·도로 확대해 선택한다(작은 시·도가 칩에 가려 눌리지 않는 문제 방지).
+- 선택 패널: 기존 로스터리 패널(위치, 연결된 기록) + 찾은 지역("📍 서울특별시 성동구" / "○○ 중심에 표시") + "네이버 지도에서 열기"·"카카오맵에서 열기"(해외는 "Google 지도에서 열기"가 먼저). 위치 미입력, 지도에서 찾지 못한 곳은 지도 아래 상자로.
+- 방문 카페 지도: 카페 기록(카테고리 카페, 카페 이름 있음)을 카페 이름별로 묶어 위치가 있는 카페를 방문 횟수와 함께 표시, 누르면 방문 기록 목록(→ 기록 상세)·지도 앱 링크·"지도에서 위치 변경". 위치 미지정 카페는 목록과 "지도에서 위치 지정" 버튼.
+- 해외 지도: 앱의 Natural Earth 세계지도(무채색)에 핀. 좌표 또는 지역 글의 나라 중심(웹 roasteryPoint의 나라 목록 + 생산국 45 + 지도 영문 국가명).
+
+**위치 지정(MapPicker)**: 로스터리 폼("지도 위치" 칸의 "지도에서 위치 지정/변경", "위치 지우기"), 카페 기록 상세의 "카페 위치", 달력 카페 목록 아래 "카페 위치"에서 연다. 국내는 전국에서 시·도를 눌러 확대한 뒤 누른 곳이 위치(빨간 표식), 찾은 "시·도 시·군·구"와 좌표를 보여준다. 해외 로스터리는 세계지도에서 누르고 나라 이름을 보여준다. 로스터리는 "확인"으로 폼에 돌려주고(지역 칸이 비어 있으면 "서울특별시 성동구"나 "일본"으로 채움) 폼에서 저장해야 반영된다. 카페는 "저장"으로 바로 저장. 기존 위치가 있으면 그 시·도에서 시작한다.
 
 **기타(장비)**: 유형 칩 → 정렬 토글 → 카드(사진·이름·시작일·메모) → FAB 추가.
 
@@ -212,7 +226,9 @@ coffee-journal/
 ---
 
 ## 7. 내장 참조 데이터 (공유 모듈 상수, 웹에서 그대로 이식)
-플레이버 휠 9/85, 향미 분류 9/43, 노트 동의어 45, 가공 4+4(허니 세부 5), 품종 참조 26·계보 21·표시명·한국어명 39, 커피 생산국 45/산지 60(+좌표), 지역 동의어 25, 국가 동의어 10, 대륙 매핑, 세계지도 SVG 175 폴리곤(viewBox 138 100 788 283, 회귀선 y 204.7/330.0), 로스터리 배치 좌표 국내 11/해외 15, WBrC 챔피언 9, 카페 레시피 4(단계 포함), 일반 단계 예시 6, 배전도 5단계, 장비 유형 6, 점수 티어 4.
+플레이버 휠 9/85, 향미 분류 9/43, 노트 동의어 45, 가공 4+4(허니 세부 5), 품종 참조 26·계보 21·표시명·한국어명 39, 커피 생산국 45/산지 60(+좌표), 지역 동의어 25, 국가 동의어 10, 대륙 매핑, 세계지도 SVG 175 폴리곤(viewBox 138 100 788 283, 회귀선 y 204.7/330.0; 등장방형 8/3 단위/도, 경도 −180° = x 0, 적도 y 267.35), 로스터리 배치 좌표 국내 11/해외 15(웹 원본 참고용, 지도는 2차에서 실제 좌표로 대체), WBrC 챔피언 9, 카페 레시피 4(단계 포함), 일반 단계 예시 6, 배전도 5단계, 장비 유형 6, 점수 티어 4.
+
+추가(2차, 생성 데이터): 한국 지도 `KoreaMapData` + `KoreaMapProvince<코드>`(16 시·도, 시·군·구 256 = `sgg` 코드 기준·일반구 포함, 대표점, 시·도별 첫 화면 틀). `tools/korea-map/build_korea_map.py`가 vuski/admdongkor ver20260701 행정동 GeoJSON(SGIS 경계 보정본, 입력 SHA-256을 파일 머리말에 기록)을 병합·GEOS coverage 단순화(공유 경계 유지)·투영(x = (경도 − 124.5)·cos 36°·10000, y = (39 − 위도)·10000, 1단위 ≈ 11 m)해 생성한다. 0.5 km² 미만 섬 조각만 버리고 제주·울릉도·독도·서해 섬은 남긴다. 생성 Kotlin 약 235 KiB, 좌표 약 5만 점, 문자열 상수마다 60 KB 미만.
 
 ---
 
@@ -224,7 +240,7 @@ coffee-journal/
 - 화면 검증: 에뮬레이터 없이 Robolectric + Roborazzi로 실제 Compose 화면을 JVM에서 렌더해 PNG로 남긴다(`./gradlew :androidApp:recordRoborazziDebug` → `androidApp/screenshots/`). 테스트는 인메모리 Room(프레임워크 SQLite 드라이버)과 샘플 데이터(`SampleData`)를 주입한다.
 - 흐름 테스트: 같은 환경에서 실제 `App()`을 띄워 탭·입력으로 사용자 흐름 전체를 수행하고, 화면 문구와 저장된 데이터를 웹 원본 핸들러 기준으로 함께 검증한다(백업 왕복, 원자적 복원, 한글 IME 조합, 자정 전환, 연속 탭 경합, 저장 중 뒤로 가기 포함).
 - 렌더 매트릭스: 모든 라우트를 기본·320dp 폭·글자 1.3/2.0배로 렌더해 줄바꿈·잘림·겹침을 확인한다(`ScreenshotMatrixTest`).
-- 현재 규모: `shared` 단위 179개, `androidApp` 흐름·스크린샷 232개, 모두 통과(건너뜀 0).
+- 현재 규모: `shared` 단위 203개, `androidApp` 흐름·스크린샷·마이그레이션 255개, 모두 통과(건너뜀 0).
 - 접근성: 최소 터치 48dp, 대비 4.5:1(잉크/아이보리), 콘텐츠 설명, 토글·펼침 상태 노출.
 
 ## 9. iOS 확장 경로 (2차)

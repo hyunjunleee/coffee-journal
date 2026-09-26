@@ -58,6 +58,20 @@ object Credits {
             links = listOf("Natural Earth" to "https://www.naturalearthdata.com/", "이용 조건" to "https://www.naturalearthdata.com/about/terms-of-use/"),
         ),
         Credit(
+            "한국 지도",
+            "로스터리·카페 지도와 위치 지정의 시·도, 시·군·구 경계는 통계청 통계지리정보서비스(SGIS)의 행정구역 경계(공공누리 제1유형: 출처표시)를 " +
+                "바탕으로 한 vuski/admdongkor ver20260701 보정본(CC BY 4.0)의 행정동 경계를 시·군·구와 시·도로 병합하고 단순화해 앱에 넣은 것이에요. " +
+                "지도의 경계는 단순화되어 실제 경계와 조금 다를 수 있어요.\n" +
+                "\"네이버 지도에서 열기\"·\"카카오맵에서 열기\"·\"Google 지도에서 열기\"는 해당 지도 앱(없으면 웹 지도)을 이름과 위치가 담긴 링크로 여는 것뿐이고, " +
+                "앱이 직접 어디로 데이터를 보내지는 않아요. 링크를 연 뒤에는 각 지도 서비스의 약관과 개인정보 처리방침을 따라요.",
+            links = listOf(
+                "통계청 SGIS" to "https://sgis.kostat.go.kr/",
+                "vuski/admdongkor" to "https://github.com/vuski/admdongkor",
+                "공공누리 제1유형" to "https://www.kogl.or.kr/info/licenseType1.do",
+                "CC BY 4.0" to "https://creativecommons.org/licenses/by/4.0/",
+            ),
+        ),
+        Credit(
             "아이콘 · Lucide",
             "하단 탭과 화면의 선 아이콘 일부는 Lucide 아이콘의 경로를 그대로 쓰거나 줄여서 다시 그렸어요(ISC License).",
             links = listOf("lucide.dev" to "https://lucide.dev/license"),

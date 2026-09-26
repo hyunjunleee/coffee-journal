@@ -3,6 +3,7 @@ package com.coffeejournal.android
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onFirst
@@ -14,9 +15,15 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.coffeejournal.data.repo.CafePlaceRepository
 import com.coffeejournal.data.repo.EntryRepository
+import com.coffeejournal.data.repo.MiscRepository
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.Entry
+import com.coffeejournal.domain.model.GeoPoint
+import com.coffeejournal.domain.model.MiscItem
+import com.coffeejournal.domain.model.MiscType
+import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.ui.nav.FormMode
 import com.coffeejournal.ui.nav.Route
@@ -106,6 +113,58 @@ class RouteScreenshotTest {
         compose.onNode(hasText("커피 지도 + 농장(생산자)") and hasClickAction()).assertIsSelected().assertIsDisplayed()
     }
     @Test fun bean_roastery() = show(Route.Bean, "38-bean-roastery.png") { beanView("로스터리", "한국 로스터리 지도") }
+    /** Roasteries and a café with positions (and one found by its 지역 text), for the map screenshots. */
+    private fun seedMapPlaces() = runBlocking {
+        val koin = GlobalContext.get()
+        koin.get<MiscRepository>().upsertAll(listOf(
+            MiscItem(id = "mp1", type = MiscType.SOURCE, name = "프릳츠 도화", scope = Scope.DOMESTIC, location = "서울 마포구", createdAt = 11, lat = 37.5410, lng = 126.9510),
+            MiscItem(id = "mp2", type = MiscType.SOURCE, name = "펠트 청계천", scope = Scope.DOMESTIC, location = "서울 중구", createdAt = 12, lat = 37.5680, lng = 126.9900),
+            MiscItem(id = "mp3", type = MiscType.SOURCE, name = "모모스", scope = Scope.DOMESTIC, location = "부산 금정구", createdAt = 13, lat = 35.2270, lng = 129.0880),
+            MiscItem(id = "mp4", type = MiscType.SOURCE, name = "테라로사", scope = Scope.DOMESTIC, location = "강원 강릉시", createdAt = 14),
+            MiscItem(id = "mp5", type = MiscType.SOURCE, name = "Coava", scope = Scope.OVERSEAS, location = "Portland, USA", createdAt = 15),
+        ))
+        koin.get<CafePlaceRepository>().set("FELT 청계천", GeoPoint(37.5663, 126.9910))
+    }
+
+    @Test fun roastery_koreaMap() {
+        seedMapPlaces()
+        show(Route.Bean, "46-roastery-korea.png") { beanView("로스터리", "한국 로스터리 지도") }
+    }
+    @Test fun roastery_provinceMap() {
+        seedMapPlaces()
+        show(Route.Bean, "47-roastery-province.png") {
+            beanView("로스터리", "한국 로스터리 지도")
+            // the three 서울 roasteries share one chip nationally; it opens 서울
+            compose.onNode(hasContentDescription("서울특별시에 3곳", substring = true)).performClick()
+            settle()
+            compose.onNode(hasText("← 전국 · 서울특별시") and hasClickAction()).assertExists()
+            compose.onNode(hasContentDescription("펠트 청계천, ", substring = true)).performClick()
+            settle()
+        }
+    }
+    @Test fun roastery_world() {
+        seedMapPlaces()
+        show(Route.Bean, "49-roastery-world.png") {
+            beanView("로스터리", "한국 로스터리 지도")
+            compose.onNode(hasText("해외") and hasClickAction()).performClick()
+            settle()
+            compose.onNode(hasContentDescription("Coava, ", substring = true)).performClick()
+            settle()
+        }
+    }
+    @Test fun cafeMap() {
+        seedMapPlaces()
+        show(Route.Bean, "50-cafe-map.png") {
+            beanView("로스터리", "한국 로스터리 지도")
+            compose.onNode(hasText("방문 카페 지도") and hasClickAction()).performClick()
+            settle()
+            compose.onNode(hasContentDescription("FELT 청계천, 방문 1회")).performClick()
+            settle()
+        }
+    }
+    @Test fun mapPicker() = show(Route.MapPicker(target = "roastery", name = "커피 리브레", scope = Scope.DOMESTIC, point = "37.5446,127.0557"), "48-map-picker.png") {
+        compose.onNode(hasText("← 전국 · 서울특별시") and hasClickAction()).assertExists()
+    }
     @Test fun bean_selection() = show(Route.Bean, "39-bean-selection.png") { beanView("생두 수입사", "Nordic Approach") }
     @Test fun bean_blend() = show(Route.Bean, "40-bean-blend.png") { beanView("블렌드", "+ 블렌드 기록 추가") }
     @Test fun blendForm() = show(Route.BlendForm("bl1"), "41-blend-form.png")

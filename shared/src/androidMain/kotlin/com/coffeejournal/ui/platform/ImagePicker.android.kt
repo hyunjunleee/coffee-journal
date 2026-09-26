@@ -104,7 +104,7 @@ private fun hasCameraApp(context: Context): Boolean {
     return runCatching { Intent(MediaStore.ACTION_IMAGE_CAPTURE).resolveActivity(pm) != null }.getOrDefault(false)
 }
 
-private var appContextForUrl: Context? = null
+internal var appContextForUrl: Context? = null
 
 fun installUrlOpener(context: Context) { appContextForUrl = context.applicationContext }
 

@@ -99,6 +99,16 @@ interface MiscDao {
 }
 
 @Dao
+interface CafePlaceDao {
+    @Query("SELECT * FROM cafe_places ORDER BY name") fun observeAll(): Flow<List<CafePlaceEntity>>
+    @Query("SELECT * FROM cafe_places ORDER BY name") suspend fun getAll(): List<CafePlaceEntity>
+    @Upsert suspend fun upsert(item: CafePlaceEntity)
+    @Upsert suspend fun upsertAll(items: List<CafePlaceEntity>)
+    @Query("DELETE FROM cafe_places WHERE name = :name") suspend fun delete(name: String)
+    @Query("DELETE FROM cafe_places") suspend fun deleteAll()
+}
+
+@Dao
 interface BookDao {
     @Query("SELECT * FROM books ORDER BY createdAt DESC") fun observeAll(): Flow<List<BookEntity>>
     @Query("SELECT * FROM books ORDER BY createdAt DESC") suspend fun getAll(): List<BookEntity>

@@ -5,6 +5,7 @@ import com.coffeejournal.data.db.BeanSummaryEntity
 import com.coffeejournal.data.db.BestRecipeEntity
 import com.coffeejournal.data.db.BlendDao
 import com.coffeejournal.data.db.BookDao
+import com.coffeejournal.data.db.CafePlaceDao
 import com.coffeejournal.data.db.ClassDao
 import com.coffeejournal.data.db.EntryDao
 import com.coffeejournal.data.db.MiscDao
@@ -22,8 +23,10 @@ import com.coffeejournal.domain.model.BeanSummary
 import com.coffeejournal.domain.model.BestRecipe
 import com.coffeejournal.domain.model.Blend
 import com.coffeejournal.domain.model.Book
+import com.coffeejournal.domain.model.CafePlace
 import com.coffeejournal.domain.model.CoffeeClass
 import com.coffeejournal.domain.model.Entry
+import com.coffeejournal.domain.model.GeoPoint
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.domain.model.PantryItem
@@ -80,6 +83,41 @@ class MiscRepository(private val dao: MiscDao, private val photos: PhotoStore) {
 
     /** Deletes every row but leaves the photo files to the caller (a restore deletes them only after its commit). */
     suspend fun deleteAllRows() = dao.deleteAll()
+}
+
+/** Positions of visited cafés by name (cafe_places); names match trimmed and case-insensitively. */
+class CafePlaceRepository(private val dao: CafePlaceDao) {
+    fun observeAll(): Flow<List<CafePlace>> = dao.observeAll().map { l -> l.map { it.toDomain() } }
+    suspend fun getAll(): List<CafePlace> = dao.getAll().map { it.toDomain() }
+
+    suspend fun get(name: String): CafePlace? {
+        val key = CafePlace.key(name)
+        return if (key.isEmpty()) null else getAll().firstOrNull { CafePlace.key(it.name) == key }
+    }
+
+    /** Sets the café's position; an existing row (any spelling of the same name) keeps its name and creation time. */
+    suspend fun set(name: String, point: GeoPoint) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
+        val existing = get(trimmed)
+        dao.upsert(CafePlace(existing?.name ?: trimmed, point.lat, point.lng, existing?.createdAt ?: Dates.nowMillis()).toEntity())
+    }
+
+    suspend fun clear(name: String) {
+        get(name)?.let { dao.delete(it.name) }
+    }
+
+    /** 병합 restore: each backup row replaces the local row of the same name (matched like [get]). */
+    suspend fun mergeAll(items: List<CafePlace>) {
+        val local = getAll().associateBy { CafePlace.key(it.name) }
+        items.forEach { p ->
+            val mine = local[CafePlace.key(p.name)]
+            if (mine != null && mine.name != p.name) dao.delete(mine.name)
+            dao.upsert(p.copy(name = p.name.trim()).toEntity())
+        }
+    }
+
+    suspend fun deleteAll() = dao.deleteAll()
 }
 
 class StudyRepository(private val books: BookDao, private val videos: VideoDao, private val classes: ClassDao) {

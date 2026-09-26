@@ -28,6 +28,8 @@ sealed interface Route {
     @Serializable data class ProcessDetail(val name: String, val seg: String? = null) : Route
     @Serializable data class RoasteryDetail(val name: String) : Route
     @Serializable data object About : Route
+    /** "지도에서 위치 지정": target "roastery" (point handed back to the form) or "cafe" (saved); point = "lat,lng". */
+    @Serializable data class MapPicker(val target: String, val name: String = "", val scope: String = "국내", val point: String? = null) : Route
 }
 
 object FormMode {

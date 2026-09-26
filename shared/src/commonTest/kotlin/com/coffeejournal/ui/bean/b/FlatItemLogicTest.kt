@@ -6,6 +6,10 @@ import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.MiscStatus
 import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.Scope
+import com.coffeejournal.domain.reference.KoreaMapData
+import com.coffeejournal.domain.rules.KoreaProjection
+import com.coffeejournal.domain.rules.MapXY
+import com.coffeejournal.ui.map.WorldPlaces
 import com.coffeejournal.domain.rules.BeanRecords
 import com.coffeejournal.ui.bean.a.BeanFormat
 import kotlin.test.Test
@@ -48,16 +52,30 @@ class FlatItemLogicTest {
             MiscItem(id = "2", type = MiscType.SOURCE, name = "듀잇", scope = Scope.DOMESTIC, location = "", createdAt = 2),
             MiscItem(id = "3", type = MiscType.SOURCE, name = "Onyx", scope = Scope.OVERSEAS, location = "USA", createdAt = 3),
             MiscItem(id = "4", type = MiscType.FARM, name = "워카", createdAt = 4),
+            MiscItem(id = "5", type = MiscType.SOURCE, name = "모모스", scope = Scope.DOMESTIC, location = "", createdAt = 5, lat = 35.2280, lng = 129.0870),
+            MiscItem(id = "6", type = MiscType.SOURCE, name = "어딘가", scope = Scope.DOMESTIC, location = "우리 동네", createdAt = 6),
         )
         val domestic = FlatItemLogic.roasteryMap(items, records, Scope.DOMESTIC)
-        assertEquals(listOf("리브레", "듀잇"), domestic.items.map { it.name })
+        assertEquals(listOf("리브레", "듀잇", "모모스", "어딘가"), domestic.items.map { it.name })
         assertEquals(4, domestic.cups)
-        val pin = domestic.pins.single()
+        // a location text naming only the 시·도: the pin sits at the 시·도's centre
+        val pin = domestic.pins.first()
         assertEquals("리브레", pin.item.name); assertEquals(3, pin.count)
-        assertEquals(48f - 3.5f, pin.x); assertEquals(27f - 5f, pin.y)
+        assertEquals("서울특별시" to false, pin.place to pin.exact)
+        val seoul = KoreaMapData.provinces.single { it.code == "11" }
+        assertEquals(MapXY(seoul.labelX.toDouble(), seoul.labelY.toDouble()), pin.at)
+        assertEquals("11", pin.area)
+        // an exact position wins and names its 시·군·구
+        val exact = domestic.pins.single { it.item.name == "모모스" }
+        assertEquals("부산광역시 금정구" to true, exact.place to exact.exact)
+        assertEquals(KoreaProjection.toMap(35.2280, 129.0870), exact.at)
         assertEquals(listOf("듀잇"), domestic.unlocated.map { it.name })
-        val overseas = FlatItemLogic.roasteryMap(items, records, Scope.OVERSEAS)
-        assertEquals(18f - 3.5f, overseas.pins.single().x)
+        assertEquals(listOf("어딘가"), domestic.unmatched.map { it.name })
+        assertEquals("한국 로스터리 지도. 로스터리 2곳 표시, 위치 미입력 1곳, 지도에서 찾지 못한 곳 1곳. 시·도를 누르면 시·군·구 지도로 확대돼요. 전체 목록은 지도 아래에 있어요.",
+            FlatItemLogic.roasteryMapDescription(true, domestic))
+        val overseas = FlatItemLogic.roasteryMap(items, records, Scope.OVERSEAS).pins.single()
+        assertEquals("미국" to "United States of America", overseas.place to overseas.area)
+        assertEquals("United States of America", WorldPlaces.countryAt(overseas.at))
     }
 
     @Test fun statusSplitAndFavoriteOrdering() {

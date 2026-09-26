@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.Entry
+import com.coffeejournal.ui.map.CafePlaceRow
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
@@ -67,6 +68,7 @@ fun EntryDetailScreen(nav: NavHostController, entryId: String) {
             en == null -> EmptyNote("기록을 찾을 수 없어요.", Modifier.padding(Dimens.gutter))
             else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter).navigationBarsPadding()) {
                 EntryDetailContent(en, ui.siblings, ui.isBest, vm::photoPath)
+                if (en.isCafe) CafePlaceRow(nav, en.cafeName, Modifier.padding(top = 8.dp))
                 flash?.let { Text(it, style = AppType.small.copy(color = Ink.good), modifier = Modifier.padding(top = 12.dp)) }
                 DetailActions(
                     en = en, isBest = ui.isBest, canBeBest = ui.bestKeys.isNotEmpty(),

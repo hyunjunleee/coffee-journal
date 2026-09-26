@@ -145,7 +145,7 @@ class DataIntegrityTest : FlowTestBase() {
             override suspend fun upsertAll(items: List<BookEntity>) = throw IllegalStateException("disk full")
         }
         val study = StudyRepository(failingBooks, db.videoDao(), db.classDao())
-        val service = BackupService(koinGet(), koinGet(), koinGet(), study, koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet())
+        val service = BackupService(koinGet(), koinGet(), koinGet(), study, koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet())
         try {
             service.import(backup, ImportMode.REPLACE)
             fail("books should have failed")
@@ -179,7 +179,7 @@ class DataIntegrityTest : FlowTestBase() {
         val slow = object : PhotoStore by real {
             override suspend fun save(bytes: ByteArray): String { saving.complete(Unit); gate.await(); return real.save(bytes) }
         }
-        val service = BackupService(koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), slow, koinGet(), koinGet(), koinGet())
+        val service = BackupService(koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), koinGet(), slow, koinGet(), koinGet(), koinGet(), koinGet())
         val runner = RestoreRunner(service, AppScope())
         val store = ViewModelStore()
         val factory = object : ViewModelProvider.Factory {

@@ -32,7 +32,7 @@ export ANDROID_HOME=/opt/android-sdk
 - 사진: `PhotoStore`(Koin `get<PhotoStore>()`), 선택은 `ui/platform/ImagePicker.kt`의 `rememberImagePicker(maxItems) { bytes -> }` / `rememberCameraCapture { bytes -> }`. 저장: `photoStore.save(bytes)` → 파일명. 표시: `coil3.compose.AsyncImage(model = "file://" + photoStore.pathFor(name), contentDescription = …)`.
 - 날짜: `domain/rules/Dates.kt`만 사용(Instant 직접 사용 금지). id: `Ids.newId()`.
 - 도메인 규칙은 `domain/rules/*`(BeanNames, Packages, BeanRecords, CalendarRanges, DdayRules, PantryRules, Prices, ScaScoring, RoastFamily, NoteCanon, CountryLookup, RegionHierarchy, RecipeSteps)를 재사용하고 중복 구현하지 않는다.
-- 참조 데이터는 `domain/reference/*`(FlavorWheel, NoteCategories, NoteSynonyms, Processes, Varieties, CoffeeCountries, WorldMapData, Champions, CafeRecipes, GenericSteps, BeanRangeColors, EquipmentTypes, RoastLevels, ScoreTiers, RoadmapDefaults, RoasteryMapPoints, ScaForm).
+- 참조 데이터는 `domain/reference/*`(FlavorWheel, NoteCategories, NoteSynonyms, Processes, Varieties, CoffeeCountries, WorldMapData, Champions, CafeRecipes, GenericSteps, BeanRangeColors, EquipmentTypes, RoastLevels, ScoreTiers, RoadmapDefaults, RoasteryMapPoints, ScaForm, KoreaMapData). `KoreaMapData*.kt`는 생성 파일이라 손으로 고치지 않고 `python3 tools/korea-map/build_korea_map.py [--input 행정동.geojson] [--preview 폴더]`(도구 전용 `pip install shapely`)로 다시 만든다.
 
 ## 공용 헬퍼 (감사 후 추가, 반드시 재사용)
 - 숫자: `Numbers.parse(text)` — `NaN`·`Infinity`·범위 초과를 "값 없음"(null)으로 돌린다. `toDoubleOrNull()` 직접 사용 금지.
@@ -49,6 +49,15 @@ export ANDROID_HOME=/opt/android-sdk
 - 큰 글자·좁은 화면: 한 줄이어야 하는 짧은 라벨은 `FitText`(줄바꿈 대신 축소), 고정 폭 숫자 열은 `N.dp.fontScaled()`(글자 배율만큼, 최대 1.6배 확장). `Seg`는 웹 flex-wrap처럼 넘치면 다음 줄로 옮긴다.
 - 동시 수정: 읽고-고쳐-쓰는 저장(로드맵, 보관함 편집, 즐겨찾기)은 `Mutex` 안에서 행을 다시 읽은 뒤 쓴다. 빠른 연속 탭이나 다른 화면의 변경이 덮이지 않게 한다.
 - 탭 간 요청: 다른 화면에서 원두 탭의 특정 서브뷰를 열 때는 `BeanViewRequests`(Koin single)에 요청을 넣고 탭을 전환한다(라우트 인자는 탭 전환 시 이전 값으로 복원되므로 쓰지 않음).
+
+## 지도 헬퍼 (2차 §1, 재사용)
+- 좌표: `GeoPoint.of(lat, lng)`(둘 다 유한·범위 안일 때만), `MiscItem.point`, `CafePlace.point`. 카페 이름 대조는 `CafePlace.key(name)`(trim + 소문자).
+- 한국 지도(`domain/rules/KoreaGeo.kt`): `KoreaProjection.toMap/toGeo`(등장방형, cos 36° 보정, 1단위 ≈ 11 m, `KM_PER_UNIT`), `inKoreaBox`. `KoreaShapes`(생성 윤곽을 한 번 디코드: `provinces`, `districts(code)`, `Outline.contains/distanceToEdge`). `KoreaRegions.locate(lat, lng, snapKm)`(point-in-polygon → `KoreaRegion.label` "서울특별시 성동구"; 바다는 null, `snapKm`이면 그 거리 안의 가장 가까운 시·군·구), `KoreaRegions.matchText(지역 글)`(시·군·구 → 일반구 도시 → 시·도, 여러 시·도에 있는 이름은 시·도와 함께일 때만).
+- 세계지도(`ui/map/WorldPlaces.kt`): `WorldProjection.toView/toGeo`(WorldMapData viewBox: 경도 −180° = x 0, 8/3 단위/도, 적도 y 267.35), `WorldPlaces.match(지역 글)`(나라 중심), `countryAt(viewBox 점)`, `displayName(지도 국가명)`(한국어 이름이 있으면).
+- 지도 링크: `MapLinks.naver/kakao/google/forPlace`(공식 URL 형식, `encode`는 RFC 3986 UTF-8), 여는 것은 `openMapUri(uri, fallback)`(expect/actual; 앱이 없으면 웹). 흐름 테스트는 `installUrlOpener`를 먼저 부른다. 화면에서는 `MapLinkButtons(name, location, point, overseas)`.
+- 지도 화면(`ui/map`): `KoreaMap(state = rememberKoreaMapState(), …)`(전국 → 시·도, 뒤로 가기 처리 포함), `WorldPinMap`, 공통 바탕 `GeoMapCanvas`(핀 칩 + 지시선, 제스처, 표식)와 `MapViewport`/`MapViewportMath`(맞춤·확대·이동 계산), `PinSpread`(칩 비켜 놓기), `KoreaPinClusters`(전국 지도의 시·도 묶음). 핀은 `MapPin(key, label, at, count, description)`.
+- 위치 지정: `Route.MapPicker(target = MapPickTarget.ROASTERY | CAFE, name, scope, point = MapPickResult.encode(p))`. 로스터리는 결과를 이전 화면의 `SavedStateHandle`(`MapPickResult.KEY`)로 돌려주고 폼이 `applyPick`으로 받는다(빈 지역 칸 채우기 포함). 카페는 `CafePlaceRepository.set/clear`로 바로 저장. 카페 위치 UI는 `CafePlaceRow`(기록 상세), `CafeLocationsBlock`(달력 카페 목록), `CafeMapSection`(원두 › 로스터리 › 방문 카페 지도).
+- 흐름 테스트에서 지도를 누를 때는 지도 노드(content description)의 크기와 `MapViewportMath.toCanvas(…, KoreaFrames.national 또는 provinceFrame(code), fitScale, 중심)`로 좌표를 구해 `performTouchInput { click(…) }`(`MapFlowTest` 참고).
 
 ## 디자인 규약 (`ui/theme`)
 - 접근성: 글리프·체크박스·지도·휠처럼 그림만 있는 요소는 동작 이름이나 아래 목록을 가리키는 content description을 달고, 접이식 헤더·토글은 펼침/선택 상태를 노출한다. 달력 칸은 "9월 21일, 오늘, 기록 2개"처럼 읽힌다.

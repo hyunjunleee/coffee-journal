@@ -207,7 +207,12 @@ data class MiscItem(
     val favorite: Boolean = false,
     val photos: List<String> = emptyList(),
     val createdAt: Long,
-)
+    /** Exact map position (app only, schema v2): set with "지도에서 위치 지정"; both or neither. */
+    val lat: Double? = null,
+    val lng: Double? = null,
+) {
+    val point: GeoPoint? get() = GeoPoint.of(lat, lng)
+}
 
 object BookStatus {
     const val WANT = "읽고 싶음"

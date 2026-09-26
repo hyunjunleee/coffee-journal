@@ -18,6 +18,8 @@ internal object ImportMerge {
      * SaveEntryPipeline.registerMany uses, so "커피 리브레" registered in the app and the web backup's "커피 리브레"
      * stay one row: the local row keeps its id and takes the backup's non-blank fields and photos. Registry types are
      * also de-duplicated within the backup itself. [savedPhotos] holds the stored file names per backup item id.
+     * A map position (app only) comes from the backup when it has one; otherwise the local row's is kept, so merging
+     * a web backup does not take the roasteries off the map.
      */
     fun misc(local: List<MiscItem>, incoming: List<MiscItem>, savedPhotos: Map<String, List<String>>): MiscResult {
         val rows = LinkedHashMap<String, MiscItem>()
@@ -32,7 +34,8 @@ internal object ImportMerge {
             val sameId = rows[m.id]
             val target = sameId ?: key?.let { byName[it] }?.let { rows[it] }
             val row = when {
-                sameId != null -> m.copy(photos = photos)
+                // a web backup never carries the app's map position: the local one stays
+                sameId != null -> m.copy(photos = photos).withPointOf(sameId)
                 target != null -> absorb(target, m, photos)
                 else -> m.copy(photos = photos)
             }
@@ -58,7 +61,10 @@ internal object ImportMerge {
         location = m.location.ifBlank { target.location },
         favorite = m.favorite || target.favorite,
         photos = photos.ifEmpty { target.photos },
-    )
+    ).let { merged -> if (m.point != null) merged.copy(lat = m.lat, lng = m.lng) else merged }
+
+    /** The backup item's position, or [local]'s when the backup has none. */
+    private fun MiscItem.withPointOf(local: MiscItem): MiscItem = if (point != null) this else copy(lat = local.lat, lng = local.lng)
 
     /**
      * 병합 for the roadmap: phases are matched by id and take the backup's title/range/days; their checklist items are

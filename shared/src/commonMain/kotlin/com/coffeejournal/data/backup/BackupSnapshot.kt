@@ -4,6 +4,7 @@ import com.coffeejournal.domain.model.BeanSummary
 import com.coffeejournal.domain.model.BestRecipe
 import com.coffeejournal.domain.model.Blend
 import com.coffeejournal.domain.model.Book
+import com.coffeejournal.domain.model.CafePlace
 import com.coffeejournal.domain.model.CoffeeClass
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.MiscItem
@@ -41,6 +42,8 @@ data class BackupSnapshot(
     val beanSummaries: List<BeanSummary> = emptyList(),
     val bestRecipes: List<BestRecipe> = emptyList(),
     val settings: Map<String, String> = emptyMap(),
+    /** App extension (schema v2): positions of visited cafés; web files have no such key. */
+    val cafePlaces: List<CafePlace> = emptyList(),
     val ddayStart: String? = null,
     val exportedAt: String? = null,
     /** Collections the source file actually contained (the web writes `null` for keys it never stored). */
@@ -55,7 +58,7 @@ data class BackupSnapshot(
     val photoCount: Int get() = photos.size + miscPhotos.size
 
     /** Label/value rows in the web result-panel order. */
-    fun countRows(): List<Pair<String, String>> = listOf(
+    fun countRows(): List<Pair<String, String>> = listOfNotNull(
         BackupKeys.ENTRIES to entries.size.toString(),
         BackupKeys.MISC to miscItems.size.toString(),
         BackupKeys.BLENDS to blends.size.toString(),
@@ -67,6 +70,8 @@ data class BackupSnapshot(
         BackupKeys.PANTRY to pantryItems.size.toString(),
         BackupKeys.SUMMARIES to beanSummaries.size.toString(),
         BackupKeys.BEST to bestRecipes.size.toString(),
+        // app-only; a web file never has it, so its row is left out rather than shown as 0
+        if (cafePlaces.isNotEmpty()) BackupKeys.CAFE_PLACES to cafePlaces.size.toString() else null,
         BackupKeys.DDAY to (ddayStart?.takeIf { it.isNotBlank() } ?: "없음"),
         BackupKeys.PHOTOS_LABEL to photoCount.toString(),
     )
@@ -94,7 +99,9 @@ object BackupKeys {
     const val VIDEOS = "videos"
     const val PANTRY = "pantryItems"
     const val SETTINGS = "settings"
+    /** App extension key (not in web files): `[{name, lat, lng, createdAt}]`. */
+    const val CAFE_PLACES = "cafePlaces"
     const val DDAY = "ddayStart"
     const val PHOTOS_LABEL = "photos (사진)"
-    val all: Set<String> = setOf(ENTRIES, MISC, BLENDS, CLASSES, ROADMAP, MY_RECIPES, BOOKS, SUMMARIES, BEST, VIDEOS, PANTRY, SETTINGS, DDAY)
+    val all: Set<String> = setOf(ENTRIES, MISC, BLENDS, CLASSES, ROADMAP, MY_RECIPES, BOOKS, SUMMARIES, BEST, VIDEOS, PANTRY, SETTINGS, CAFE_PLACES, DDAY)
 }
