@@ -24,7 +24,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import com.coffeejournal.ui.form.sections.BagPhotoSection
 import com.coffeejournal.ui.form.sections.BasicSection
@@ -34,6 +36,7 @@ import com.coffeejournal.ui.form.sections.CuppingSection
 import com.coffeejournal.ui.form.sections.RecipeLauncherSection
 import com.coffeejournal.ui.form.sections.RecipeSection
 import com.coffeejournal.ui.form.sections.TastingSection
+import com.coffeejournal.ui.form.timer.BrewTimerResult
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.BlockBackWhile
 import com.coffeejournal.ui.theme.Dimens
@@ -47,7 +50,7 @@ import org.koin.core.parameter.parametersOf
 
 /** Route.RecordForm — the record input form in 원두 / 카페 / 커핑 mode, new or editing. */
 @Composable
-fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cuppingType: String?) {
+fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cuppingType: String?, results: SavedStateHandle? = null) {
     val vm = koinViewModel<RecordFormViewModel> { parametersOf(FormArgs(mode, entryId, cuppingType)) }
     val state by vm.state.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
@@ -65,6 +68,15 @@ fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cup
                     if (!ev.wasEdit) nav.navigate(Route.EntryDetail(ev.entryId))
                 }
                 FormEvent.NotFound -> nav.popBackStack()
+            }
+        }
+    }
+    // the brew timer hands its rows back through this destination's saved state (also after a process death)
+    if (results != null) LaunchedEffect(results) {
+        results.getStateFlow<String?>(BrewTimerResult.KEY, null).collect { json ->
+            if (json != null) {
+                results.remove<String>(BrewTimerResult.KEY)
+                BrewTimerResult.decode(json)?.let(vm::applyTimerSteps)
             }
         }
     }
@@ -127,7 +139,8 @@ private fun RecordFormBody(
     // Web hideBagPhotoSection: a repeat brew of a known bean has no bag photos of its own (photos it already has stay).
     val bagPhotosHidden = state.repeatBean && state.bagPhotos.none { it.hasImage }
     if (!state.isCafe && !bagPhotosHidden) BagPhotoSection(state.bagPhotos, vm::photoModel, vm::setPhoto, vm::removePhoto)
-    RecipeSection(state, suggestions, update)
+    // a double tap opens one timer, not two
+    RecipeSection(state, suggestions, update, onOpenTimer = dropUnlessResumed { nav.navigate(vm.timerRoute()) })
     TastingSection(state, update)
 }
 

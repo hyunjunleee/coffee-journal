@@ -17,6 +17,7 @@ import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.domain.model.PackageType
 import com.coffeejournal.domain.model.PantryItem
+import com.coffeejournal.domain.model.RecipeStep
 import com.coffeejournal.domain.reference.CafeRecipes
 import com.coffeejournal.domain.reference.Champions
 import com.coffeejournal.domain.rules.BeanNames
@@ -25,6 +26,8 @@ import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.PantryRules
+import com.coffeejournal.ui.form.timer.BrewTimerResult
+import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.deriveOffMain
 import kotlin.concurrent.Volatile
 import kotlinx.coroutines.Job
@@ -157,6 +160,15 @@ class RecordFormViewModel(
     fun applyCafeRecipe(r: CafeRecipes.Recipe) = update { FormMapper.applyCafeRecipe(it, r) }
     fun applyMyRecipe(r: MyRecipe) = update { FormMapper.applyMyRecipe(it, r) }
     fun deleteMyRecipe(id: String) { viewModelScope.launch { myRecipes.delete(id) } }
+
+    /** The brew timer's rows replace the step log (the timer asked before replacing a log of the user's own). */
+    fun applyTimerSteps(steps: List<RecipeStep>) = update { it.copy(steps = steps.map(StepForm::from)) }
+
+    /** Opens the brew timer with the applied recipe, telling it whether a log of the user's own would be replaced. */
+    fun timerRoute(): Route.BrewTimer {
+        val s = _state.value
+        return Route.BrewTimer(recipe = BrewTimerResult.encodeRecipe(s.appliedRecipeRef?.takeIf { it.steps.isNotEmpty() }), hasLog = FormMapper.hasOwnStepLog(s))
+    }
 
     fun setPhoto(index: Int, bytes: ByteArray) = update { s ->
         s.copy(bagPhotos = s.bagPhotos.mapIndexed { i, slot -> if (i == index) PhotoSlot(existingName = null, pending = bytes) else slot })

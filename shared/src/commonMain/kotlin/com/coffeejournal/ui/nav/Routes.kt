@@ -28,6 +28,10 @@ sealed interface Route {
     @Serializable data class ProcessDetail(val name: String, val seg: String? = null) : Route
     @Serializable data class RoasteryDetail(val name: String) : Route
     @Serializable data object About : Route
+    /** recipe: the form's applied recipe as JSON (BrewTimerResult.encodeRecipe); hasLog: the form already has a step log. */
+    @Serializable data class BrewTimer(val recipe: String? = null, val hasLog: Boolean = false) : Route
+    @Serializable data class BrewCompare(val beanKey: String) : Route
+    @Serializable data object Stats : Route
 }
 
 object FormMode {

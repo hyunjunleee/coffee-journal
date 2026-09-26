@@ -1,5 +1,6 @@
 package com.coffeejournal.ui.form
 
+import com.coffeejournal.domain.rules.CvaScoring
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.reference.ScaForm
@@ -63,10 +64,13 @@ internal object EntryDisplay {
         return parts.joinToString(" · ")
     }
 
-    /** Web scaScoreHtml with the app rule: only when one of the 7 scored attributes was set. */
+    /**
+     * Web scaScoreHtml with the app rule (only when one of the 7 scored attributes was set), or for a CVA tasting its
+     * affective score labelled "CVA 84.25 / 100".
+     */
     fun scaTotalText(en: Entry): String? {
         if (en.isCupping) return null
-        return ScaScoring.effectiveTotal(FormNumbers.finiteAttributes(en.attributes))?.let { "${ScaScoring.format2(it)} / 100" }
+        return CvaScoring.scoreText(FormNumbers.finiteAttributes(en.attributes), en.attributeNotes)
     }
 
     /**

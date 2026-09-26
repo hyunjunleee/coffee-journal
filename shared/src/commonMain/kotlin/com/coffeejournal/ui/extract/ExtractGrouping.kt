@@ -1,5 +1,6 @@
 package com.coffeejournal.ui.extract
 
+import com.coffeejournal.domain.rules.CvaScoring
 import com.coffeejournal.domain.model.BeanMode
 import com.coffeejournal.domain.model.BeanRecord
 import com.coffeejournal.domain.model.Blend
@@ -49,6 +50,8 @@ data class BeanGroup(
     val lastAt: Long,
     val dateRangeLabel: String,
     val highestScore: Double?,
+    /** Best CVA affective score, shown apart from [highestScore] (SCA 2004). */
+    val highestCva: Double? = null,
     /** Photo file name of the oldest record that has a bag photo. */
     val thumbnailPhoto: String?,
     /** "직접 블렌드 · A 10g + B 8g" when the latest record is a custom blend. */
@@ -187,6 +190,8 @@ object ExtractGrouping {
             val latest = sorted.first().entry
             val oldest = sorted.last().entry
             val scores = sorted.mapNotNull { ScaScoring.effectiveTotal(it.entry.attributes) }
+            // CVA scores are a different scale of judgement: kept apart from the SCA 2004 best
+            val cvaScores = sorted.mapNotNull { CvaScoring.scoreOf(it.entry) }
             val thumb = sorted.asReversed().firstOrNull { it.entry.bagPhotos.isNotEmpty() }?.entry?.bagPhotos?.firstOrNull()
             val range = if (sorted.size > 1) "${Dates.md(oldest.createdAt)} ~ ${Dates.md(latest.createdAt)}" else Dates.md(latest.createdAt)
             val blendLine = if (latest.beanMode == BeanMode.CUSTOM_BLEND) {
@@ -200,6 +205,7 @@ object ExtractGrouping {
                 lastAt = latest.createdAt,
                 dateRangeLabel = range,
                 highestScore = scores.maxOrNull(),
+                highestCva = cvaScores.maxOrNull(),
                 thumbnailPhoto = thumb,
                 customBlendLine = blendLine,
                 infoLines = if (blendLine == null) infoLines(latest, allEntries) else emptyList(),
@@ -258,7 +264,7 @@ object ExtractGrouping {
             blendLabel = if (entry.beanMode == BeanMode.CUSTOM_BLEND) "직접 블렌드 · " + BeanNames.displayName(entry.name).ifBlank { "이름 없음" } else null,
             packageBadge = when (type) { PackageType.DRIPBAG -> "드립백"; PackageType.SAMPLE -> "소량"; else -> null },
             isBest = isBest,
-            scoreText = ScaScoring.effectiveTotal(entry.attributes)?.let { ScaScoring.format2(it) + " / 100" },
+            scoreText = CvaScoring.scoreText(entry),
             recipeLine = recipeSummaryLine(entry),
             notePreview = entry.actualNotes.trim().take(60),
         )

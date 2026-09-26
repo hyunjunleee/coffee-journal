@@ -22,6 +22,7 @@ import com.coffeejournal.domain.reference.ScaForm
 import com.coffeejournal.domain.rules.ScaScoring
 import com.coffeejournal.ui.form.FieldBlock
 import com.coffeejournal.ui.form.FormState
+import com.coffeejournal.ui.form.ScoreForm
 import com.coffeejournal.ui.form.FormTextField
 import com.coffeejournal.ui.form.SliderRow
 import com.coffeejournal.ui.theme.AppType
@@ -30,6 +31,8 @@ import com.coffeejournal.ui.theme.ChipInput
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.Hairline
+import com.coffeejournal.ui.theme.HintText
+import com.coffeejournal.ui.theme.Seg
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.SectionLabel
 
@@ -39,7 +42,14 @@ internal fun TastingSection(state: FormState, update: ((FormState) -> FormState)
     SectionLabel("테이스팅")
     FieldBlock {
         FieldLabel("SCA 커핑 평가 (100점)")
-        ScaSheet(state, update)
+        ScoreFormSeg(state.scoreForm) { form -> update { it.copy(scoreForm = form) } }
+        ScoreFormSwitchHint(state)
+        Spacer(Modifier.height(8.dp))
+        if (state.scoreForm == ScoreForm.CVA) {
+            CvaSheet(state.cva, onChange = { v -> update { it.copy(cva = v) } })
+        } else {
+            ScaSheet(state, update)
+        }
     }
     FlavorWheelSection(
         open = state.flavorWheelOpen,
@@ -60,6 +70,24 @@ internal fun TastingSection(state: FormState, update: ((FormState) -> FormState)
         value = state.notes, onValueChange = { v -> update { it.copy(notes = v) } }, label = "추출 관련 메모",
         placeholder = "맛, 개선할 점, 다음에 시도할 것 등", singleLine = false, minLines = 3,
     )
+}
+
+/** "SCA 2004 | CVA": which cupping form this tasting (or cupping bean) is scored on. */
+@Composable
+internal fun ScoreFormSeg(value: String, onChange: (String) -> Unit) {
+    Seg(options = listOf(ScoreForm.SCA2004, ScoreForm.CVA), value = value, onChange = onChange, allowClear = false, labels = ScoreForm.labels)
+}
+
+/** Only the chosen form is saved: say so when the other one holds scores (switching back keeps them until saving). */
+@Composable
+private fun ScoreFormSwitchHint(state: FormState) {
+    val text = when {
+        state.scoreForm == ScoreForm.CVA && ScaScoring.isScored(state.attributes) ->
+            "저장하면 SCA 2004 점수(${ScaScoring.effectiveTotal(state.attributes)?.let(ScaScoring::format2) ?: "–"})는 지워져요. 2004로 돌아가면 그대로 있어요."
+        state.scoreForm == ScoreForm.SCA2004 && !state.cva.isEmpty -> "저장하면 CVA 평가는 지워져요. CVA로 돌아가면 그대로 있어요."
+        else -> null
+    }
+    if (text != null) HintText(text)
 }
 
 /** Web buildAttrGrid: 10 attributes, intensity rows under their parent, a memo per attribute, TOTAL SCORE. */

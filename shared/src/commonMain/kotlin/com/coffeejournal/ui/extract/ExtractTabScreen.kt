@@ -1,6 +1,15 @@
 package com.coffeejournal.ui.extract
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.style.TextAlign
+import com.coffeejournal.ui.theme.FitText
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -39,7 +48,6 @@ import com.coffeejournal.ui.theme.GlyphButton
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.EmptyNote
 import com.coffeejournal.ui.theme.FieldLabel
-import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.SubTabs
@@ -77,7 +85,7 @@ fun ExtractTabScreen(nav: NavHostController) {
                     DrinkingRow(state.drinking, onEditPantry = { nav.navigate(Route.PantryEditor(it)) }, modifier = pad.padding(bottom = 12.dp))
                 }
             }
-            item { ActionRow(onNew = newRecord, onPantry = { nav.navigate(Route.Pantry) }, onBackup = { nav.navigate(Route.Backup) }) }
+            item { ActionRow(onNew = newRecord, onPantry = { nav.navigate(Route.Pantry) }, onStats = { nav.navigate(Route.Stats) }, onBackup = { nav.navigate(Route.Backup) }) }
             item { FilterBlock(state.controls, query, vm::setFilterMode, vm::setSmallMode, vm::setQuery) }
             val search = state.search
             if (search != null) {
@@ -100,6 +108,7 @@ fun ExtractTabScreen(nav: NavHostController) {
                             onCancelSummary = vm::cancelEditSummary,
                             onOpenPicker = { vm.openBestPicker(key) },
                             onPick = { id -> vm.pickBest(key, id) },
+                            onCompare = { nav.navigate(Route.BrewCompare(key)) },
                         ),
                         modifier = Modifier.padding(horizontal = Dimens.gutter, vertical = 5.dp),
                     )
@@ -115,14 +124,29 @@ fun ExtractTabScreen(nav: NavHostController) {
 }
 
 @Composable
-private fun ActionRow(onNew: () -> Unit, onPantry: () -> Unit, onBackup: () -> Unit) {
+private fun ActionRow(onNew: () -> Unit, onPantry: () -> Unit, onStats: () -> Unit, onBackup: () -> Unit) {
     Column(Modifier.padding(horizontal = Dimens.gutter)) {
         PrimaryButton("+ 새 기록 추가", onClick = onNew, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            GhostButton("원두 보관함", onClick = onPantry, modifier = Modifier.weight(1f))
-            GhostButton("💾 백업", onClick = onBackup, modifier = Modifier.weight(1f))
+        Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ActionButton("원두 보관함", onClick = onPantry, modifier = Modifier.weight(1f))
+            ActionButton("통계", onClick = onStats, modifier = Modifier.weight(1f))
+            ActionButton("💾 백업", onClick = onBackup, modifier = Modifier.weight(1f))
         }
+    }
+}
+
+/** A GhostButton whose one-line label shrinks instead of breaking when three share a 320 dp row ("원두 보관 / 함"). */
+@Composable
+private fun ActionButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Box(
+        modifier.heightIn(min = Dimens.touch).fillMaxHeight()
+            .border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        FitText(text, style = AppType.body, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
     }
 }
 

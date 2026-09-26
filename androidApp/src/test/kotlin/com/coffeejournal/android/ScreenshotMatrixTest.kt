@@ -268,6 +268,69 @@ class ScreenshotMatrixTest {
     @Test fun fontScale20_detail() = detailScreens("92-fs20", 2f)
     @Test fun fontScale20_pantry() = pantryScreens("93-fs20", 2f)
 
+    // ───────── feature-plan-v2 §2 screens: 320 dp wide and font scale 2.0 ─────────
+
+    private fun timerScreen(prefix: String, fontScale: Float) {
+        seed()
+        val recipe = com.coffeejournal.domain.reference.CafeRecipes.all.first { it.id == "yourhome" }
+        val json = com.coffeejournal.ui.form.timer.BrewTimerResult.encodeRecipe(com.coffeejournal.domain.model.RecipeRef(recipe.name, recipe.steps))
+        val clock = FakeBrewClock()
+        org.koin.core.context.loadKoinModules(org.koin.dsl.module { single<com.coffeejournal.ui.form.timer.BrewClock> { clock } })
+        route(Route.BrewTimer(recipe = json), fontScale)
+        clickText("💧 붓기 시작")
+        clock.advance(9_000)
+        settle()
+        clickText("붓기 끝")
+        pages("$prefix-timer", 2)
+    }
+
+    private fun compareScreen(prefix: String, fontScale: Float) {
+        seed()
+        runBlocking {
+            val entries = GlobalContext.get().get<EntryRepository>()
+            entries.upsert(entries.getById("e2")!!.copy(id = "e2b", createdAt = Dates.toMillis(LocalDate(2026, 9, 25), 7, 45), temp = "90", dose = "16", grind = "C40 22클릭"))
+        }
+        route(Route.BrewCompare("에티오피아 예가체프 워카 첼베사"), fontScale)
+        pages("$prefix-compare", 2)
+    }
+
+    private fun cvaScreens(prefix: String, fontScale: Float) {
+        seed()
+        route(Route.RecordForm(mode = FormMode.EXTRACT, entryId = "e1"), fontScale)
+        clickText("CVA")
+        compose.onAllNodes(hasText("SCA CVA · 묘사 + 정동 평가")).onFirst().performScrollTo()
+        settle()
+        pages("$prefix-cva", 12)
+    }
+
+    private fun calculatorScreen(prefix: String, fontScale: Float) {
+        seed()
+        route(Route.RecordForm(mode = FormMode.EXTRACT, entryId = "e1"), fontScale)
+        clickText("🧮 비율 · 추출수율 계산기")
+        compose.onAllNodes(hasText("🧮 비율 · 추출수율 계산기")).onFirst().performScrollTo()
+        settle()
+        pages("$prefix-calculator", 2)
+    }
+
+    private fun statsScreen(prefix: String, fontScale: Float) {
+        seed()
+        runBlocking { GlobalContext.get().get<EntryRepository>().upsert(SampleCva.tasting) }
+        route(Route.Stats, fontScale)
+        clickText("전체")
+        pages("$prefix-stats", 5)
+    }
+
+    @Test @Config(qualifiers = NARROW) fun narrow_timer() = timerScreen("74-w320", 1f)
+    @Test @Config(qualifiers = NARROW) fun narrow_compare() = compareScreen("74-w320", 1f)
+    @Test @Config(qualifiers = NARROW) fun narrow_cva() = cvaScreens("74-w320", 1f)
+    @Test @Config(qualifiers = NARROW) fun narrow_calculator() = calculatorScreen("74-w320", 1f)
+    @Test @Config(qualifiers = NARROW) fun narrow_stats() = statsScreen("74-w320", 1f)
+    @Test fun fontScale20_timer() = timerScreen("94-fs20", 2f)
+    @Test fun fontScale20_compare() = compareScreen("94-fs20", 2f)
+    @Test fun fontScale20_cva() = cvaScreens("94-fs20", 2f)
+    @Test fun fontScale20_calculator() = calculatorScreen("94-fs20", 2f)
+    @Test fun fontScale20_stats() = statsScreen("94-fs20", 2f)
+
     private companion object {
         const val NARROW = "w320dp-h640dp-xhdpi"
     }

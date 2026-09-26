@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
@@ -244,6 +245,8 @@ internal fun SliderRow(
     onChange: (Double) -> Unit,
     modifier: Modifier = Modifier,
     secondary: Boolean = false,
+    /** What TalkBack calls the slider (default [label]), e.g. "프레그런스 강도" where two rows share a label. */
+    description: String? = null,
 ) {
     val stepsCount = (((max - min) / step) - 1).toInt().coerceAtLeast(0)
     Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -254,7 +257,7 @@ internal fun SliderRow(
             onValueChange = { v -> onChange(snap(v.toDouble(), min, step)) },
             valueRange = min.toFloat()..max.toFloat(),
             steps = stepsCount,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).semantics { contentDescription = description ?: label },
             colors = SliderDefaults.colors(
                 thumbColor = Ink.accent, activeTrackColor = Ink.accent, inactiveTrackColor = Ink.line,
                 activeTickColor = Color.Transparent, inactiveTickColor = Color.Transparent,
