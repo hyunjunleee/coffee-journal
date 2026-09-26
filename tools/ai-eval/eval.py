@@ -368,6 +368,7 @@ def fetch_page(url, timeout=30):
     except Exception as e:  # noqa: BLE001 - a page that fails is reported, not fatal
         return None, f"{type(e).__name__}: {e}"
     import html as htmllib
+    html = re.sub(r"(?s)<!--.*?-->", " ", html)
     title = htmllib.unescape((re.search(r"<title[^>]*>(.*?)</title>", html, re.S | re.I) or [None, ""])[1]).strip()
     body = re.sub(r"(?is)<(script|style|noscript|svg|header|footer|nav)[^>]*>.*?</\1>", " ", html)
     body = re.sub(r"(?s)<[^>]+>", " ", body)
@@ -390,7 +391,14 @@ def tavily_like_content(text, keywords, chunks=3, size=500):
             break
     if not found:
         found = [0]
-    return " [...] ".join(text[s:s + size].strip() for s in sorted(found))
+    def clip(start):
+        piece = text[start:start + size]
+        if start > 0 and " " in piece[:40]:
+            piece = piece[piece.index(" ") + 1:]
+        if start + size < len(text) and " " in piece[-40:]:
+            piece = piece[: piece.rindex(" ")]
+        return piece.strip()
+    return " [...] ".join(clip(s) for s in sorted(found))
 
 
 def norm(s):

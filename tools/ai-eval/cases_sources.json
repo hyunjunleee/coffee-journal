@@ -1,24 +1,56 @@
 {
-  "_comment": "Debugging the 'Gemini 무료 + Tavily' pipeline without a Tavily key: real pages found by a web search on 2026-09-26 stand in for Tavily results. The eval fetches them live, cuts Tavily-style snippets around the keywords and keeps the full text for the quote check.",
+  "_comment": "Debugging the 'Gemini 무료 + Tavily' pipeline without a Tavily key: real pages found by a web search on 2026-09-26 stand in for Tavily results. The eval fetches them live, cuts Tavily-style snippets around the keywords and keeps the full text for the quote check. Pages that refuse automated fetches (403) or moved (404) were dropped.",
   "cases": [
-    {"mode": "note", "case": "베르가못 (bergamot)", "keywords": ["bergamot"],
-     "urls": ["https://www.coffeereview.com/review/ethiopia-banko-gotiti-7/",
-              "https://www.coffeereview.com/review/ethiopia-halo-beriti-2/",
-              "https://library.sweetmarias.com/roasting-washed-coffees-from-ethiopia/",
-              "https://baristalife.co/blogs/blog/ethiopian-flavor-notes"]},
-    {"mode": "note", "case": "리치 (lychee)", "keywords": ["lychee"],
-     "urls": ["https://www.coffeereview.com/review/lychee-hermoso/",
-              "https://www.coffeereview.com/review/peach-lychee-blossom/",
-              "https://unpacking.coffee/flavors/120",
-              "https://onyxcoffeelab.com/products/colombia-jairo-arcila-lychee"]},
-    {"mode": "note", "case": "자스민 (jasmine)", "keywords": ["jasmine"],
-     "urls": ["https://www.coffeereview.com/review/ethiopia-halo-beriti-2/",
-              "https://beanbox.com/blog/ethiopian-yirgacheffe-coffee",
-              "https://library.sweetmarias.com/roasting-washed-coffees-from-ethiopia/"]},
-    {"mode": "describe", "case": "홍차에 레몬을 띄운 것처럼 산뜻하고 꽃향이 나요", "keywords": ["black tea", "tea-like", "lemon", "floral", "jasmine", "bergamot"],
-     "urls": ["https://beanbox.com/blog/ethiopian-yirgacheffe-coffee",
-              "https://baristalife.co/blogs/blog/ethiopian-flavor-notes",
-              "https://library.sweetmarias.com/roasting-washed-coffees-from-ethiopia/",
-              "https://notbadcoffee.com/flavor-wheel-en/"]}
+    {
+      "mode": "note",
+      "case": "베르가못 (bergamot)",
+      "keywords": [
+        "bergamot"
+      ],
+      "urls": [
+        "https://www.coffeereview.com/review/ethiopia-banko-gotiti-7/",
+        "https://www.coffeereview.com/review/ethiopia-halo-beriti-2/"
+      ]
+    },
+    {
+      "mode": "note",
+      "case": "리치 (lychee)",
+      "keywords": [
+        "lychee"
+      ],
+      "urls": [
+        "https://www.coffeereview.com/review/lychee-hermoso/",
+        "https://www.coffeereview.com/review/peach-lychee-blossom/",
+        "https://unpacking.coffee/flavors/120",
+        "https://onyxcoffeelab.com/products/colombia-jairo-arcila-lychee"
+      ]
+    },
+    {
+      "mode": "note",
+      "case": "자스민 (jasmine)",
+      "keywords": [
+        "jasmine"
+      ],
+      "urls": [
+        "https://www.coffeereview.com/review/ethiopia-halo-beriti-2/",
+        "https://beanbox.com/blog/ethiopian-yirgacheffe-coffee"
+      ]
+    },
+    {
+      "mode": "describe",
+      "case": "홍차에 레몬을 띄운 것처럼 산뜻하고 꽃향이 나요",
+      "keywords": [
+        "black tea",
+        "tea-like",
+        "lemon",
+        "floral",
+        "jasmine",
+        "bergamot"
+      ],
+      "urls": [
+        "https://beanbox.com/blog/ethiopian-yirgacheffe-coffee",
+        "https://notbadcoffee.com/flavor-wheel-en/"
+      ]
+    }
   ]
 }
