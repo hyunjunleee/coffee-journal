@@ -44,7 +44,13 @@ import com.coffeejournal.ui.nav.appGraph
 import com.coffeejournal.ui.notify.ReminderPrefs
 import com.coffeejournal.ui.notify.ReminderTexts
 import com.coffeejournal.ui.notify.ReminderTime
+import com.coffeejournal.ui.settings.SettingsTexts
+import com.coffeejournal.ui.theme.BodyFont
 import com.coffeejournal.ui.theme.CoffeeJournalTheme
+import com.coffeejournal.ui.theme.Display
+import com.coffeejournal.ui.theme.DisplaySettings
+import com.coffeejournal.ui.theme.NumberFont
+import com.coffeejournal.ui.theme.TextSize
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
@@ -280,9 +286,10 @@ class RouteScreenshotTest {
     }
     @Test fun process_detail() = show(Route.ProcessDetail("워시드", "워시드"), "36-process-detail.png")
 
-    // 알림 설정 (feature plan v2 §3): first visit (off, every kind on, 09:00), and on at 07:30 with the permission taken away
-    @Test fun notificationSettings() = show(Route.NotificationSettings, "60-notification-settings.png") {
-        compose.onNode(hasText("알림 받기")).assertIsDisplayed()
+    // 설정: first visit (the display choices at their defaults), then its 알림 section on at 07:30 with the permission
+    // taken away (feature plan v2 §3), then a serif, larger text setting on 설정 and on the home tab
+    @Test fun settings() = show(Route.Settings, "60-settings.png") {
+        compose.onNode(hasText(SettingsTexts.PREVIEW_TITLE)).assertIsDisplayed()
     }
     @Test fun notificationSettings_on() {
         runBlocking {
@@ -291,8 +298,17 @@ class RouteScreenshotTest {
             prefs.setKind(ReminderKind.LOW_STOCK, false)
             prefs.setTime(ReminderTime(7, 30))
         }
-        show(Route.NotificationSettings, "61-notification-settings-on.png") {
+        show(Route.Settings, "61-settings-reminders-on.png") {
+            bringToTop(hasText("알림"))
             compose.onNode(hasText(ReminderTexts.BLOCKED)).assertIsDisplayed()
         }
+    }
+    @Test fun settings_serifLarger() {
+        Display.current = DisplaySettings(bodyFont = BodyFont.SERIF, numberFont = NumberFont.BODY, textSize = TextSize.LARGER)
+        show(Route.Settings, "68-settings-serif-larger.png")
+    }
+    @Test fun home_serifLarger() {
+        Display.current = DisplaySettings(bodyFont = BodyFont.SERIF, textSize = TextSize.LARGER)
+        show(Route.Extract, "69-home-serif-larger.png")
     }
 }

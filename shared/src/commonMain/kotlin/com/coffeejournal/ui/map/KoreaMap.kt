@@ -127,8 +127,8 @@ class KoreaMapState(provinceCode: String? = null) {
 fun rememberKoreaMapState(initialProvince: String? = null): KoreaMapState =
     rememberSaveable(saver = KoreaMapState.Saver) { KoreaMapState(initialProvince) }
 
-private val provinceLabel = TextStyle(fontFamily = AppType.mono, fontSize = 9.5.sp, color = Ink.textMuted)
-private val districtLabel = TextStyle(fontFamily = AppType.sans, fontSize = 9.sp, color = Ink.textFaint)
+private val provinceLabel: TextStyle get() = TextStyle(fontFamily = AppType.mono, fontSize = 9.5.sp, color = Ink.textMuted)
+private val districtLabel: TextStyle get() = TextStyle(fontFamily = AppType.sans, fontSize = 9.sp, color = Ink.textFaint)
 
 /**
  * The Korea map (통계청 SGIS 경계, simplified): the 16 시·도 nationally, and after a tap on one its 시·군·구 (the

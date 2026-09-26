@@ -7,16 +7,13 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,7 +28,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavHostController
 import com.coffeejournal.domain.rules.ReminderKind
 import com.coffeejournal.domain.rules.Reminders
 import com.coffeejournal.ui.form.TextLink
@@ -44,13 +40,12 @@ import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.MinTouchTarget
 import com.coffeejournal.ui.theme.PickerBox
-import com.coffeejournal.ui.theme.ScreenTitleBar
 import com.coffeejournal.ui.theme.SectionLabel
 import org.koin.compose.viewmodel.koinViewModel
 
-/** 알림 설정: the master switch, one switch per reminder kind and the time of the daily check. */
+/** 설정 › 알림: the master switch, one switch per reminder kind and the time of the daily check. */
 @Composable
-fun ReminderSettingsScreen(nav: NavHostController) {
+fun ReminderSettingsSection(modifier: Modifier = Modifier) {
     val vm = koinViewModel<ReminderSettingsViewModel>()
     val state by vm.state.collectAsStateWithLifecycle()
     val askPermission = rememberNotificationPermissionRequest(vm::onPermissionResult)
@@ -62,18 +57,10 @@ fun ReminderSettingsScreen(nav: NavHostController) {
     var pickingTime by rememberSaveable { mutableStateOf(false) }
     val settings = state.settings
 
-    Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar("알림 설정", onBack = { nav.popBackStack() })
+    Column(modifier.fillMaxWidth().testTag("reminder-settings")) {
         // nothing until the saved settings are read: the switches would flash their defaults first
         if (!state.loaded) return@Column
-        Column(
-            Modifier
-                .fillMaxSize()
-                .testTag("reminder-settings")
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = Dimens.gutter)
-                .padding(top = 14.dp, bottom = 96.dp),
-        ) {
+        Column(Modifier.fillMaxWidth()) {
             Text(ReminderTexts.INTRO, style = AppType.bodyMuted)
             Spacer(Modifier.height(10.dp))
             SettingSwitch(

@@ -38,6 +38,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.coffeejournal.ui.platform.rememberJsonSaver
+import com.coffeejournal.ui.theme.AppHeader
 import com.coffeejournal.ui.theme.Chip
 import com.coffeejournal.ui.theme.ChipInput
 import com.coffeejournal.ui.theme.CoffeeJournalTheme
@@ -138,7 +139,7 @@ class PlatformFlowTest : FlowTestBase() {
         }
         settle()
         val width = compose.onRoot().fetchSemanticsNode().boundsInRoot.width
-        val title = node(hasText("coffee_journal / 2026")).fetchSemanticsNode().boundsInRoot
+        val title = node(hasText(AppHeader.TITLE)).fetchSemanticsNode().boundsInRoot
         val count = node(hasText("5 entries")).fetchSemanticsNode().boundsInRoot
         assertTrue("title clear of the left cutout (${title.left} < $left)", title.left >= left)
         assertTrue("entry count clear of the right navigation bar (${count.right} > ${width - right})", count.right <= width - right)

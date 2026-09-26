@@ -16,6 +16,7 @@ import com.coffeejournal.ui.about.Credits
 import com.coffeejournal.ui.about.LicenseTexts
 import com.coffeejournal.ui.about.platformLibraries
 import com.coffeejournal.ui.platform.installUrlOpener
+import com.coffeejournal.ui.settings.SettingsTexts
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -27,7 +28,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * The 출처 · 라이선스 page (not on the web): reached from the bottom of the 기타 tab, it credits the content sources
+ * The 출처 · 라이선스 page (not on the web): reached from 설정 (the gear in the tab header), it credits the content sources
  * with their terms and lists every library of the APK under its license, and the café recipes link their sources.
  */
 @RunWith(AndroidJUnit4::class)
@@ -57,9 +58,8 @@ class AboutFlowTest : CoverageFlowBase() {
 
     private fun openAbout() {
         launchApp()
-        tab("tab-misc")
-        scrollIn("misc-list", button("출처 · 오픈소스 라이선스 →"))
-        tap(button("출처 · 오픈소스 라이선스 →"))
+        tap(hasTestTag("open-settings"))
+        tap(button(SettingsTexts.SOURCES))
         waitForText("출처 · 라이선스")
     }
 

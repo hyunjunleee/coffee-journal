@@ -1,5 +1,10 @@
 package com.coffeejournal.ui.nav
 
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -49,6 +54,7 @@ import androidx.navigation.compose.rememberNavController
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
+import com.coffeejournal.ui.theme.Display
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.Ink
 
@@ -82,7 +88,14 @@ fun AppNav() {
     ) { padding ->
         // top: status bar / cutout; left and right: a landscape navigation bar or display cutout
         Box(Modifier.fillMaxSize().padding(padding).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top))) {
-            NavHost(navController = nav, startDestination = Route.Extract) {
+            // screens fade into each other for the time chosen in 설정 › 화면 › 화면 전환 (Navigation's own default is 700 ms)
+            val fade = Display.current.motion.millis
+            NavHost(
+                navController = nav,
+                startDestination = Route.Extract,
+                enterTransition = { if (fade == 0) EnterTransition.None else fadeIn(tween(fade)) },
+                exitTransition = { if (fade == 0) ExitTransition.None else fadeOut(tween(fade)) },
+            ) {
                 appGraph(nav)
             }
             // a notification or the home-screen widget asked for a screen
@@ -142,7 +155,7 @@ private fun rememberTabLabelStyle(tabWidth: Int): TextStyle {
     val measurer = rememberTextMeasurer()
     val density = LocalDensity.current
     val base = AppType.monoSmall
-    return remember(measurer, density, tabWidth) {
+    return remember(measurer, density, tabWidth, base) {
         val room = tabWidth - with(density) { 8.dp.roundToPx() }
         val widest = tabs.maxOf { measurer.measure("[ ${it.label} ]", base, maxLines = 1, softWrap = false).size.width }
         if (widest <= room || room <= 0) base else base.copy(fontSize = base.fontSize * (room.toFloat() / widest))

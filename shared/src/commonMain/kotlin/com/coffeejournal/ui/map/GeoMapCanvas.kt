@@ -61,8 +61,8 @@ import kotlin.math.roundToInt
 /** A pin: a name chip (with an optional count) tied to its map point by a dot and, when pushed aside, a leader line. */
 data class MapPin(val key: String, val label: String, val at: MapXY, val count: Int? = null, val description: String = label)
 
-private val chipName = TextStyle(fontFamily = AppType.sans, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium, color = Ink.text)
-private val chipCount = TextStyle(fontFamily = AppType.mono, fontSize = 9.sp, lineHeight = 14.sp, color = Ink.textMuted)
+private val chipName: TextStyle get() = TextStyle(fontFamily = AppType.sans, fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.Medium, color = Ink.text)
+private val chipCount: TextStyle get() = TextStyle(fontFamily = AppType.mono, fontSize = 9.sp, lineHeight = 14.sp, color = Ink.textMuted)
 private val CHIP_PAD_H = 7.dp
 private val CHIP_PAD_V = 4.dp
 private val CHIP_COUNT_GAP = 4.dp
@@ -111,7 +111,7 @@ fun GeoMapCanvas(
 ) {
     val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
-    val sizes = remember(pins, density) {
+    val sizes = remember(pins, density, chipName, chipCount) {
         with(density) {
             pins.map { p ->
                 val name = measurer.measure(p.label, chipName, maxLines = 1, softWrap = false).size

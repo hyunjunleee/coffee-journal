@@ -20,6 +20,7 @@ import com.coffeejournal.ui.calendar.components.MonthGridView
 import com.coffeejournal.ui.calendar.components.MonthHeader
 import com.coffeejournal.ui.calendar.components.RangeLegend
 import com.coffeejournal.ui.calendar.components.TodayBox
+import com.coffeejournal.ui.theme.AppHeader
 import com.coffeejournal.ui.theme.imeOverlapPadding
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.nav.navigateTab
@@ -39,7 +40,7 @@ fun CalendarTabScreen(nav: NavHostController) {
     val state by vm.state.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize()) {
         // the web header is global: every tab shows the record count
-        TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = state.entryCount?.let { "$it entries" })
+        TopHeader(title = AppHeader.TITLE, tagline = AppHeader.TAGLINE, right = state.entryCount?.let { "$it entries" }, onSettings = { nav.navigate(Route.Settings) })
         SubTabs(
             items = CalTabs.all,
             selected = state.controls.tab,

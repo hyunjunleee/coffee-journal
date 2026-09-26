@@ -53,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
@@ -708,9 +709,15 @@ fun FitText(text: String, style: TextStyle, modifier: Modifier = Modifier, minFo
 @Composable
 fun Dp.fontScaled(cap: Float = 1.6f): Dp = this * LocalDensity.current.fontScale.coerceIn(1f, cap)
 
-/** Top header shared by all tabs: title, tagline and a right-hand count. */
+/** The tab header's words. The web's title reads "coffee_journal / 2026"; the app drops the year (user request). */
+object AppHeader {
+    const val TITLE = "coffee_journal"
+    const val TAGLINE = "[ personal coffee archive ]"
+}
+
+/** Top header shared by all tabs: title, tagline, a right-hand count and the small gear that opens 설정. */
 @Composable
-fun TopHeader(title: String, tagline: String, right: String?, modifier: Modifier = Modifier) {
+fun TopHeader(title: String, tagline: String, right: String?, modifier: Modifier = Modifier, onSettings: (() -> Unit)? = null) {
     Column(modifier.fillMaxWidth().padding(horizontal = Dimens.gutter).padding(top = 20.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Bottom) {
             // one line each, a little smaller when needed (the web drops to 20px on phones): "coffee_journ / al" was worse
@@ -719,6 +726,16 @@ fun TopHeader(title: String, tagline: String, right: String?, modifier: Modifier
                 FitText(tagline, style = AppType.tagline, minFontSize = 5.sp)
             }
             if (right != null) Text(right, style = AppType.count, maxLines = 1, softWrap = false, modifier = Modifier.padding(start = 8.dp))
+            if (onSettings != null) {
+                // a small gear, not a tab: 설정 is visited rarely (typefaces, text size, transitions, reminders, sources)
+                Box(
+                    Modifier.size(Dimens.touch).testTag("open-settings").clickable(role = Role.Button, onClickLabel = "설정 열기", onClick = onSettings)
+                        .semantics { contentDescription = "설정" },
+                    contentAlignment = Alignment.BottomEnd,
+                ) {
+                    Icon(AppIcons.settings, contentDescription = null, tint = Ink.textMuted, modifier = Modifier.padding(bottom = 1.dp).size(18.dp))
+                }
+            }
         }
         Spacer(Modifier.height(12.dp))
         Hairline(color = Ink.text, thickness = Dimens.heavyRule)
