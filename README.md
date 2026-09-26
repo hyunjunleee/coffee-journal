@@ -6,6 +6,7 @@
 - `docs/coffee-journal-site-analysis.md` — 웹 원본 전수 분석(구조·기능·데이터·참조 데이터·버그)
 - `docs/android-app-design.md` — 앱 설계서(스택 결정, 모듈, DB 스키마, 화면, 디자인 토큰, 규칙, 마일스톤)
 - `docs/dev/implementation-notes.md` — 구현 규약(빌드, 패키지 소유, API, 디자인)
+- `docs/feature-plan-v2.md` — 2차 기능 설계(SGIS 한국 지도·지도 앱 링크, 추출 타이머, 비교표·계산기, CVA 양식, 통계, 알림·위젯, 서명 키·CI)
 - `iosApp/README.md` — iOS 호스트 앱 준비 절차
 
 ## 구조
