@@ -10,7 +10,7 @@ export ANDROID_HOME=/opt/android-sdk
 - 커밋 전 반드시 위 명령이 exit 0 이어야 한다. 경고는 허용, 오류는 불가.
 - 단위 테스트는 `shared/src/commonTest/kotlin/com/coffeejournal/<패키지>/`에 둔다(kotlin-test). 화면 흐름·스크린샷 테스트는 `androidApp/src/test/kotlin/com/coffeejournal/android/`(Robolectric + Roborazzi, 인메모리 Room)에 둔다.
 - git 커밋: `git -c user.name=Claude -c user.email=noreply@anthropic.com commit -m "..."`.
-- 의존성 추가·버전 변경 시: ① `./gradlew :androidApp:updateThirdPartyNotices`(앱 내 라이브러리 목록 갱신, 안 하면 빌드가 실패) ② `./gradlew --write-verification-metadata sha256 help :androidApp:assembleRelease :shared:testDebugUnitTest :androidApp:testDebugUnitTest`(체크섬 기록) ③ 새로 생긴 `verification-metadata.xml` 항목의 그룹이 공식 배포처인지 확인 후 커밋. POM에 라이선스가 없거나 목록에 없는 라이선스면 ①이 실패하므로 `gradle/third-party-notices.gradle.kts`의 `spdx()`와 `LicenseTexts`에 추가한다.
+- 의존성 추가·버전 변경 시(2차 §3에서 androidx.work·androidx.glance 추가 때 이 순서로 진행): ① `./gradlew :androidApp:updateThirdPartyNotices`(앱 내 라이브러리 목록 갱신, 안 하면 빌드가 실패) ② `./gradlew --write-verification-metadata sha256 help :androidApp:assembleRelease :shared:testDebugUnitTest :androidApp:testDebugUnitTest`(체크섬 기록) ③ 새로 생긴 `verification-metadata.xml` 항목의 그룹이 공식 배포처인지 확인 후 커밋. POM에 라이선스가 없거나 목록에 없는 라이선스면 ①이 실패하므로 `gradle/third-party-notices.gradle.kts`의 `spdx()`와 `LicenseTexts`에 추가한다.
 - 참고 데이터가 외부 기관·가게의 자료라고 적을 때는 그 공식 페이지와 수치를 대조하고 출처 URL을 남긴다(`CafeRecipes.sourceUrl`, `Credits`). 공식 자료에 없는 값은 지어내지 않고 비운다.
 
 ## 패키지 소유 규칙
@@ -40,7 +40,7 @@ export ANDROID_HOME=/opt/android-sdk
 - 트랜잭션: 여러 저장소에 걸친 쓰기는 `TransactionRunner.write { … }` 한 블록으로(같은 코루틴 안의 DAO 호출이 모두 합류). 기록 저장은 여전히 `SaveEntryPipeline.save`.
 - 복원: 화면은 `RestoreRunner`(앱 스코프)를 통해서만 `BackupService.import`를 호출한다. 화면을 떠나도 복원이 중간에 취소되지 않는다.
 - 텍스트 입력: `AppTextField`는 한글 조합이 끊기지 않도록 로컬 `TextFieldValue`를 유지한다(`ImeSafeText`). `FormTextField`·`CompactField`도 같은 방식이다. 숫자만 받기 등 입력 제한은 `onValueChange` 안에서 걸러 되돌리지 말고 `inputFilter = { … }`로 넘긴다(거절 시 null 반환, 바꾼 문자열 반환 시 커서 보정). 소유자 쪽에서 거르면 거절된 글자가 화면에 남는다. 웹의 `type=number` 필드는 `InputFilters.decimal`(음이 아닌 소수, 쉼표는 소수점으로). 한 줄 필드가 포커스를 잃으면 `shownWhen`으로 글 앞부분을 보인다.
-- 날짜 입력: `DateField`(웹 `<input type="date">` 대응, "YYYY-MM-DD" 입출력, 빈 값 안내 `연도-월-일`).
+- 날짜 입력: `DateField`(웹 `<input type="date">` 대응, "YYYY-MM-DD" 입출력, 빈 값 안내 `연도-월-일`). 시각은 `PickerBox("HH:MM")` + `AppTimePickerDialog`(24시간, 기록 폼과 알림 설정이 함께 씀).
 - 글리프 버튼: ×·✕ 같은 기호만 있는 동작은 `GlyphButton(glyph, label, onClick)` — 탭 영역 48dp(`MinTouchTarget`), TalkBack 라벨.
 - 키보드: 스크롤 컨테이너에 `Modifier.imeOverlapPadding()`(`ui/theme/ImeInsets.kt`)(edge-to-edge라 창이 키보드만큼 줄지 않음; 하단 탭 높이는 제외).
 - 폼 상태 보존: 카메라 앱이 앞에 있는 동안 프로세스가 죽어도 입력이 남도록 `SavedFormState`(`ui/theme`, SavedStateHandle + JSON)로 저장.
@@ -58,6 +58,16 @@ export ANDROID_HOME=/opt/android-sdk
 - 지도 화면(`ui/map`): `KoreaMap(state = rememberKoreaMapState(), …)`(전국 → 시·도, 뒤로 가기 처리 포함), `WorldPinMap`, 공통 바탕 `GeoMapCanvas`(핀 칩 + 지시선, 제스처, 표식)와 `MapViewport`/`MapViewportMath`(맞춤·확대·이동 계산), `PinSpread`(칩 비켜 놓기), `KoreaPinClusters`(전국 지도의 시·도 묶음). 핀은 `MapPin(key, label, at, count, description)`.
 - 위치 지정: `Route.MapPicker(target = MapPickTarget.ROASTERY | CAFE, name, scope, point = MapPickResult.encode(p))`. 로스터리는 결과를 이전 화면의 `SavedStateHandle`(`MapPickResult.KEY`)로 돌려주고 폼이 `applyPick`으로 받는다(빈 지역 칸 채우기 포함). 카페는 `CafePlaceRepository.set/clear`로 바로 저장. 카페 위치 UI는 `CafePlaceRow`(기록 상세), `CafeLocationsBlock`(달력 카페 목록), `CafeMapSection`(원두 › 로스터리 › 방문 카페 지도).
 - 흐름 테스트에서 지도를 누를 때는 지도 노드(content description)의 크기와 `MapViewportMath.toCanvas(…, KoreaFrames.national 또는 provinceFrame(code), fitScale, 중심)`로 좌표를 구해 `performTouchInput { click(…) }`(`MapFlowTest` 참고).
+
+## 알림 · 위젯 헬퍼 (2차 §3, 재사용)
+- 규칙(`domain/rules/Reminders.kt`, 순수 함수): `Reminders.due(pantry, entries, inUse, ddayStart, today, kinds, sent)` → 오늘 보낼 `Reminder(key, kind, title, body)`. ① `peakStarts`: 보관함 원두(개봉 여부 무관)의 `PantryRules.peakWindow` 시작일 = 오늘 ② `lowStock`: 마시는 중 원두의 잔여량 ≤ 2잔(`LOW_STOCK_CUPS`), 1잔 = 그 원두 기록 원두량의 중앙값(`cupGrams`, 없으면 15 g) ③ `ddayMilestone`: `DdayRules.milestone`(30·100일 단위). 키: `peak:<보관함 id>:<시작일>`, `low:pantry:<id>` 또는 `low:bean:<핵심 이름>`, `dday:<시작일>:<N>` — 보낸 키는 다시 보내지 않는다.
+- 입력은 홈 화면과 같은 파생을 쓴다: `ReminderInputs.inUse(...)`가 `ExtractGrouping.drinking`의 카드(`OpenedBagCard`/`RecentBeanCard`의 `remainingGrams`·`bagGrams`·`remainingLine`)로 `BeanStock`을 만든다. 잔여량 계산을 따로 구현하지 않는다.
+- 설정·보낸 기록: `ReminderPrefs`(`SettingsRepository`의 `device.reminders.*` 키: enabled·peak·lowStock·dday·time "HH:MM"·sent JSON). `device.` 접두 키(`SettingsRepository.isDeviceKey`)는 기기 설정이라 백업에 쓰지 않고, 복원 때 파일의 같은 키는 무시하며, 교체도 지우지 않는다(`deleteAllBackedUp`). 보낸 기록은 400일 지나면 정리.
+- 점검 실행: `ReminderCheck.run(today, canNotify, post)`(마스터 꺼짐·알림 불가면 아무것도 안 함, `post`가 true를 돌려준 것만 보낸 것으로 기록). 플랫폼 경계는 `ReminderPlatform`(`platformModule`의 single: Android `AndroidReminderPlatform` = WorkManager 고유 주기 작업 `coffee-journal.daily-reminders`, 24시간, 첫 실행을 정한 시각까지 지연, 시각 태그가 같으면 유지·다르면 교체; iOS `IosReminderPlatform` = 미연결)과 `rememberNotificationPermissionRequest`(expect, Android 13+ POST_NOTIFICATIONS). 앱 시작 시 `ReminderSchedule.sync`.
+- 알림 게시(Android): `ReminderNotifier` — 종류별 채널(피크 시작 / 원두 소진 임박 / D-day 마일스톤), 누르면 `LaunchIntents.open(context, target)`(보관함·홈). 채널을 사용자가 끈 종류는 보낸 것으로 치지 않는다.
+- 앱 밖에서 화면 열기: `LaunchRequests`(Koin single, `BeanViewRequests`와 같은 방식)에 `LaunchTarget.HOME / PANTRY / NEW_RECORD`를 넣으면 `AppNav`의 `LaunchRequestHandler`가 한 번 받아 홈 탭 루트 → 대상 화면으로 이동한다. `MainActivity`가 인텐트 extra(`LaunchIntents.EXTRA_OPEN`)를 읽어 넣는다(복원·최근 앱에서 다시 연 경우 제외).
+- 위젯 데이터: `WidgetSnapshots.build(...)`(D-day 알약과 마시는 중 카드의 문구 그대로, 빈 상태 문구 포함), `HomeWidgetFeed.current()/snapshots()/changes()`(Room 무효화 추적, 데이터는 들고 있지 않음), 갱신 훅 `HomeWidgets`(앱이 Glance 구현을 등록), `HomeWidgetSync.run`(앱 프로세스가 사는 동안 저장·자정마다 갱신). 위젯 화면 자체는 `androidApp/.../widget/`(Glance).
+- 흐름 테스트: WorkManager는 `ReminderFixtures.initWorkManager`(WorkManagerTestInitHelper), 권한은 `grantNotifications/denyNotifications`, 권한 창 응답은 `ReminderSettingsFlowTest.answerPermission` 참고. 위젯은 `runGlanceAppWidgetUnitTest`로 `CoffeeWidgetContent`를 검사하고 `GlanceRemoteViews`로 PNG를 남긴다.
 
 ## 디자인 규약 (`ui/theme`)
 - 접근성: 글리프·체크박스·지도·휠처럼 그림만 있는 요소는 동작 이름이나 아래 목록을 가리키는 content description을 달고, 접이식 헤더·토글은 펼침/선택 상태를 노출한다. 달력 칸은 "9월 21일, 오늘, 기록 2개"처럼 읽힌다.
