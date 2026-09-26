@@ -5,6 +5,21 @@ plugins {
     alias(libs.plugins.roborazzi)
 }
 
+// Version from the checked-out commit, the same on a local machine and in CI (even in a shallow clone): the code is
+// the minutes between 2026-01-01 and the commit time, so every later commit installs over an earlier build.
+val commitEpochSeconds: Long? = runCatching {
+    providers.exec { commandLine("git", "log", "-1", "--format=%ct") }.standardOutput.asText.get().trim().toLong()
+}.getOrNull()
+val commitShortSha: String = runCatching {
+    providers.exec { commandLine("git", "rev-parse", "--short", "HEAD") }.standardOutput.asText.get().trim()
+}.getOrDefault("local")
+
+// Release signing with the project's fixed key, when it is provided (CI secrets or a local keystore); otherwise the
+// release APK stays unsigned. Debug builds keep the machine's debug key.
+fun signingValue(env: String, property: String): String? =
+    providers.environmentVariable(env).orNull?.takeIf { it.isNotBlank() } ?: providers.gradleProperty(property).orNull
+val releaseKeystore: String? = signingValue("COFFEEJOURNAL_KEYSTORE_FILE", "coffeejournal.keystore.file")
+
 android {
     namespace = "com.coffeejournal.android"
     compileSdk = libs.versions.compileSdk.get().toInt()
@@ -12,12 +27,23 @@ android {
         applicationId = "com.coffeejournal.app"
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = commitEpochSeconds?.let { ((it - 1_767_225_600L) / 60L).toInt().coerceAtLeast(2) } ?: 1
+        versionName = "1.1.0 ($commitShortSha)"
+    }
+    signingConfigs {
+        if (releaseKeystore != null) {
+            create("release") {
+                storeFile = file(releaseKeystore)
+                storePassword = signingValue("COFFEEJOURNAL_KEYSTORE_PASSWORD", "coffeejournal.keystore.password")
+                keyAlias = signingValue("COFFEEJOURNAL_KEY_ALIAS", "coffeejournal.key.alias")
+                keyPassword = signingValue("COFFEEJOURNAL_KEY_PASSWORD", "coffeejournal.key.password")
+            }
+        }
     }
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfigs.findByName("release")?.let { signingConfig = it }
         }
     }
     compileOptions {

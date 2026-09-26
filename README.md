@@ -34,6 +34,12 @@ export ANDROID_HOME=/opt/android-sdk          # Android SDK 위치 (local.proper
 - 의존성을 추가·변경했다면: `./gradlew --write-verification-metadata sha256 help :androidApp:assembleRelease :shared:testDebugUnitTest :androidApp:testDebugUnitTest`로 새 항목을 기록하고, 추가된 줄의 출처를 확인한 뒤 커밋합니다.
 - Maven Central이 요청 수를 제한하는 빌드 환경에서는 `-Pcoffeejournal.mavenCentralMirror=https://maven-central.storage-download.googleapis.com/maven2/`(또는 `~/.gradle/gradle.properties`)로 미러를 앞에 둘 수 있습니다. 이때도 파일은 위 체크섬으로 검증됩니다.
 
+### 배포 (고정 서명 키 · CI)
+- 릴리스 APK는 프로젝트 고정 키로 서명된다. 키 파일과 비밀번호는 저장소에 넣지 않고, 환경 변수(`COFFEEJOURNAL_KEYSTORE_FILE`, `COFFEEJOURNAL_KEYSTORE_PASSWORD`, `COFFEEJOURNAL_KEY_ALIAS`, `COFFEEJOURNAL_KEY_PASSWORD`)나 `~/.gradle/gradle.properties`의 `coffeejournal.keystore.*`로 넘긴다. 없으면 릴리스 APK는 서명 없이 만들어진다.
+- 버전 코드는 커밋 시각(2026-01-01부터의 분)이라, 뒤 커밋의 APK가 항상 앞 APK 위에 설치된다. 버전 이름에는 커밋 해시가 붙는다.
+- GitHub Actions(`.github/workflows/android.yml`): 푸시·PR마다 전체 테스트 → 서명된 릴리스 APK를 아티팩트로 올린다. `v*` 태그를 푸시하면 GitHub Release에 APK가 첨부된다. 저장소 Secrets에 `COFFEEJOURNAL_KEYSTORE_BASE64`(키 파일의 base64), `COFFEEJOURNAL_KEYSTORE_PASSWORD`, `COFFEEJOURNAL_KEY_ALIAS`, `COFFEEJOURNAL_KEY_PASSWORD`를 등록해야 서명된다.
+- 키를 잃어버리면 같은 앱으로 업데이트할 수 없으니 키 파일과 비밀번호는 따로 안전하게 보관한다.
+
 ### 출처 · 라이선스
 - 앱의 기타 탭 맨 아래 "출처 · 오픈소스 라이선스"에서 데이터·디자인 출처(웹 템플릿, SCA·WCR 플레이버 휠, SCA 커핑 폼, 카페 레시피, Natural Earth, Lucide·Feather 아이콘)와 APK에 들어간 오픈소스 라이브러리 전체를 라이선스별로 보여줍니다.
 - 라이브러리 목록은 `./gradlew :androidApp:updateThirdPartyNotices`가 릴리스 런타임 클래스패스의 POM에서 생성하고(`shared/src/androidMain/.../ui/about/PlatformLibraries.android.kt`), 모든 빌드 전에 `checkThirdPartyNotices`가 목록이 최신인지 확인합니다.
