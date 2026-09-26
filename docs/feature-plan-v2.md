@@ -44,7 +44,7 @@
 - 출처 표시: 지도 위에 항상 "© OpenMapTiles © OpenStreetMap contributors"(누르면 OSM 저작권 페이지). `출처 · 라이선스`에 OpenStreetMap(ODbL 1.0)·OpenMapTiles·OpenFreeMap·MapLibre와 MapLibre Native가 함께 넣은 C++ 라이브러리 고지 원문.
 - 개인정보: 상세 지도를 열 때만 보이는 지역의 타일·글꼴 조각을 OpenFreeMap(Cloudflare CDN 경유 가능)에 요청한다. 요청에는 여느 HTTP 요청처럼 IP 주소와 User-Agent(앱 이름·버전, MapLibre·Android 버전)가 담기고, 기록·로스터리·카페 정보는 보내지 않는다. 위치 권한은 쓰지 않는다(MapLibre가 선언한 위치·Wi-Fi 권한은 매니페스트에서 제거).
 - 오프라인·실패: 열 때 네트워크가 없으면 안내 + "한국 지도로 돌아가기"·"다시 시도". 네이티브 라이브러리를 못 올리거나 스타일이 실패하면 같은 안내. 20초가 지나도 다 못 받으면 지도 위에 알림. SGIS 지도는 네트워크 없이 그대로 동작한다.
-- APK: 네이티브 라이브러리(4개 ABI, 압축 전 약 49 MB)를 압축 저장해 릴리스 APK가 약 15.9 MiB → 31.2 MiB(설치 시 기기 ABI만 풀림).
+- APK: 네이티브 라이브러리(4개 ABI, 압축 전 약 49 MB)를 압축 저장해 릴리스 APK가 약 15.9 MiB → 31.2 MiB(설치 시 기기 ABI만 풀림). 알림·위젯과 병합한 뒤에는 약 17.7 MiB → 33.0 MiB.
 
 ## 2. 기록·분석
 
