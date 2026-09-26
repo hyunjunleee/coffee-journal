@@ -9,8 +9,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Typography
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -63,17 +66,19 @@ object Dimens {
 }
 
 object AppType {
-    val mono: FontFamily = FontFamily.Monospace
-    val sans: FontFamily = FontFamily.Default
+    /** The header and number typeface (설정 › 화면 › 제목·숫자). */
+    val mono: FontFamily get() = Display.numberFamily
+    /** The running text typeface (설정 › 화면 › 글꼴). */
+    val sans: FontFamily get() = Display.bodyFamily
 
-    val headerTitle = TextStyle(fontFamily = mono, fontSize = 22.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.04).em, color = Ink.text)
-    val tagline = TextStyle(fontFamily = mono, fontSize = 11.sp, color = Ink.textMuted, letterSpacing = 0.02.em)
-    val count = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Ink.text)
-    val sectionLabel = TextStyle(fontFamily = mono, fontSize = 10.5.sp, letterSpacing = 0.05.em, color = Ink.textFaint, fontWeight = FontWeight.Medium)
-    val fieldLabel = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Ink.textMuted)
-    val body = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Ink.text, lineHeight = 21.sp)
-    val bodyMuted = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Ink.textMuted, lineHeight = 20.sp)
-    val small = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Ink.textMuted, lineHeight = 18.sp)
+    val headerTitle: TextStyle get() = TextStyle(fontFamily = mono, fontSize = 22.sp, fontWeight = FontWeight.Medium, letterSpacing = (-0.04).em, color = Ink.text)
+    val tagline: TextStyle get() = TextStyle(fontFamily = mono, fontSize = 11.sp, color = Ink.textMuted, letterSpacing = 0.02.em)
+    val count: TextStyle get() = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Ink.text)
+    val sectionLabel: TextStyle get() = TextStyle(fontFamily = mono, fontSize = 10.5.sp, letterSpacing = 0.05.em, color = Ink.textFaint, fontWeight = FontWeight.Medium)
+    val fieldLabel: TextStyle get() = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Ink.textMuted)
+    val body: TextStyle get() = TextStyle(fontFamily = sans, fontSize = 14.sp, color = Ink.text, lineHeight = 21.sp)
+    val bodyMuted: TextStyle get() = TextStyle(fontFamily = sans, fontSize = 13.sp, color = Ink.textMuted, lineHeight = 20.sp)
+    val small: TextStyle get() = TextStyle(fontFamily = sans, fontSize = 12.sp, color = Ink.textMuted, lineHeight = 18.sp)
 
     /**
      * Text inside input boxes: [body] / [small] with an untrimmed line box. The default trim fits the first and last
@@ -82,14 +87,14 @@ object AppType {
      * its line height whatever the script, so boxes in one row stay level.
      */
     private val fieldLines = LineHeightStyle(alignment = LineHeightStyle.Alignment.Center, trim = LineHeightStyle.Trim.None)
-    val input = body.copy(lineHeightStyle = fieldLines)
-    val inputSmall = small.copy(lineHeightStyle = fieldLines)
-    val faint = TextStyle(fontFamily = sans, fontSize = 11.5.sp, color = Ink.textFaint, lineHeight = 17.sp)
-    val title = TextStyle(fontFamily = sans, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink.text, lineHeight = 24.sp)
-    val cardTitle = TextStyle(fontFamily = sans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink.text, lineHeight = 22.sp)
-    val monoValue = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Ink.text)
-    val monoSmall = TextStyle(fontFamily = mono, fontSize = 10.5.sp, color = Ink.textMuted, letterSpacing = 0.04.em)
-    val displayNumber = TextStyle(fontFamily = mono, fontSize = 26.sp, fontWeight = FontWeight.Medium, color = Ink.text, letterSpacing = (-0.02).em)
+    val input: TextStyle get() = body.copy(lineHeightStyle = fieldLines)
+    val inputSmall: TextStyle get() = small.copy(lineHeightStyle = fieldLines)
+    val faint: TextStyle get() = TextStyle(fontFamily = sans, fontSize = 11.5.sp, color = Ink.textFaint, lineHeight = 17.sp)
+    val title: TextStyle get() = TextStyle(fontFamily = sans, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Ink.text, lineHeight = 24.sp)
+    val cardTitle: TextStyle get() = TextStyle(fontFamily = sans, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = Ink.text, lineHeight = 22.sp)
+    val monoValue: TextStyle get() = TextStyle(fontFamily = mono, fontSize = 12.sp, color = Ink.text)
+    val monoSmall: TextStyle get() = TextStyle(fontFamily = mono, fontSize = 10.5.sp, color = Ink.textMuted, letterSpacing = 0.04.em)
+    val displayNumber: TextStyle get() = TextStyle(fontFamily = mono, fontSize = 26.sp, fontWeight = FontWeight.Medium, color = Ink.text, letterSpacing = (-0.02).em)
 
 }
 
@@ -137,7 +142,7 @@ private val ArchiveColors = lightColorScheme(
 private val Square = RoundedCornerShape(0.dp)
 private val ArchiveShapes = Shapes(extraSmall = Square, small = Square, medium = Square, large = Square, extraLarge = Square)
 
-private val ArchiveTypography = Typography(
+private fun archiveTypography() = Typography(
     bodyLarge = AppType.body,
     bodyMedium = AppType.body,
     bodySmall = AppType.small,
@@ -147,9 +152,21 @@ private val ArchiveTypography = Typography(
     labelMedium = AppType.fieldLabel,
 )
 
+/**
+ * The archive theme with this phone's display settings ([Display.current]): the typefaces through [AppType] and the
+ * Material typography, the text size through the density every sp is converted with.
+ */
 @Composable
 fun CoffeeJournalTheme(content: @Composable () -> Unit) {
-    MaterialTheme(colorScheme = ArchiveColors, typography = ArchiveTypography, shapes = ArchiveShapes) {
-        Surface(Modifier.fillMaxSize().background(Ink.bg), color = Ink.bg, contentColor = Ink.text, content = content)
+    val display = Display.current
+    val base = LocalDensity.current
+    val density = remember(base, display.textSize) {
+        if (display.textSize.scale == 1f) base else scaledTextDensity(base, display.textSize.scale)
+    }
+    val typography = remember(display.bodyFont, display.numberFont) { archiveTypography() }
+    CompositionLocalProvider(LocalDensity provides density) {
+        MaterialTheme(colorScheme = ArchiveColors, typography = typography, shapes = ArchiveShapes) {
+            Surface(Modifier.fillMaxSize().background(Ink.bg), color = Ink.bg, contentColor = Ink.text, content = content)
+        }
     }
 }

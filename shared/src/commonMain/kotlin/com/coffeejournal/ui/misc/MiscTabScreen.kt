@@ -5,7 +5,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -38,7 +37,6 @@ import androidx.navigation.NavHostController
 import coil3.compose.AsyncImage
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.ui.nav.Route
-import com.coffeejournal.ui.form.TextLink
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Badge
@@ -60,7 +58,7 @@ fun MiscTabScreen(nav: NavHostController) {
 
     Column(Modifier.fillMaxSize()) {
         // the web header is global: every tab shows the record count
-        TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = state.entryCount?.let { "$it entries" })
+        TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = state.entryCount?.let { "$it entries" }, onSettings = { nav.navigate(Route.Settings) })
         Box(Modifier.fillMaxSize()) {
             LazyColumn(Modifier.fillMaxSize().testTag("misc-list"), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, top = 12.dp, bottom = 96.dp)) {
                 item(key = "type-tabs") {
@@ -94,13 +92,6 @@ fun MiscTabScreen(nav: NavHostController) {
                             onDelete = { deleteTarget = item },
                         )
                         Spacer(Modifier.height(10.dp))
-                    }
-                }
-                // not on the web: reminders (알림 설정) and where the content, icons and libraries come from (출처 · 라이선스)
-                item(key = "about") {
-                    FlowRow(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally)) {
-                        TextLink("알림 설정 →", Ink.textMuted, { nav.navigate(Route.NotificationSettings) })
-                        TextLink("출처 · 오픈소스 라이선스 →", Ink.textMuted, { nav.navigate(Route.About) })
                     }
                 }
             }

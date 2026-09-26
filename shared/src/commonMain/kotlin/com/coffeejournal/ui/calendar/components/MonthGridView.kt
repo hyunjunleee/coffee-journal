@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -45,7 +46,7 @@ import com.coffeejournal.ui.theme.Ink
 
 private val cellGap = 3.dp
 private val milestoneBig = Color(0xFFD9A441)
-private val tinyMono = AppType.monoSmall.copy(fontSize = 8.sp, letterSpacing = 0.em, lineHeight = 9.sp)
+private val tinyMono: TextStyle get() = AppType.monoSmall.copy(fontSize = 8.sp, letterSpacing = 0.em, lineHeight = 9.sp)
 
 /** Seven-column month grid with a weekday header row (web #calendar-grid). */
 @Composable

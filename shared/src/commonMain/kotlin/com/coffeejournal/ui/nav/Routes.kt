@@ -48,8 +48,8 @@ sealed interface Route {
     @Serializable data class BrewTimer(val recipe: String? = null, val hasLog: Boolean = false) : Route
     @Serializable data class BrewCompare(val beanKey: String) : Route
     @Serializable data object Stats : Route
-    /** 알림 설정 (reminders), from the bottom of the 기타 tab. */
-    @Serializable data object NotificationSettings : Route
+    /** 설정: typefaces, text size, transitions, reminders and sources; the small gear in each tab's header. */
+    @Serializable data object Settings : Route
 }
 
 object FormMode {

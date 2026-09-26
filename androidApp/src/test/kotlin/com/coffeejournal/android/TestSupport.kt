@@ -10,6 +10,7 @@ import com.coffeejournal.di.dataModule
 import com.coffeejournal.ui.nav.Features
 import com.coffeejournal.ui.notify.AndroidReminderPlatform
 import com.coffeejournal.ui.notify.ReminderPlatform
+import com.coffeejournal.ui.theme.Display
 import kotlinx.coroutines.Dispatchers
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -18,7 +19,13 @@ import org.koin.dsl.module
 import java.io.File
 
 /** Test application that does not start Koin, so each test can install its own modules. */
-class TestApp : Application()
+class TestApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        // Display (설정 › 화면) is process-wide state: an earlier test's typeface or text size must not carry over
+        Display.reset()
+    }
+}
 
 /** In-memory Room database on the framework SQLite (Robolectric) plus a photo store in a temp dir. */
 fun testPlatformModule(context: Context) = module {

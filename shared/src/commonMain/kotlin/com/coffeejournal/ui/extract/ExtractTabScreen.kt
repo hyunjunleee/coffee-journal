@@ -72,7 +72,7 @@ fun ExtractTabScreen(nav: NavHostController) {
     Box(Modifier.fillMaxSize()) {
         // ends at the keyboard, so the search / D-day / summary fields scroll above it
         LazyColumn(Modifier.fillMaxSize().imeOverlapPadding(), contentPadding = PaddingValues(bottom = 96.dp)) {
-            item { TopHeader("coffee_journal / 2026", "[ personal coffee archive ]", if (state.loaded) "${state.entryCount} entries" else null) }
+            item { TopHeader("coffee_journal / 2026", "[ personal coffee archive ]", if (state.loaded) "${state.entryCount} entries" else null, onSettings = { nav.navigate(Route.Settings) }) }
             item {
                 if (state.loaded) DdaySection(
                     start = state.ddayStart, label = state.ddayLabel, milestone = state.ddayMilestone, onSave = vm::saveDday,

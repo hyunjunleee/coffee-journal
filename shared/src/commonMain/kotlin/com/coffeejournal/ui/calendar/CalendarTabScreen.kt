@@ -39,7 +39,7 @@ fun CalendarTabScreen(nav: NavHostController) {
     val state by vm.state.collectAsStateWithLifecycle()
     Column(Modifier.fillMaxSize()) {
         // the web header is global: every tab shows the record count
-        TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = state.entryCount?.let { "$it entries" })
+        TopHeader(title = "coffee_journal / 2026", tagline = "[ personal coffee archive ]", right = state.entryCount?.let { "$it entries" }, onSettings = { nav.navigate(Route.Settings) })
         SubTabs(
             items = CalTabs.all,
             selected = state.controls.tab,

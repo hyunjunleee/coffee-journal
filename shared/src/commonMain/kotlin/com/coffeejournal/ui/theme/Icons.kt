@@ -29,6 +29,14 @@ object AppIcons {
     val drop: ImageVector by lazy { build("drop", "M12 2.7l5.7 7.1a7 7 0 1 1-11.4 0L12 2.7z") }
     val backup: ImageVector by lazy { build("backup", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M7 10l5 5 5-5", "M12 15V3") }
     val restore: ImageVector by lazy { build("restore", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "M17 8l-5-5-5 5", "M12 3v12") }
+    // lucide-static 1.48.0 icons/settings.svg (its circle r=3 written as two arcs)
+    val settings: ImageVector by lazy {
+        build(
+            "settings",
+            "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915",
+            "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z",
+        )
+    }
     val box: ImageVector by lazy { build("box", "M3 7l9-4 9 4v10l-9 4-9-4z", "M3 7l9 4 9-4", "M12 11v10") }
 
     private fun build(name: String, vararg paths: String): ImageVector {

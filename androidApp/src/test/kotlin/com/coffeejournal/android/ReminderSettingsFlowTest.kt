@@ -31,7 +31,7 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * 알림 설정 (feature plan v2 §3), driven through the real app: reached from the bottom of the 기타 tab; turning
+ * 설정 › 알림 (feature plan v2 §3), driven through the real app: reached from the gear in the tab header; turning
  * reminders on asks for the Android 13+ notification permission first, a refusal keeps the switch off with a hint,
  * and a new time reschedules the daily check.
  */
@@ -51,13 +51,7 @@ class ReminderSettingsFlowTest : CoverageFlowBase() {
 
     private fun openSettings() {
         launchApp()
-        tab("tab-misc")
-        waitFor(hasTestTag("misc-list"))
-        node(hasTestTag("misc-list")).performScrollToNode(button("알림 설정 →"))
-        settle(1)
-        // next to the existing credits link
-        assertTrue(has(button("출처 · 오픈소스 라이선스 →")))
-        tap(button("알림 설정 →"))
+        tap(hasTestTag("open-settings"))
         waitForText(ReminderTexts.INTRO)
     }
 
