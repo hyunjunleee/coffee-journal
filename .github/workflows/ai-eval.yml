@@ -2,7 +2,8 @@
 # the app's two kinds of questions and reports how well the answers are tied to real sources.
 #
 # Repository secret (Settings › Secrets and variables › Actions):
-#   GEMINI_API_KEY   a free Gemini API key from Google AI Studio (a project without billing)
+#   GEMINI_API_KEY_DEBUG   a free Gemini API key for development only (a project without billing). It is never put
+#                          into the app: in the app every user enters their own key (docs/ai-note-helper-plan.md §5).
 # Without it only the parser self-test runs. The report goes to a short-lived artifact (7 days) and the job summary;
 # grounded answers are not committed to the repository.
 name: AI note helper eval
@@ -44,13 +45,13 @@ jobs:
 
       - name: Ask Gemini
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_DEBUG }}
           MODEL: ${{ inputs.model || 'gemini-2.5-flash' }}
           NOTES: ${{ inputs.notes || '12' }}
           DESCRIBES: ${{ inputs.describes || '6' }}
         run: |
           if [ -z "$GEMINI_API_KEY" ]; then
-            echo "::warning::The GEMINI_API_KEY secret is not set; only the self-test ran."
+            echo "::warning::The GEMINI_API_KEY_DEBUG secret is not set; only the self-test ran."
             exit 0
           fi
           python3 tools/ai-eval/eval.py --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out

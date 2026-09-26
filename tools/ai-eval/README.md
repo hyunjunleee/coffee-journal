@@ -18,7 +18,8 @@
 - GitHub Actions의 "AI note helper eval"로 실행합니다.
   - `tools/ai-eval/`을 바꿔 푸시하면 자동으로 돕니다.
   - Actions 탭에서 모델과 개수를 골라 수동으로도 실행할 수 있습니다.
-  - 저장소 Secret `GEMINI_API_KEY`(결제가 꺼진 프로젝트의 무료 키)가 있어야 실제 질문을 보냅니다. 없으면 자체 점검만 합니다.
+  - 저장소 Secret `GEMINI_API_KEY_DEBUG`(개발용 무료 키, 결제가 꺼진 프로젝트)가 있어야 실제 질문을 보냅니다. 없으면 자체 점검만 합니다.
+  - 이 키는 개발용이라 앱(APK)에는 넣지 않습니다. 앱에서는 사용자가 자기 키를 직접 입력합니다.
   - 보고서는 실행 페이지 요약과 7일짜리 아티팩트로 남습니다. 저장소에는 커밋하지 않습니다.
 - 로컬 실행은 `GEMINI_API_KEY=… python3 tools/ai-eval/eval.py --notes 3 --describes 2`입니다. 파이썬 표준 라이브러리만 씁니다.
 - 자체 점검(키 불필요)은 `python3 tools/ai-eval/eval.py --selftest`입니다.
