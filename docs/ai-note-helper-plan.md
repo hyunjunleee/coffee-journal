@@ -45,6 +45,49 @@
 - 검색 API: [Tavily](https://docs.tavily.com/documentation/api-credits), [Exa](https://exa.ai/pricing)
 - 유료 참고: [Claude 웹 검색](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool), [Perplexity](https://docs.perplexity.ai/docs/getting-started/pricing)
 
+### 2.1 유료 키로 쓸 제공자 (2026-09-26 확인)
+
+**OpenAI (GPT)**
+- 호출: Responses API(`POST https://api.openai.com/v1/responses`)에 `tools: [{type: "web_search"}]`를 넣고, `tool_choice: "required"`로 검색을 강제한다.
+- 요청 옵션:
+  - `include: ["web_search_call.action.sources"]`로 참고한 전체 URL을 받는다.
+  - `user_location`에 `{type: "approximate", country: "KR"}`를 준다. 빠뜨리면 미국으로 간주한다.
+  - `filters.allowed_domains`를 쓸 수 있다.
+- 인용: 답의 `annotations[]`에 `url_citation`(url, title, start_index, end_index)이 온다. 인용은 화면에 보이고 누를 수 있어야 한다.
+- 가격:
+  - 검색 1,000회당 $10에, 검색 내용 토큰을 모델 요금으로 따로 낸다.
+  - 가장 싼 검색 지원 모델은 `gpt-5-nano`(입력 $0.05 / 출력 $0.40, 100만 토큰당)다.
+- 출처:
+  - [웹 검색](https://developers.openai.com/api/docs/guides/tools-web-search)
+  - [가격](https://developers.openai.com/api/docs/pricing)
+  - [요청 형식](https://developers.openai.com/api/reference/resources/responses/methods/create)
+
+**Gemini 유료 (3.x)**
+- 모델과 가격:
+  - 최신 Flash는 `gemini-3.8-flash`다.
+  - 검색 그라운딩은 모델이 실행한 검색마다 과금한다. 3.x 전체 합쳐 월 5,000회 무료, 그 뒤 1,000회당 $14.
+- 구조화 출력과 검색: 3.x에서 함께 쓸 수 있지만 아직 미리보기다.
+- API 면: 새로 권장되는 면은 Interactions API(`/v1beta/interactions`, 2026-06 GA)다. 기존 `generateContent`도 계속 지원된다. 무료 2.5는 `generateContent`로 쓴다.
+- 출처: [가격](https://ai.google.dev/gemini-api/docs/pricing), [구조화 출력](https://ai.google.dev/gemini-api/docs/structured-output), [Interactions](https://ai.google.dev/gemini-api/docs/interactions-overview)
+
+**Anthropic (Claude)**
+- 호출: Messages API에 웹 검색 도구를 넣는다.
+- 인용: 인용마다 url, title, `cited_text`(원문 그대로 최대 150자)가 온다.
+- 가격: 검색 1,000회당 $10에 토큰 요금이 붙는다.
+- 구현할 때 공식 문서로 모델 ID와 도구 버전을 다시 확인한다.
+- 출처: [웹 검색 도구](https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-search-tool)
+
+**세 제공자 공통 처리**
+- 각자의 인용 형식을 같은 `GroundedAnswer`로 바꾼다.
+  - Gemini: `groundingChunks` + `groundingSupports`
+  - OpenAI: `url_citation`
+  - Claude: `citations` + `cited_text`
+- 인용 위치(offset)는 문서마다 설명이 엇갈린다.
+  - Gemini 참조 문서는 "bytes"라고 쓰고, 이전 안내서는 "character"라고 쓴다.
+  - OpenAI는 "characters"라고 쓰지만, 코드 포인트인지 UTF-16 단위인지는 확인하지 못했다.
+- 그래서 앱은 위치 숫자를 믿지 않고, 인용에 딸려 오는 텍스트를 답에서 직접 찾는다. 찾지 못할 때만 위치 숫자를 쓰고, Gemini의 경우 UTF-8 바이트로 해석한다.
+- PoC가 Gemini 2.5의 실제 위치 단위를 잰다(`offset_kinds`).
+
 ## 3. Gemini 무료 등급의 조건과 앱에서의 대응
 
 | 조건(약관·문서) | 앱에서의 대응 |
