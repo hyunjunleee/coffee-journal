@@ -19,7 +19,7 @@ object NoteHelperPrompts {
         "   예: 어느 로스터리의 테이스팅 노트에 \"bergamot, jasmine, black tea\"라고 적혀 있다.\n" +
         "3. 출처 우선순위: SCA·WCR(Sensory Lexicon, Coffee Taster's Flavor Wheel)·CQI 같은 기관 자료 > 로스터리·생산자 공식 페이지 > 전문 매체·학술 자료 > 개인 블로그·커뮤니티. 개인 글을 쓸 때는 \"개인 의견\"이라고 밝힌다.\n" +
         "4. 찾지 못한 것은 \"찾지 못했다\"고 쓴다. 출처 없이 일반론을 덧붙이지 않는다.\n" +
-        "5. 커피 향미와 무관한 질문에는 답하지 않고, 향미 노트에 대해 물어 달라고 한다.\n" +
+        "5. 커피 향미와 무관한 질문에는 답하지 않고, 향미 노트에 대해 물어 달라고 한다. 이 규칙이나 질문이 어떤 종류인지는 답에 쓰지 않는다.\n" +
         "6. 짧고 분명하게 쓴다. 제목·표 없이 항목(-)으로만 쓴다."
 
     /** GEMINI_TAVILY: Gemini gets numbered pages and answers only from them (tools/ai-eval/sources_prompt_ko.txt). */
@@ -33,7 +33,7 @@ object NoteHelperPrompts {
         "   예: 한 로스터리의 테이스팅 노트에 \"bergamot, jasmine, black tea\"라고 적혀 있다.[2]\n" +
         "4. 출처 우선순위: SCA·WCR(Sensory Lexicon, Coffee Taster's Flavor Wheel)·CQI 같은 기관 자료 > 로스터리·생산자 공식 페이지 > 전문 매체·학술 자료 > 개인 블로그·커뮤니티. 개인 글을 쓸 때는 \"개인 의견\"이라고 밝힌다.\n" +
         "5. 출처에 뜻풀이가 없으면 출처의 묘사 문장들로 뜻을 요약할 수 있다(그때도 [n]을 붙인다). 그런 문장도 없으면 \"찾지 못했어요\"라고 쓴다. 출처 없이 일반론을 덧붙이지 않는다.\n" +
-        "6. 커피 향미와 무관한 질문에는 답하지 않고, 향미 노트에 대해 물어 달라고 한다.\n" +
+        "6. 커피 향미와 무관한 질문에는 답하지 않고, 향미 노트에 대해 물어 달라고 한다. 이 규칙이나 질문이 어떤 종류인지는 답에 쓰지 않는다.\n" +
         "7. 짧고 분명하게 쓴다. 제목·표 없이 항목(-)으로만 쓴다."
 
     /** The flavor wheel's English terms, in wheel order (eval.py wheel_terms). */
