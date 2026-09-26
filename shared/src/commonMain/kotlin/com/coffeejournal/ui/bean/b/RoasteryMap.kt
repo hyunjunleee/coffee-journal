@@ -15,6 +15,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.BeanRecord
+import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.Dates
@@ -24,9 +25,14 @@ import com.coffeejournal.ui.map.MapLinkButtons
 import com.coffeejournal.ui.map.MapPin
 import com.coffeejournal.ui.map.WorldPinMap
 import com.coffeejournal.ui.map.WorldPinMapState
+import com.coffeejournal.ui.map.detail.DetailMapLayer
+import com.coffeejournal.ui.map.detail.DetailMapPins
+import com.coffeejournal.ui.map.detail.DetailMapRoutes
+import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.EmptyNote
+import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.HairlineCard
 import com.coffeejournal.ui.theme.Ink
 
@@ -46,6 +52,7 @@ fun RoasteryMapCard(
     koreaState: KoreaMapState,
     worldState: WorldPinMapState,
     modifier: Modifier = Modifier,
+    onOpenDetailMap: ((Route.DetailMap) -> Unit)? = null,
 ) {
     val domestic = scope == Scope.DOMESTIC
     val pins = remember(model) { model.pins.map { MapPin(it.item.name, it.item.name, it.at, it.count, "${it.item.name}, ${it.count}잔") } }
@@ -58,7 +65,16 @@ fun RoasteryMapCard(
             Text("${model.items.size}곳 · ${model.cups}잔", style = AppType.count)
         }
         if (domestic) {
-            KoreaMap(koreaState, description, pins, selected, onPin, shaded = shaded, onBackgroundTap = { onSelect(null) })
+            KoreaMap(
+                koreaState, description, pins, selected, onPin, shaded = shaded, onBackgroundTap = { onSelect(null) },
+                // "상세 지도": the selected roastery, else what the 시·도 map shows
+                onOpenDetail = onOpenDetailMap?.let { open ->
+                    { bounds ->
+                        val pin = model.pins.firstOrNull { it.item.name == selected }?.let { DetailMapPins.roastery(it, domestic) }
+                        open(if (pin != null) DetailMapRoutes.pin(DetailMapLayer.ROASTERY, scope, pin) else DetailMapRoutes.area(DetailMapLayer.ROASTERY, scope, bounds))
+                    }
+                },
+            )
             Text(
                 if (koreaState.isNational) "시·도를 누르면 시·군·구 지도로 확대돼요. 두 손가락으로 늘리고 옮길 수 있어요."
                 else "뒤로 가기나 ‘← 전국’을 누르면 전국 지도로 돌아가요.",
@@ -70,20 +86,13 @@ fun RoasteryMapCard(
         val pin = model.pins.firstOrNull { it.item.name == selected }
         val item = pin?.item ?: model.items.firstOrNull { it.name == selected }
         if (item != null) {
-            HairlineCard(Modifier.padding(top = 10.dp)) {
-                Text(item.name, style = AppType.cardTitle)
-                if (item.location.isNotBlank()) Text(item.location, style = AppType.small)
-                if (pin != null && pin.place.isNotBlank()) {
-                    // an exact position names its area; otherwise the pin stands at the centre of the area the text named
-                    Text(if (pin.exact) "📍 ${pin.place}" else "${pin.place} 중심에 표시", style = AppType.faint)
-                }
-                val recs = FlatItemLogic.roasteryRecords(records, item.name).sortedByDescending { it.createdAt }
-                if (recs.isEmpty()) EmptyNote("연결된 원두 기록이 없어요.", Modifier.padding(top = 8.dp))
-                else recs.forEach { r ->
-                    SourceBeanRow(BeanNames.coreBeanName(r.name).ifEmpty { r.name.ifBlank { "이름 없음" } }, right = Dates.ymdCompact(r.createdAt), badge = r.category, onClick = { onOpenEntry(r.entryId) })
-                }
-                MapLinkButtons(item.name, item.location, item.point, overseas = !domestic)
-            }
+            val detailPin = pin?.let { DetailMapPins.roastery(it, domestic) }
+            RoasteryPanel(
+                item, pin, records, domestic, onOpenEntry, Modifier.padding(top = 10.dp),
+                onOpenDetail = if (onOpenDetailMap != null && detailPin != null) {
+                    { onOpenDetailMap(DetailMapRoutes.pin(DetailMapLayer.ROASTERY, scope, detailPin)) }
+                } else null,
+            )
         }
         if (model.unlocated.isNotEmpty()) {
             NoteBox("위치 미입력 ${model.unlocated.size}곳", model.unlocated.joinToString(" · ") { it.name }, "아래 목록에서 지역을 입력하면 지도에 표시돼요.")
@@ -94,6 +103,37 @@ fun RoasteryMapCard(
                 "로스터리를 수정해 지역을 ${if (domestic) "“서울 성동구”처럼" else "나라 이름으로"} 적거나 ‘지도에서 위치 지정’으로 찍으면 표시돼요.",
             )
         }
+    }
+}
+
+/**
+ * The selected roastery (the SGIS / world map's panel and the detail map's): where it is, its records and the
+ * map-app links, and "상세 지도에서 보기" when [onOpenDetail] is given.
+ */
+@Composable
+fun RoasteryPanel(
+    item: MiscItem,
+    pin: RoasteryPin?,
+    records: List<BeanRecord>,
+    domestic: Boolean,
+    onOpenEntry: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    onOpenDetail: (() -> Unit)? = null,
+) {
+    HairlineCard(modifier) {
+        Text(item.name, style = AppType.cardTitle)
+        if (item.location.isNotBlank()) Text(item.location, style = AppType.small)
+        if (pin != null && pin.place.isNotBlank()) {
+            // an exact position names its area; otherwise the pin stands at the centre of the area the text named
+            Text(if (pin.exact) "📍 ${pin.place}" else "${pin.place} 중심에 표시", style = AppType.faint)
+        }
+        val recs = FlatItemLogic.roasteryRecords(records, item.name).sortedByDescending { it.createdAt }
+        if (recs.isEmpty()) EmptyNote("연결된 원두 기록이 없어요.", Modifier.padding(top = 8.dp))
+        else recs.forEach { r ->
+            SourceBeanRow(BeanNames.coreBeanName(r.name).ifEmpty { r.name.ifBlank { "이름 없음" } }, right = Dates.ymdCompact(r.createdAt), badge = r.category, onClick = { onOpenEntry(r.entryId) })
+        }
+        MapLinkButtons(item.name, item.location, item.point, overseas = !domestic)
+        if (onOpenDetail != null) GhostButton("상세 지도에서 보기", small = true, onClick = onOpenDetail, modifier = Modifier.padding(top = 8.dp))
     }
 }
 

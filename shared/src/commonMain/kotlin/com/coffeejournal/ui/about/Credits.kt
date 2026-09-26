@@ -1,6 +1,8 @@
 package com.coffeejournal.ui.about
 
 import com.coffeejournal.domain.reference.CafeRecipes
+import com.coffeejournal.ui.map.detail.DetailMapPrivacy
+import com.coffeejournal.ui.map.detail.OpenFreeMap
 
 /** A source the app's content or look comes from, with its terms. */
 data class Credit(
@@ -88,6 +90,23 @@ object Credits {
                 "공공누리 제1유형" to "https://www.kogl.or.kr/info/licenseType1.do",
                 "CC BY 4.0" to "https://creativecommons.org/licenses/by/4.0/",
             ),
+        ),
+        Credit(
+            "상세 지도 · OpenStreetMap",
+            "로스터리·카페 지도와 위치 지정의 \"상세 지도\"는 OpenStreetMap 데이터(© OpenStreetMap contributors, ODbL 1.0)로 만든 " +
+                "OpenMapTiles 스키마의 벡터 지도 조각을 OpenFreeMap(openfreemap.org)에서 받아 앱의 색으로 그린 것이에요. " +
+                "지도 위에는 항상 \"${OpenFreeMap.ATTRIBUTION}\"를 표시해요. OpenFreeMap은 키·계정 없이 쓸 수 있는 무료 공개 서비스예요(상업적 사용 허용, 출처 표시 필요).\n" +
+                "지도는 MapLibre Native(BSD 2-Clause)가 그리고, 앱 화면에는 MapLibre Compose(BSD 3-Clause)로 붙였어요. 둘의 라이선스와 MapLibre Native에 함께 들어간 " +
+                "라이브러리들의 고지문은 아래 \"라이선스 전문 보기\"에 원문 그대로 있어요.\n" +
+                DetailMapPrivacy.NOTE + "\n" +
+                "인터넷이 없으면 상세 지도는 열리지 않고, 시·도·시·군·구 경계 지도는 앱에 들어 있어 그대로 쓸 수 있어요.",
+            links = listOf(
+                "OpenStreetMap 저작권 · ODbL 1.0" to OpenFreeMap.OSM_COPYRIGHT_URL,
+                "OpenMapTiles" to OpenFreeMap.OPENMAPTILES_URL,
+                "OpenFreeMap" to OpenFreeMap.SITE_URL,
+                "MapLibre" to "https://maplibre.org/",
+            ),
+            licenseText = LicenseTexts.MAPLIBRE,
         ),
         Credit(
             "아이콘 · Lucide",

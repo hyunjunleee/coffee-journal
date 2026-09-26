@@ -30,6 +30,20 @@ sealed interface Route {
     @Serializable data object About : Route
     /** "지도에서 위치 지정": target "roastery" (point handed back to the form) or "cafe" (saved); point = "lat,lng". */
     @Serializable data class MapPicker(val target: String, val name: String = "", val scope: String = "국내", val point: String? = null) : Route
+    /**
+     * 상세 지도 (OpenStreetMap via OpenFreeMap, feature-plan-v2 §1.7). mode "view": the roastery or café pins ([layer],
+     * [scope]); mode "pick": a crosshair whose point goes back to the location picker. It opens on [camera]
+     * ("lat,lng,zoom"), else fitted to [bounds] ("south,west,north,east"); [focus] selects a pin; [name] is what is placed.
+     */
+    @Serializable data class DetailMap(
+        val mode: String = "view",
+        val layer: String = "roastery",
+        val scope: String = "국내",
+        val camera: String? = null,
+        val bounds: String? = null,
+        val focus: String? = null,
+        val name: String = "",
+    ) : Route
     /** recipe: the form's applied recipe as JSON (BrewTimerResult.encodeRecipe); hasLog: the form already has a step log. */
     @Serializable data class BrewTimer(val recipe: String? = null, val hasLog: Boolean = false) : Route
     @Serializable data class BrewCompare(val beanKey: String) : Route
