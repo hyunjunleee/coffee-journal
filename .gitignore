@@ -1,0 +1,24 @@
+# Gradle / build
+.gradle/
+build/
+**/build/
+.kotlin/
+local.properties
+# IDE
+.idea/
+*.iml
+.DS_Store
+# iOS
+iosApp/build/
+iosApp/Pods/
+iosApp/*.xcworkspace/xcuserdata/
+# Roborazzi comparison artifacts (recorded PNGs are kept)
+androidApp/screenshots/*_compare.png
+androidApp/screenshots/*_actual.png
+.claude/worktrees/
+# Render matrix (320dp, font scale 1.3/2.0, page-by-page): regenerate with recordRoborazziDebug, not committed
+androidApp/screenshots/matrix/
+# Signing keys never enter the repository
+*.jks
+*.keystore
+keystore.base64.txt

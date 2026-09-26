@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Coffee Journal</string>
+    <string name="widget_name">커피 D-day · 마시는 중</string>
+    <string name="widget_description">Coffee D-day와 마시는 중인 원두의 잔여량을 보여 주고, 누르면 바로 새 기록을 쓸 수 있어요.</string>
+</resources>

@@ -1,0 +1,45 @@
+package com.coffeejournal.ui.form
+
+import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.composable
+import androidx.navigation.toRoute
+import com.coffeejournal.ui.form.timer.BrewClock
+import com.coffeejournal.ui.form.timer.BrewTimerArgs
+import com.coffeejournal.ui.form.timer.BrewTimerScreen
+import com.coffeejournal.ui.form.timer.BrewTimerViewModel
+import com.coffeejournal.ui.form.timer.SystemBrewClock
+import com.coffeejournal.ui.nav.Feature
+import com.coffeejournal.ui.nav.Route
+import org.koin.core.module.Module
+import org.koin.core.module.dsl.viewModel
+import org.koin.core.module.dsl.viewModelOf
+import org.koin.dsl.module
+
+/** Record form, entry detail, my recipes and the brew timer: Koin module (view models) and full-screen routes. */
+object RecordFormFeature : Feature {
+    override val module: Module = module {
+        // the last get() is the destination's SavedStateHandle, created by Koin from the view model's CreationExtras
+        viewModel { (args: FormArgs) -> RecordFormViewModel(args, get(), get(), get(), get(), get(), get(), get()) }
+        viewModel { (entryId: String) -> EntryDetailViewModel(entryId, get(), get(), get(), get()) }
+        viewModelOf(::MyRecipesViewModel)
+        single<BrewClock> { SystemBrewClock }
+        // the last get() is the destination's SavedStateHandle: a running timer survives process death
+        viewModel { (args: BrewTimerArgs) -> BrewTimerViewModel(args, get(), get()) }
+    }
+
+    override fun NavGraphBuilder.routes(nav: NavHostController) {
+        composable<Route.RecordForm> { backStackEntry ->
+            val route = backStackEntry.toRoute<Route.RecordForm>()
+            RecordFormScreen(nav, route.mode, route.entryId, route.cuppingType, results = backStackEntry.savedStateHandle)
+        }
+        composable<Route.EntryDetail> { backStackEntry ->
+            EntryDetailScreen(nav, backStackEntry.toRoute<Route.EntryDetail>().entryId)
+        }
+        composable<Route.MyRecipes> { MyRecipesScreen(nav) }
+        composable<Route.BrewTimer> { backStackEntry ->
+            val route = backStackEntry.toRoute<Route.BrewTimer>()
+            BrewTimerScreen(nav, route.recipe, route.hasLog)
+        }
+    }
+}

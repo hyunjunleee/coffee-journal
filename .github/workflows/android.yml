@@ -1,0 +1,151 @@
+# Builds and tests the Android app on every push and pull request, and publishes a signed release APK.
+#
+# Repository secrets (Settings › Secrets and variables › Actions):
+#   COFFEEJOURNAL_KEYSTORE_BASE64    base64 of the release keystore (.jks)
+#   COFFEEJOURNAL_KEYSTORE_PASSWORD  keystore password
+#   COFFEEJOURNAL_KEY_ALIAS          key alias
+#   COFFEEJOURNAL_KEY_PASSWORD       key password (same as the keystore password for a PKCS12 keystore)
+# Without them the tests still run and the release APK is built unsigned (not installable), with a warning.
+# Every signed APK from a push is also collected in the "APK builds" release (one place, no expiry);
+# a tag v* attaches the signed APK to its own GitHub Release.
+name: Android
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      dependency_verification:
+        description: >-
+          strict: stop on any dependency without a recorded checksum (pushes and PRs always run strict).
+          lenient: log every missing or wrong checksum and keep building, to audit gradle/verification-metadata.xml.
+        type: choice
+        options: [strict, lenient]
+        default: strict
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+env:
+  VERIFICATION_MODE: ${{ inputs.dependency_verification || 'strict' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Official Gradle action: checks the wrapper jar against Gradle's published checksums and caches dependencies.
+      # Every dependency is also checked against gradle/verification-metadata.xml by the build itself.
+      - uses: gradle/actions/setup-gradle@v5
+
+      - name: Unit and flow tests
+        run: ./gradlew :shared:testDebugUnitTest :androidApp:testDebugUnitTest --no-daemon --dependency-verification="$VERIFICATION_MODE"
+
+      - name: Decode the release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.COFFEEJOURNAL_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "COFFEEJOURNAL_KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::COFFEEJOURNAL_KEYSTORE_BASE64 is not set: the release APK is built unsigned."
+          fi
+
+      - name: Build the release APK
+        env:
+          COFFEEJOURNAL_KEYSTORE_PASSWORD: ${{ secrets.COFFEEJOURNAL_KEYSTORE_PASSWORD }}
+          COFFEEJOURNAL_KEY_ALIAS: ${{ secrets.COFFEEJOURNAL_KEY_ALIAS }}
+          COFFEEJOURNAL_KEY_PASSWORD: ${{ secrets.COFFEEJOURNAL_KEY_PASSWORD }}
+        run: ./gradlew :androidApp:assembleRelease --no-daemon --dependency-verification="$VERIFICATION_MODE"
+
+      - name: Keep test and dependency-verification reports
+        if: failure() || env.VERIFICATION_MODE == 'lenient'
+        uses: actions/upload-artifact@v6
+        with:
+          name: reports
+          path: |
+            shared/build/reports/tests/
+            androidApp/build/reports/tests/
+            build/reports/dependency-verification/
+          if-no-files-found: ignore
+
+      # coffee-journal-<versionCode>-<commit>.apk: the version code is computed exactly as androidApp/build.gradle.kts
+      # does (minutes from 2026-01-01 to the commit time), so a larger number is always the newer build.
+      - name: Name the APK
+        run: |
+          mkdir -p dist
+          apk=$(ls androidApp/build/outputs/apk/release/*.apk | head -n1)
+          code=$(( ($(git log -1 --format=%ct) - 1767225600) / 60 ))
+          cp "$apk" "dist/coffee-journal-${code}-$(git rev-parse --short HEAD)$( [[ "$apk" == *unsigned* ]] && echo -unsigned ).apk"
+          ls -l dist
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: coffee-journal-apk
+          path: dist/*.apk
+          if-no-files-found: error
+
+  # Every signed APK built from a push is kept in one place: the "APK builds" release (tag apk-builds) collects them
+  # all as downloadable files, with no expiry (run artifacts are deleted after 90 days).
+  collect:
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: apk-builds-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: coffee-journal-apk
+          path: dist
+      - name: Add the APK to the "APK builds" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          signed=()
+          for f in dist/*.apk; do
+            [[ -f "$f" && "$f" != *-unsigned.apk ]] && signed+=("$f")
+          done
+          if [ ${#signed[@]} -eq 0 ]; then
+            echo "::warning::The APK is unsigned (signing secrets missing); nothing added to APK builds."
+            exit 0
+          fi
+          if ! gh release view apk-builds --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create apk-builds --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest=false \
+              --title "APK builds" \
+              --notes "자동 빌드마다 서명된 APK가 이 한 곳에 쌓입니다. 파일 이름은 coffee-journal-<버전 코드>-<커밋>.apk이고, 버전 코드가 클수록 최신입니다. 모두 같은 키로 서명되어 뒤 버전을 앞 버전 위에 덮어 설치할 수 있어요."
+          fi
+          gh release upload apk-builds "${signed[@]}" --repo "$GITHUB_REPOSITORY" --clobber
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: coffee-journal-apk
+          path: dist
+      - name: Attach the APK to a GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" dist/*.apk --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --generate-notes
