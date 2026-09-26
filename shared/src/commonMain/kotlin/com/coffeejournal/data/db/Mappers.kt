@@ -8,6 +8,8 @@ import com.coffeejournal.domain.model.Book
 import com.coffeejournal.domain.model.CoffeeClass
 import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.model.Entry
+import com.coffeejournal.domain.model.CafePlace
+import com.coffeejournal.domain.model.GeoPoint
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.domain.model.PantryItem
@@ -109,8 +111,17 @@ fun CuppingBeanEntity.toDomain(): CuppingBean = CuppingBean(
 fun PantryItem.toEntity() = PantryItemEntity(id, name, roastery, packageType, weight, price, roastLevel, roastDate, purchaseDate, peakStart, peakEnd, expectedNotes, notes, status, openedAt, createdAt, sourceEntryId)
 fun PantryItemEntity.toDomain() = PantryItem(id, name, roastery, packageType, weight, price, roastLevel, roastDate, purchaseDate, peakStart, peakEnd, expectedNotes, notes, status, openedAt, createdAt, sourceEntryId)
 
-fun MiscItem.toEntity() = MiscItemEntity(id, type, name, notes, since, status, scope, location, favorite, dbJson.encodeToString(strListSer, photos), createdAt)
-fun MiscItemEntity.toDomain() = MiscItem(id, type, name, notes, since, status, scope, location, favorite, parseOr(photosJson, emptyList()) { dbJson.decodeFromString(strListSer, it) }, createdAt)
+fun MiscItem.toEntity(): MiscItemEntity {
+    val p = point
+    return MiscItemEntity(id, type, name, notes, since, status, scope, location, favorite, dbJson.encodeToString(strListSer, photos), createdAt, p?.lat, p?.lng)
+}
+fun MiscItemEntity.toDomain(): MiscItem {
+    val p = GeoPoint.of(lat, lng)
+    return MiscItem(id, type, name, notes, since, status, scope, location, favorite, parseOr(photosJson, emptyList()) { dbJson.decodeFromString(strListSer, it) }, createdAt, p?.lat, p?.lng)
+}
+
+fun CafePlace.toEntity() = CafePlaceEntity(name, point?.lat, point?.lng, createdAt)
+fun CafePlaceEntity.toDomain() = CafePlace(name, lat, lng, createdAt)
 
 fun Book.toEntity() = BookEntity(id, createdAt, title, author, status, startDate, endDate, rating, notes)
 fun BookEntity.toDomain() = Book(id, createdAt, title, author, status, startDate, endDate, rating, notes)

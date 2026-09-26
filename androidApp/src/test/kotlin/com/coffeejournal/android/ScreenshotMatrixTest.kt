@@ -258,6 +258,34 @@ class ScreenshotMatrixTest {
     @Test @Config(qualifiers = NARROW) fun narrow_detail() = detailScreens("72-w320", 1f)
     @Test @Config(qualifiers = NARROW) fun narrow_pantry() = pantryScreens("73-w320", 1f)
 
+    /** Design v2 §1: the location picker, the 로스터리 map with a selected pin, and the roastery form's location field. */
+    private fun mapPicker(prefix: String, fontScale: Float) {
+        seed()
+        route(Route.MapPicker(target = "roastery", name = "커피 리브레", point = "37.5446,127.0557"), fontScale)
+        pages("$prefix-map-picker", 2)
+    }
+
+    private fun roasteryMap(prefix: String, fontScale: Float) {
+        seed()
+        route(Route.Bean, fontScale)
+        click(hasText("로스터리") and hasClickAction())
+        click(hasContentDescription("커피 리브레, ", substring = true) and hasClickAction())
+        pages("$prefix-roastery-map", 3)
+    }
+
+    private fun roasteryForm(prefix: String, fontScale: Float) {
+        seed()
+        route(Route.FlatItemForm(type = "source", itemId = "m4"), fontScale)
+        pages("$prefix-roastery-form", 2)
+    }
+
+    @Test @Config(qualifiers = NARROW) fun narrow_mapPicker() = mapPicker("74-w320", 1f)
+    @Test @Config(qualifiers = NARROW) fun narrow_roasteryMap() = roasteryMap("74-w320", 1f)
+    @Test @Config(qualifiers = NARROW) fun narrow_roasteryForm() = roasteryForm("74-w320", 1f)
+    @Test fun fontScale20_mapPicker() = mapPicker("94-fs20", 2f)
+    @Test fun fontScale20_roasteryMap() = roasteryMap("94-fs20", 2f)
+    @Test fun fontScale20_roasteryForm() = roasteryForm("94-fs20", 2f)
+
     // ───────────────────────── font scale 1.3 and 2.0 ─────────────────────────
 
     @Test fun fontScale13_tabs() = mainScreens("80-fs13", 1.3f)

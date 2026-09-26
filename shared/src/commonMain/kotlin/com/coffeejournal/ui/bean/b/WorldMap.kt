@@ -210,7 +210,7 @@ fun WorldMapCanvas(
  * drag is left alone, so the page keeps scrolling over the map; taps are left to the tap detector until the fingers
  * move past the touch slop.
  */
-private suspend fun PointerInputScope.detectMapTransform(isZoomed: () -> Boolean, onTransform: (centroid: Offset, pan: Offset, zoom: Float) -> Unit) {
+internal suspend fun PointerInputScope.detectMapTransform(isZoomed: () -> Boolean, onTransform: (centroid: Offset, pan: Offset, zoom: Float) -> Unit) {
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false)
         var zoom = 1f

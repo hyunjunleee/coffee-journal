@@ -4,6 +4,7 @@ import com.coffeejournal.data.db.TransactionRunner
 import com.coffeejournal.data.photo.PhotoStore
 import com.coffeejournal.data.repo.BeanMetaRepository
 import com.coffeejournal.data.repo.BlendRepository
+import com.coffeejournal.data.repo.CafePlaceRepository
 import com.coffeejournal.data.repo.EntryRepository
 import com.coffeejournal.data.repo.MiscRepository
 import com.coffeejournal.data.repo.MyRecipeRepository
@@ -62,6 +63,7 @@ class BackupService(
     private val codec: BackupCodec,
     private val tx: TransactionRunner,
     private val pipeline: SaveEntryPipeline,
+    private val cafePlaces: CafePlaceRepository,
 ) {
     fun fileName(): String = "커피일지-백업-${Dates.isoDate(Dates.today())}.json"
 
@@ -91,6 +93,7 @@ class BackupService(
             beanSummaries = beanMeta.getSummaries(),
             bestRecipes = beanMeta.getBest(),
             settings = allSettings,
+            cafePlaces = cafePlaces.getAll(),
             ddayStart = allSettings[SettingsRepository.KEY_DDAY_START],
             exportedAt = BackupDates.iso8601(Dates.nowMillis()),
         )
@@ -207,6 +210,12 @@ class BackupService(
             if (replace) settings.deleteAll()
             s.settings.forEach { (k, v) -> settings.put(k, v) }
             lines += ImportLine(BackupKeys.SETTINGS, ok = s.settings.size)
+        }
+        // ── café positions (app extension): merged by name; 교체 swaps the table. Web files have no such key. ──
+        if (BackupKeys.CAFE_PLACES in s.present) {
+            if (replace) cafePlaces.deleteAll()
+            cafePlaces.mergeAll(s.cafePlaces)
+            lines += ImportLine(BackupKeys.CAFE_PLACES, ok = s.cafePlaces.size)
         }
         // ── D-day start (web rawData) ──
         val dday = s.ddayStart?.let { Dates.parseIsoDate(it) }

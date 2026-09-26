@@ -17,7 +17,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.MiscType
+import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.reference.CoffeeCountries
+import com.coffeejournal.ui.map.MapLinkButtons
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
@@ -67,6 +69,7 @@ fun RoasteryDetailScreen(nav: NavHostController, name: String) {
             Spacer(Modifier.height(12.dp))
             if (item?.location?.isNotBlank() == true) Text(item.location, style = AppType.small)
             if (item?.notes?.isNotBlank() == true) Text(item.notes, style = AppType.bodyMuted, modifier = Modifier.padding(top = 4.dp))
+            if (item != null) MapLinkButtons(item.name, item.location, item.point, overseas = item.scope == Scope.OVERSEAS)
             SourceBeansInfo(recs)
             SectionLabel("연결된 기록")
             if (recs.isEmpty()) EmptyNote("연결된 원두 기록이 없어요.")

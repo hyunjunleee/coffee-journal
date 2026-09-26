@@ -7,13 +7,16 @@ import com.coffeejournal.data.repo.EntryRepository
 import com.coffeejournal.data.repo.MiscRepository
 import com.coffeejournal.domain.model.Blend
 import com.coffeejournal.domain.model.BlendComponent
+import com.coffeejournal.domain.model.GeoPoint
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.rules.BeanRecords
 import com.coffeejournal.ui.theme.deriveOffMain
 import com.coffeejournal.domain.rules.Dates
+import com.coffeejournal.domain.rules.KoreaProjection
 import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.ui.bean.BeanData
+import com.coffeejournal.ui.map.MapPickResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -47,6 +50,8 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
         val notes: String = "", val existing: MiscItem? = null, val loaded: Boolean = false,
         /** A save is running or has succeeded (the screen is closing): further saves are ignored. */
         val saving: Boolean = false,
+        /** Exact position set with "지도에서 위치 지정" (roasteries only). */
+        val point: GeoPoint? = null,
     )
 
     private val _state = MutableStateFlow(State(loaded = itemId == null))
@@ -60,14 +65,32 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
             val m = misc.getById(itemId)
             _state.update { s ->
                 if (m == null) s.copy(loaded = true)
-                else s.copy(name = m.name, status = m.status, scope = m.scope.ifBlank { Scope.DOMESTIC }, location = m.location, notes = m.notes, existing = m, loaded = true)
+                else s.copy(name = m.name, status = m.status, scope = m.scope.ifBlank { Scope.DOMESTIC }, location = m.location, notes = m.notes, existing = m, loaded = true, point = m.point)
             }
         }
     }
 
     fun setName(v: String) = _state.update { it.copy(name = v) }
     fun setStatus(v: String) = _state.update { it.copy(status = v) }
-    fun setScope(v: String) = _state.update { it.copy(scope = v.ifBlank { it.scope }) }
+    fun setScope(v: String) = _state.update { s ->
+        val scope = v.ifBlank { s.scope }
+        // a point abroad cannot stay on a 국내 roastery (the Korea map would not show it), nor a Korean one on a 해외
+        val keep = s.point?.takeIf { KoreaProjection.inKoreaBox(it) == (scope == Scope.DOMESTIC) }
+        s.copy(scope = scope, point = keep)
+    }
+
+    /**
+     * The location picker's answer ([MapPickResult]): sets or clears the position; an empty 지역 field is filled with
+     * the area found there ("서울특별시 성동구", or the country abroad).
+     */
+    fun applyPick(result: String) = _state.update { s ->
+        if (s.saving) return@update s
+        val p = MapPickResult.decode(result) ?: return@update s.copy(point = null)
+        val fill = if (s.location.isBlank()) MapPickResult.placeName(p, overseas = s.scope == Scope.OVERSEAS) else null
+        s.copy(point = p, location = fill ?: s.location)
+    }
+
+    fun clearPoint() = _state.update { if (it.saving) it else it.copy(point = null) }
     fun setLocation(v: String) = _state.update { it.copy(location = v) }
     fun setNotes(v: String) = _state.update { it.copy(notes = v) }
 
@@ -86,6 +109,8 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
                         status = if (spec.hasStatus) s.status else base.status,
                         scope = if (spec.hasScope) s.scope else base.scope,
                         location = if (spec.hasScope) s.location.trim() else base.location,
+                        lat = if (spec.hasScope) s.point?.lat else base.lat,
+                        lng = if (spec.hasScope) s.point?.lng else base.lng,
                     )
                 )
                 onDone()

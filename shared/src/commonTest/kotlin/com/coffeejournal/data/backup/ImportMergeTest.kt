@@ -38,6 +38,24 @@ class ImportMergeTest {
         assertEquals(listOf("k.jpg"), r.obsoletePhotos)
     }
 
+    @Test fun mapPositionComesFromTheBackup_orStaysWhenTheBackupHasNone() {
+        val local = listOf(
+            item("r1", MiscType.SOURCE, "리브레").copy(lat = 37.5, lng = 127.0),
+            item("r2", MiscType.SOURCE, "프릳츠").copy(lat = 37.6, lng = 127.1),
+            item("r3", MiscType.SOURCE, "모모스").copy(lat = 35.2, lng = 129.0),
+        )
+        val incoming = listOf(
+            item("r1", MiscType.SOURCE, "리브레", notes = "web edit"),               // same id, web file: no position
+            item("w2", MiscType.SOURCE, "프릳츠"),                                    // name match, no position
+            item("r3", MiscType.SOURCE, "모모스").copy(lat = 35.25, lng = 129.05),    // same id, app file: its position
+        )
+        val rows = ImportMerge.misc(local, incoming, emptyMap()).rows.associateBy { it.id }
+        assertEquals(Pair(37.5, 127.0), rows.getValue("r1").let { it.lat to it.lng })
+        assertEquals("web edit", rows.getValue("r1").notes)
+        assertEquals(Pair(37.6, 127.1), rows.getValue("r2").let { it.lat to it.lng })
+        assertEquals(Pair(35.25, 129.05), rows.getValue("r3").let { it.lat to it.lng })
+    }
+
     @Test fun registryDuplicatesInsideTheBackupCollapseButEquipmentDoesNot() {
         val incoming = listOf(
             item("a", MiscType.VARIETY, "Geisha"), item("b", MiscType.VARIETY, "geisha"),

@@ -6,6 +6,7 @@ import com.coffeejournal.domain.model.BestRecipe
 import com.coffeejournal.domain.model.Blend
 import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.model.Book
+import com.coffeejournal.domain.model.CafePlace
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.ClassType
 import com.coffeejournal.domain.model.CoffeeClass
@@ -39,6 +40,44 @@ import kotlin.test.assertTrue
 
 class BackupCodecTest {
     private val codec = BackupCodec()
+
+    // ───────────── map positions (schema v2 app extension) ─────────────
+
+    @Test fun mapPositionsAndCafePlaces_roundTrip_asOptionalKeys() {
+        val snap = BackupSnapshot(
+            miscItems = listOf(
+                MiscItem(id = "r1", type = MiscType.SOURCE, name = "리브레", scope = "국내", location = "서울 성동구", createdAt = 1, lat = 37.5446, lng = 127.0557),
+                MiscItem(id = "r2", type = MiscType.SOURCE, name = "프릳츠", scope = "국내", createdAt = 2),
+            ),
+            cafePlaces = listOf(CafePlace("FELT 청계천", 37.5689, 126.986, 3), CafePlace("미정 카페", null, null, 4)),
+        )
+        val text = codec.encode(snap)
+        val data = Json.parseToJsonElement(text).jsonObject["data"]!!.jsonObject
+        val misc = data["miscItems"]!!.jsonArray.map { it.jsonObject }
+        assertEquals("37.5446", misc[0]["lat"]!!.jsonPrimitive.content)
+        assertFalse("lat" in misc[1], "no position, no key: the web file stays as it was")
+        assertEquals(listOf("FELT 청계천", "미정 카페"), data["cafePlaces"]!!.jsonArray.map { it.jsonObject["name"]!!.jsonPrimitive.content })
+        val back = codec.decode(text)
+        assertEquals(snap.miscItems, back.miscItems)
+        assertEquals(snap.cafePlaces, back.cafePlaces)
+        assertTrue(BackupKeys.CAFE_PLACES in back.present)
+        assertEquals(BackupKeys.CAFE_PLACES to "2", back.countRows().last { it.first == BackupKeys.CAFE_PLACES })
+    }
+
+    @Test fun webFileWithoutPositions_decodesUnchanged_andDamagedPositionsAreDropped() {
+        val web = """{"data":{"miscItems":[{"id":"m","type":"source","name":"리브레","location":"서울","createdAt":1}]}}"""
+        val s = codec.decode(web)
+        assertNull(s.miscItems.single().point)
+        assertFalse(BackupKeys.CAFE_PLACES in s.present, "a web file has no cafePlaces: nothing is replaced on restore")
+        assertTrue(s.countRows().none { it.first == BackupKeys.CAFE_PLACES })
+        val damaged = """{"data":{"miscItems":[{"id":"m","type":"source","name":"x","lat":"NaN","lng":127,"createdAt":1},
+            {"id":"n","type":"source","name":"y","lat":37.5,"createdAt":1}],
+            "cafePlaces":[{"name":"","lat":1,"lng":1},{"name":"카페","lat":91,"lng":10,"createdAt":5},{"name":"카페 ","lat":37.1,"lng":127.1,"createdAt":6}]}}"""
+        val d = codec.decode(damaged)
+        assertTrue(d.miscItems.all { it.point == null && it.lat == null && it.lng == null }, "half or non-finite pairs are no position")
+        // a nameless row is skipped; the same café twice keeps the later row
+        assertEquals(listOf(CafePlace("카페", 37.1, 127.1, 6)), d.cafePlaces)
+    }
 
     // ───────────── (a) domain → encode → decode round trip ─────────────
 

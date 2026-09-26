@@ -12,6 +12,7 @@ import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.CuppingType
 import com.coffeejournal.ui.calendar.components.BrewRow
 import com.coffeejournal.ui.calendar.components.EntryListRow
+import com.coffeejournal.ui.map.CafeLocationsBlock
 import com.coffeejournal.ui.nav.FormMode
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.EmptyNote
@@ -51,6 +52,8 @@ internal fun CafeCuppingSection(state: CalendarUiState, vm: CalendarViewModel, n
             state.cafeCuppingList.forEach { en ->
                 EntryListRow(en, onClick = { nav.navigate(Route.EntryDetail(en.id)) }, modifier = Modifier.padding(bottom = 8.dp))
             }
+            // the cafés of this list once each, with "지도에서 위치 지정" (design v2 §1.4)
+            if (!isCupping) CafeLocationsBlock(nav, state.cafeCuppingList, Modifier.padding(top = 10.dp))
         }
     }
 }

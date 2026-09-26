@@ -1,5 +1,6 @@
 package com.coffeejournal.data.db
 
+import androidx.room.AutoMigration
 import androidx.room.ConstructedBy
 import androidx.room.Database
 import androidx.room.RoomDatabase
@@ -12,9 +13,12 @@ import kotlinx.coroutines.Dispatchers
         EntryEntity::class, CuppingBeanEntity::class, PantryItemEntity::class, MiscItemEntity::class,
         BookEntity::class, VideoEntity::class, ClassEntity::class, BlendEntity::class, MyRecipeEntity::class,
         RoadmapPhaseEntity::class, BeanSummaryEntity::class, BestRecipeEntity::class, SettingEntity::class,
+        CafePlaceEntity::class,
     ],
-    version = 1,
+    // v2: misc_items.lat / lng and the cafe_places table (shared/schemas/…/2.json)
+    version = 2,
     exportSchema = true,
+    autoMigrations = [AutoMigration(from = 1, to = 2)],
 )
 @ConstructedBy(AppDatabaseConstructor::class)
 abstract class AppDatabase : RoomDatabase() {
@@ -29,6 +33,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun roadmapDao(): RoadmapDao
     abstract fun beanMetaDao(): BeanMetaDao
     abstract fun settingsDao(): SettingsDao
+    abstract fun cafePlaceDao(): CafePlaceDao
 }
 
 @Suppress("KotlinNoActualForExpect")

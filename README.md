@@ -35,8 +35,12 @@ export ANDROID_HOME=/opt/android-sdk          # Android SDK 위치 (local.proper
 - Maven Central이 요청 수를 제한하는 빌드 환경에서는 `-Pcoffeejournal.mavenCentralMirror=https://maven-central.storage-download.googleapis.com/maven2/`(또는 `~/.gradle/gradle.properties`)로 미러를 앞에 둘 수 있습니다. 이때도 파일은 위 체크섬으로 검증됩니다.
 
 ### 출처 · 라이선스
-- 앱의 기타 탭 맨 아래 "출처 · 오픈소스 라이선스"에서 데이터·디자인 출처(웹 템플릿, SCA·WCR 플레이버 휠, SCA 커핑 폼, 카페 레시피, Natural Earth, Lucide·Feather 아이콘)와 APK에 들어간 오픈소스 라이브러리 전체를 라이선스별로 보여줍니다.
+- 앱의 기타 탭 맨 아래 "출처 · 오픈소스 라이선스"에서 데이터·디자인 출처(웹 템플릿, SCA·WCR 플레이버 휠, SCA 커핑 폼, 카페 레시피, Natural Earth, 한국 지도(통계청 SGIS 경계 · vuski/admdongkor), Lucide·Feather 아이콘)와 APK에 들어간 오픈소스 라이브러리 전체를 라이선스별로 보여줍니다.
 - 라이브러리 목록은 `./gradlew :androidApp:updateThirdPartyNotices`가 릴리스 런타임 클래스패스의 POM에서 생성하고(`shared/src/androidMain/.../ui/about/PlatformLibraries.android.kt`), 모든 빌드 전에 `checkThirdPartyNotices`가 목록이 최신인지 확인합니다.
 
+### 한국 지도 데이터
+- 로스터리·카페 지도의 시·도, 시·군·구 경계는 앱에 들어 있습니다(오프라인에서 바로 열림). `tools/korea-map/build_korea_map.py`가 vuski/admdongkor `ver20260701` 행정동 GeoJSON(통계청 SGIS 경계 보정본; SGIS 공공누리 제1유형, 보정본 CC BY 4.0)을 시·군·구·시·도로 병합하고 단순화해 `shared/src/commonMain/kotlin/com/coffeejournal/domain/reference/KoreaMapData*.kt`를 생성합니다(입력 파일의 SHA-256을 생성 파일 머리말에 기록).
+- 다시 만들기: `pip install shapely` 후 `python3 tools/korea-map/build_korea_map.py --input <받은 geojson>`(`--input`이 없으면 원본 URL에서 받음, `--preview <폴더>`로 PNG 미리보기).
+
 ## 데이터
-모든 데이터는 기기 로컬 SQLite(Room)와 앱 전용 사진 폴더에 저장됩니다. 서버·계정·AI 호출은 없습니다. 웹 백업 JSON과 상호 호환되는 백업/복원을 제공합니다.
+모든 데이터는 기기 로컬 SQLite(Room)와 앱 전용 사진 폴더에 저장됩니다. 서버·계정·AI 호출은 없습니다. 웹 백업 JSON과 상호 호환되는 백업/복원을 제공합니다. "네이버 지도에서 열기" 같은 지도 링크는 해당 지도 앱(없으면 웹 지도)을 링크로 열 뿐, 앱이 직접 보내는 데이터는 없습니다.

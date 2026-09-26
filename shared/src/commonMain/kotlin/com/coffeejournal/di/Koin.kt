@@ -5,6 +5,7 @@ import com.coffeejournal.data.db.RoomTransactionRunner
 import com.coffeejournal.data.db.TransactionRunner
 import com.coffeejournal.data.repo.BeanMetaRepository
 import com.coffeejournal.data.repo.BlendRepository
+import com.coffeejournal.data.repo.CafePlaceRepository
 import com.coffeejournal.data.repo.EntryRepository
 import com.coffeejournal.data.repo.MiscRepository
 import com.coffeejournal.data.repo.MyRecipeRepository
@@ -40,6 +41,7 @@ val dataModule = module {
     single { get<AppDatabase>().roadmapDao() }
     single { get<AppDatabase>().beanMetaDao() }
     single { get<AppDatabase>().settingsDao() }
+    single { get<AppDatabase>().cafePlaceDao() }
 
     single { EntryRepository(get(), get()) }
     single { PantryRepository(get()) }
@@ -50,6 +52,7 @@ val dataModule = module {
     single { RoadmapRepository(get()) }
     single { BeanMetaRepository(get()) }
     single { SettingsRepository(get()) }
+    single { CafePlaceRepository(get()) }
     single { SaveEntryPipeline(get(), get(), get(), get()) }
 }
 

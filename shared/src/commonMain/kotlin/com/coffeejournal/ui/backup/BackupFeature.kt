@@ -16,7 +16,7 @@ import org.koin.dsl.module
 object BackupFeature : Feature {
     override val module = module {
         single { BackupCodec() }
-        single { BackupService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+        single { BackupService(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         single { RestoreRunner(get(), get<AppScope>()) }
         viewModelOf(::BackupViewModel)
     }

@@ -31,7 +31,7 @@ val beanExtraModule: Module = module {
 fun NavGraphBuilder.beanExtraRoutes(nav: NavHostController) {
     composable<Route.FlatItemForm> { back ->
         val r = back.toRoute<Route.FlatItemForm>()
-        FlatItemFormScreen(nav, r.type, r.itemId)
+        FlatItemFormScreen(nav, r.type, r.itemId, results = back.savedStateHandle)
     }
     composable<Route.BlendForm> { back -> BlendFormScreen(nav, back.toRoute<Route.BlendForm>().blendId) }
     composable<Route.CountryDetail> { back -> CountryDetailScreen(nav, back.toRoute<Route.CountryDetail>().en) }

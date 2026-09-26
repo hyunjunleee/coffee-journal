@@ -128,6 +128,18 @@ data class MiscItemEntity(
     val favorite: Boolean,
     val photosJson: String,
     val createdAt: Long,
+    /** Schema v2 (auto-migration 1 → 2): the exact map position, both or neither. */
+    val lat: Double? = null,
+    val lng: Double? = null,
+)
+
+/** Schema v2: where a visited café is, one row per café name (café records only carry the name). */
+@Entity(tableName = "cafe_places")
+data class CafePlaceEntity(
+    @PrimaryKey val name: String,
+    val lat: Double?,
+    val lng: Double?,
+    val createdAt: Long,
 )
 
 @Entity(tableName = "books")
