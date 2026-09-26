@@ -2,7 +2,7 @@
 
 사용자 요청(2026-09-26): 향미 노트를 찾을 때 AI의 도움을 받는다. 가장 좋은 무료 AI API에 연결하고, AI가 항상 인터넷에 실제로 나오는 향·맛 표현을 직접 찾아 출처와 함께 설명·대답하도록 미리 지시(프롬프트)를 넣는다.
 
-이 문서는 계획이다. 구현 전에 11장의 결정이 필요하다. 사실 항목은 모두 2026-09-26에 공식 문서에서 확인했고 링크를 달았다.
+이 문서는 계획이다. 사실 항목은 모두 2026-09-26에 공식 문서에서 확인했고 링크를 달았다. **구현은 12장에 있다.** 12장의 결정(2026-09-26)이 0~11장과 다르면 12장이 맞다: 무료 기본값은 Gemini 2.5 + Google 검색이 아니라 "Gemini 무료 + Tavily"이고, 키는 앱에 넣지 않으며, AI 기록(1-C)은 만들지 않았다.
 
 ## 0. 결론
 
@@ -229,3 +229,65 @@
 2. **키:** 앱에는 어떤 키도 넣지 않는다. 무료·유료 모두 사용자가 설정 › AI에 직접 넣고, 앱이 키 받는 절차를 단계별로 안내한다(5.1). 개발용 무료 키는 `GEMINI_API_KEY_DEBUG` Secret으로 PoC에만 쓴다.
 3. **범위:** 모드 A(노트 설명)와 B(맛 묘사 → 노트)를 함께 만든다(제안). 두 모드는 API 호출과 출처 검사를 공유하고, B에 "노트에 추가" 칩이 더해질 뿐이다.
 4. **PoC:** GitHub Actions에서 개발용 키 `GEMINI_API_KEY_DEBUG`로 돌린다. 결과를 보고 프롬프트를 다듬은 뒤 앱 구현으로 간다.
+
+## 12. 구현 (2026-09)
+
+### 12.1 결정 (사용자, 2026-09-26)
+- **키는 어디에도 넣지 않는다.** APK·저장소·CI 빌드 어디에도 키가 없다. 사용자가 설정 › AI 노트 도우미에서 방식을 고르고 자기 키를 붙여 넣는다. 앱이 키 받는 순서를 서비스별로 안내한다.
+- **검색할 수 있는 방식을 모두 만들고 사용자가 고른다.** 넷 다 실제 웹 출처에 묶인 답만 보인다.
+- **모드 A·B를 함께 만든다.** A는 노트 설명, B는 맛 묘사 → 앱의 휠 용어·노트 분류 후보(고른 후보는 기록 폼의 "내가 느낀 노트"에 붙음).
+- **Claude도 만든다.** SDK 없이 다른 방식처럼 HTTP로 부른다(새 의존성 없음). 같은 날 "Claude 제외"로 바뀌었다가 다시 "포함"으로 확정됐다.
+- 2.5 모델을 기본으로 쓰려던 계획(0장)은 버렸다. 새 무료 키로 잰 결과(2026-09-26): `gemini-2.5-flash`·`2.5-flash-lite`·`2.5-pro`는 HTTP 404 "no longer available to new users", `gemini-3.5-flash`·`3.5-flash-lite`·`3.1-flash-lite`는 도구 없이 200, `tools:[{google_search:{}}]`를 붙이면 3.x 모두 HTTP 429 "You exceeded your current quota, please check your plan and billing details"(무료 등급에는 검색 그라운딩이 없음). 그래서 무료 기본값은 검색을 Tavily에 맡기는 방식이다.
+
+### 12.2 방식
+
+| 방식 | 키 | 비용 | 호출 | 기본 모델 · 추천 |
+|---|---|---|---|---|
+| Gemini 무료 + Tavily (기본) | Gemini, Tavily | 둘 다 무료 등급(Tavily 월 1,000크레딧, 질문 1번 = advanced 검색 2크레딧) | Tavily `POST /search` → Gemini `generateContent`(도구 없음) | `gemini-3.5-flash-lite` · 3.5-flash, 3.1-flash-lite |
+| Gemini + Google 검색 | Gemini | 결제한 프로젝트. 검색은 3.x 합쳐 월 5,000회 무료, 뒤 1,000회당 $14 | `generateContent` + `google_search` | `gemini-3.5-flash` · 3.8-flash, 3.5-flash-lite |
+| GPT (OpenAI) | OpenAI | 웹 검색 1,000회당 $10 + 토큰 | Responses `web_search`, `tool_choice: required`, 위치 KR, `include: web_search_call.action.sources` | `gpt-5-nano` · gpt-5.5 |
+| Claude (Anthropic) | Anthropic | 웹 검색 1,000회당 $10 + 토큰(검색 결과도 입력 토큰) | Messages + `web_search`(Opus 5·Sonnet 5는 `web_search_20260209`, Haiku 4.5는 `web_search_20250305`), `max_uses` 3, 위치 KR, `max_tokens` 16000, thinking·temperature 없음. `claude-opus-5`만 `anthropic-beta: server-side-fallback-2026-07-01` + `fallbacks: "default"` | `claude-opus-5` · sonnet-5, haiku-4-5 |
+
+- 모델 칸은 자유 입력이고, 비우면 기본 모델을 쓴다.
+- 시스템 지시: Google 검색·GPT·Claude는 `tools/ai-eval/system_prompt_ko.txt`, Gemini 무료 + Tavily는 `tools/ai-eval/sources_prompt_ko.txt`. 앱의 `NoteHelperPrompts`와 글자까지 같아야 하고 테스트(`AiPlatformTest`)가 확인한다. 질문 틀(모드 A·B)은 `eval.py question()`과 같다(모드 B에는 휠 영문 용어 89개와 노트 분류 43개가 들어감).
+
+### 12.3 Gemini 무료 + Tavily 파이프라인
+1. **Tavily 검색 한 번**(advanced, 결과 5개, 페이지당 조각 3개, `include_raw_content: "text"`). 검색어는 모드 A `"<영문 이름 또는 노트 이름>" coffee flavor note meaning tasting notes`(라벨 괄호 안에 영문이 있으면 그것, 뜻풀이 페이지가 잘 걸리도록), 모드 B `coffee tasting notes <묘사>`.
+2. **Gemini(도구 없음)**에 질문과 출처 묶음 `[n] <제목> — <도메인>\n<URL>\n<content>`을 보낸다(토큰을 줄이려고 raw_content가 아니라 content). 지시: 주어진 출처만으로 답하고, 출처 n을 쓴 항목·문장 끝마다 [n], 향·맛 표현은 출처 그대로 큰따옴표로(잘린 조각은 온전한 부분만), 뜻풀이가 없으면 출처의 묘사 문장으로 요약할 수 있고 그것도 없으면 "찾지 못했어요".
+3. **앱이 확인한다.** [n] 표시를 걷어 내 문장 끝 번호로 바꾸고(없는 번호는 버림), 번호가 붙은 문장의 큰따옴표 표현을 그 출처의 raw_content(없으면 content)에서 찾는다. 정규화(NFC, 소문자, 공백 하나로, 곧은 따옴표)한 부분 문자열이면 "✓ 원문 확인", 아니면 "원문에서 찾지 못함". 잘린 조각("… red c")도 원문의 일부면 찾은 것으로 친다. 번호 없는 문장은 회색으로 남기고 지우지 않는다. 번호가 붙은 문장이 없으면 답 대신 "출처를 찾지 못했어요".
+- 평가(코디네이터 세션, 무료 키, `gemini-3.5-flash-lite`, Tavily 대신 실제 페이지, 4건): 인용 11개 모두 인용한 출처에 그대로 있었고, 없는 번호를 붙인 경우는 없었으며, 답 한 번에 약 1초. 잘린 조각을 그대로 인용한 사례("Lychee, white peach, red c")가 있어 지시에 "온전한 단어와 구절로만"을 더했다.
+
+### 12.4 다른 방식의 출처 연결
+- **Gemini + Google 검색**: `groundingChunks`가 출처(링크는 vertexaisearch 경유, 제목이 보통 도메인), `groundingSupports`의 세그먼트 끝에 번호를 붙인다(Google 예제와 같음). 위치는 세그먼트 글을 앞 세그먼트 뒤에서부터 찾고, 없을 때만 인덱스를 UTF-8 바이트로 읽는다(문서마다 글자/바이트가 다름). 답 글은 고치지 않고 번호만 더하며, 검색 제안(`searchEntryPoint.renderedContent`)을 WebView(스크립트 끔, 높이 64dp, 누르면 브라우저)로 함께 보인다. 답은 화면에만 있고 저장하지 않는다.
+- **GPT**: `url_citation`의 end_index가 든 문장 끝에 번호를 붙이고, 모델이 글 속에 쓴 마크다운 링크 `([도메인](URL))`은 번호로 대신하므로 걷어 낸다. 출처는 처음 인용된 순서, `utm_source=openai`만 다른 주소는 하나로 친다.
+- **Claude**: 텍스트 블록을 순서대로 이어 붙이고, 인용이 있는 블록의 끝에 번호를 붙인다. 출처는 인용된 URL(처음 인용 순서) 다음에 나머지 검색 결과. 인용 블록 안의 큰따옴표 표현이 그 인용의 `cited_text`(원문 그대로 최대 150자)에 있으면 "✓ 원문 확인"을 붙이고, 없어도 "못 찾음"은 표시하지 않는다(150자에 없다고 원문에 없는 것은 아님). `stop_reason`은 내용보다 먼저 본다: `refusal` → "요청이 거절됐어요", `pause_turn` → 받은 내용을 그대로 assistant 메시지로 붙여 다시 요청(최대 3번), `max_tokens` → 받은 만큼과 "답이 길어 끝이 잘렸어요". 검색 결과는 목록 또는 오류 객체이고, 모르는 블록(thinking, 동적 필터링의 코드 실행과 `caller`가 붙은 블록)은 건너뛴다.
+- 넷 모두: 출처 목록은 번호·제목·도메인에 기관(sca.coffee, worldcoffeeresearch.org 등 7곳) / 개인 글(blog.naver.com, tistory.com, reddit.com 등 13곳) 표시. 번호가 붙은 문장이 하나도 없으면 답을 보이지 않는다.
+
+### 12.5 키 · 설정 · 네트워크
+- **키 저장**: `SecretStore`. Android는 Android Keystore에 내보낼 수 없는 AES-256/GCM 키(별칭 `coffeejournal.ai`)를 만들고, 키마다 암호문과 IV를 `noBackupFilesDir/ai-keys/<이름>.bin`에 둔다. DB·JSON 백업·클라우드 백업·기기 이전에 가지 않는다. 풀리지 않는 파일(키 삭제, 변조)은 지우고 "키 없음"으로 본다. `androidx.security-crypto`는 쓰지 않는다. iOS는 "아직 지원 안 함".
+- **설정**: 방식, 방식별 모델, 방식별 안내 확인은 `device.ai.*` 키(백업 제외). 입력 중인 키는 저장 상태 번들에 남기지 않는다. 저장된 키는 마지막 4자리("…a1b2")만 보인다.
+- **키 확인**: Gemini는 도구 없는 아주 짧은 요청(`maxOutputTokens` 8, 고른 방식의 모델), Tavily는 basic 검색 1개(1크레딧, 화면에 적음), OpenAI·Anthropic은 `GET /v1/models`(무료; 목록이 끝까지 왔는데 고른 모델이 없으면 "이 모델은 쓸 수 없어요"). 결과는 정상 / 키가 틀려요 / 결제가 필요해요 / 한도를 넘었어요 / 이 모델은 쓸 수 없어요 / 연결 실패.
+- **동의**: 방식마다 처음 물을 때 무엇을(질문 글만; 기록·원두·장소·사진은 안 보냄) 어디로 보내는지, Gemini 무료 등급의 학습·사람 검토 조건과 유료 방식의 과금을 보이고 확인을 받는다.
+- **HTTP**: `AiHttp`. Android는 `HttpURLConnection`(연결 15초, 읽기 120초, IO 디스패처, 4xx/5xx는 오류 스트림). 새 라이브러리 0개라 `verification-metadata.xml`과 라이브러리 목록은 그대로다. iOS는 미연결.
+
+### 12.6 오류 안내 (요지)
+| 서비스 | 상태 | 안내 |
+|---|---|---|
+| Gemini | 400 `API_KEY_INVALID`, 401/403 | 키가 맞지 않아요 + "설정에서 키 넣기" |
+| Gemini | 404 ("no longer available to new users") | ‘모델’은 쓸 수 없어요, 새 키에는 열어 주지 않는 모델 + "설정에서 모델 바꾸기" |
+| Gemini | 429 (Google 검색 요청) | Google 검색은 결제를 켠 프로젝트에서만 돼요. 결제를 켜거나 'Gemini 무료 + Tavily'를 고르세요 |
+| Gemini | 429 (그 밖) / 402 / 503 | 한도(태평양 시간 자정에 다시 채워짐) / 선불 크레딧 없음 / 붐빔 |
+| Tavily | 401 / 429 / 432 / 433 | 키 / 너무 잦음 / 이번 달 크레딧 소진 / 종량제 한도 |
+| OpenAI | 401 / 429 `insufficient_quota` / 429 / 402·`credit_balance_exhausted` / 404 | 키 / 결제 필요 / 요청 한도 / 크레딧 소진 / 모델 |
+| Anthropic | 400 "credit balance" / 400 웹 검색 꺼짐 / 401 / 402 / 403 / 404 / 429 / 500·529 | 크레딧 / 관리자가 platform.claude.com/settings/privacy에서 켜야 함 / 키 / 결제 / 권한 / 모델 / 한도 / 붐빔 |
+| 공통 | 연결 없음 · 출처 0 · 안전 필터 · 거절 | 연결 실패 · 출처를 찾지 못했어요 · 다른 말로 물어봐 주세요 |
+
+### 12.7 화면과 테스트
+- 진입: 노트 상세 "✦ 출처로 알아보기"(모드 A, 질문 = 노트 라벨), 기록 폼 "✦ AI에게 묻기"(모드 B). 폼의 묘사 입력은 대화상자가 아니라 노트 칸 아래 패널이다(대화상자 속 입력칸은 Robolectric에서 Compose가 idle이 되지 않았다, 구현 규약). 답 화면은 `Route.NoteHelper(mode, query, returnToForm)`, 고른 후보는 이전 목적지의 SavedStateHandle(`NoteHelperResult.KEY`)로 돌아가 중복 없이 붙는다. 키가 없으면 답 화면이 이유와 "설정에서 키 넣기 →"를 보이고, 설정은 AI 절로 스크롤되어 열리며, 돌아오면 이어서 묻는다.
+- 공용 단위 테스트(`shared/src/commonTest/.../ui/ai`, 가짜 JSON은 모두 synthetic으로 표시): 네 서비스의 요청 형식과 응답 해석, Gemini 세그먼트의 글자/UTF-8 바이트 위치(한국어), [n] 해석, 인용 대조 정규화(NFD 한글·따옴표·공백·잘린 조각), 모드 B 용어 찾기, 서비스·상태별 오류, pause_turn 재요청·거절·출처 없음, 키 확인, 설정 저장.
+- 흐름 테스트(`AiFlowTest`, 가짜 HTTP·메모리 키 저장소): 설정 절(방식, 키 저장·가림·확인 정상/401, 안내 펼침과 링크, 모델 칩, 지우기 확인, 백업 제외), 노트 상세 → 동의 → 답(번호, 회색 문장, ✓·✗, 기관·개인 글, [n] → 출처, 링크 열기, 동의는 한 번), 동의 거절, 폼 → 후보 → 노트에 추가, 키 없음 → 설정 → 답, 무료 프로젝트 Google 검색 429, 모델 404, Claude. `AiPlatformTest`: 프롬프트 파일·질문 틀 동기화, Keystore 파일 형식(소프트웨어 키). 스크린샷 70–74.
+
+### 12.8 확인한 것 · 못 한 것
+- 확인: 요청·응답 형식과 오류 코드는 2026-09-26 공식 문서 기준(코디네이터 세션에서 확인)이고, Gemini의 404·429 문구는 새 무료 키로 잰 값이다. Gemini 무료 + Tavily 파이프라인은 12.3의 평가로 확인했다. Anthropic 약관·개인정보 링크는 curl로 200을 확인했다.
+- 못 한 것: 이 저장소의 테스트는 네트워크를 쓰지 않으므로 앱이 실제 서비스에 보낸 요청은 없다(응답은 문서 모양으로 손으로 쓴 가짜). OpenAI·Anthropic의 실제 응답(특히 url_citation 위치 단위, 동적 필터링 블록 모양), Google 검색 제안 HTML이 WebView에서 어떻게 보이는지, AndroidKeyStore 동작(Robolectric에 없음)은 기기에서 확인해야 한다. openai.com의 약관·개인정보 페이지는 Cloudflare가 curl을 막아(403) 직접 확인하지 못했고, Wayback Machine에 2026-09의 200 응답 사본이 있는 것만 확인했다. iOS는 연결하지 않았다.
+
