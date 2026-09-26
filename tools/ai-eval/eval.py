@@ -342,6 +342,131 @@ def probe(models, out_dir):
     (Path(out_dir) / "report.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
 
 
+# --- "Gemini 무료 + Tavily" pipeline, debugged without a Tavily key ------------------------------------------------
+
+FALLBACK_SOURCES_PROMPT = (
+    "너는 스페셜티 커피의 향미 표현을 조사하는 도우미다. 대답은 한국어로 한다.\n"
+    "아래에 번호가 붙은 출처만 근거로 쓴다. 출처에 없는 내용은 쓰지 않는다.\n"
+    "출처 n의 내용을 쓴 문장 끝에는 [n]을 붙인다(여러 개면 [1][3]).\n"
+    "향·맛 표현은 출처에 적힌 그대로 큰따옴표로 인용한다. 번역하거나 고치지 않는다.\n"
+    "출처에서 찾지 못한 것은 \"찾지 못했어요\"라고 쓴다.\n"
+)
+
+
+def sources_prompt():
+    f = HERE / "sources_prompt_ko.txt"
+    return f.read_text(encoding="utf-8") if f.exists() else FALLBACK_SOURCES_PROMPT
+
+
+def fetch_page(url, timeout=30):
+    """(title, plain text) of a web page, or (None, None)."""
+    req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/128.0 Safari/537.36",
+                                               "Accept-Language": "en,ko;q=0.8"})
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            html = r.read(3_000_000).decode(r.headers.get_content_charset() or "utf-8", "replace")
+    except Exception as e:  # noqa: BLE001 - a page that fails is reported, not fatal
+        return None, f"{type(e).__name__}: {e}"
+    import html as htmllib
+    title = htmllib.unescape((re.search(r"<title[^>]*>(.*?)</title>", html, re.S | re.I) or [None, ""])[1]).strip()
+    body = re.sub(r"(?is)<(script|style|noscript|svg|header|footer|nav)[^>]*>.*?</\1>", " ", html)
+    body = re.sub(r"(?s)<[^>]+>", " ", body)
+    text = re.sub(r"\s+", " ", htmllib.unescape(body)).strip()
+    return title or url, text
+
+
+def tavily_like_content(text, keywords, chunks=3, size=500):
+    """Up to [chunks] snippets of at most [size] characters around the keywords, joined like Tavily's content."""
+    low = text.lower()
+    found = []
+    for kw in keywords:
+        for m in re.finditer(re.escape(kw.lower()), low):
+            start = max(0, m.start() - size // 2)
+            if all(abs(start - s) >= size for s in found):
+                found.append(start)
+            if len(found) >= chunks:
+                break
+        if len(found) >= chunks:
+            break
+    if not found:
+        found = [0]
+    return " [...] ".join(text[s:s + size].strip() for s in sorted(found))
+
+
+def norm(s):
+    import unicodedata
+    s = unicodedata.normalize("NFC", s).lower()
+    s = s.replace("“", '"').replace("”", '"').replace("‘", "'").replace("’", "'")
+    return re.sub(r"\s+", " ", s).strip()
+
+
+MARKER = re.compile(r"\[(\d+)\]")
+
+
+def check_cited(text, sources):
+    """Sentence-level [n] markers and verbatim quotes, checked against each cited source's full text."""
+    sentences = [s for s in re.split(r"(?<=[.!?。])\s+|\n+", text) if s.strip()]
+    cited = [s for s in sentences if MARKER.search(s)]
+    bad_refs, quotes, verified = 0, 0, 0
+    detail = []
+    for s in cited:
+        refs = [int(n) for n in MARKER.findall(s)]
+        bad_refs += sum(1 for n in refs if not 1 <= n <= len(sources))
+        for q in QUOTE.findall(s):
+            quotes += 1
+            ok = any(1 <= n <= len(sources) and norm(q) in norm(sources[n - 1]["raw"]) for n in refs)
+            verified += ok
+            detail.append((q, refs, ok))
+    return {"sentences": len(sentences), "cited": len(cited), "bad_refs": bad_refs, "quotes": quotes,
+            "verified": verified, "quote_detail": detail}
+
+
+def run_sources(args):
+    key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if not key:
+        sys.exit("GEMINI_API_KEY is not set")
+    data = json.loads((HERE / "cases_sources.json").read_text(encoding="utf-8"))
+    terms, subs = wheel_terms()
+    system = sources_prompt()
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    lines = [f"# Gemini free + sources: {args.model}", "",
+             "| # | mode | question | pages ok | HTTP | cited sentences | bad [n] | quotes verified | s |",
+             "|---|---|---|---|---|---|---|---|---|"]
+    answers = []
+    for n, c in enumerate(data["cases"], 1):
+        sources = []
+        for url in c["urls"]:
+            title, text = fetch_page(url)
+            if title is None:
+                answers.append(f"- fetch failed: {url} ({text})")
+                continue
+            sources.append({"title": title, "url": url, "domain": urllib.parse.urlparse(url).hostname,
+                            "content": tavily_like_content(text, c["keywords"]), "raw": text[:200_000]})
+        block = "\n\n".join(f"[{i}] {s['title']} — {s['domain']}\n{s['url']}\n{s['content']}" for i, s in enumerate(sources, 1))
+        body = {
+            "system_instruction": {"parts": [{"text": system}]},
+            "contents": [{"role": "user", "parts": [{"text": question(c["mode"], c["case"], terms, subs) + "\n\n출처:\n" + block}]}],
+            "generationConfig": {"temperature": 0.2},
+        }
+        status, resp, secs = call(args.model, key, body)
+        if status == 200:
+            text = "".join(p.get("text", "") for p in ((resp.get("candidates") or [{}])[0].get("content") or {}).get("parts", []))
+            chk = check_cited(text, sources)
+            lines.append(f"| {n} | {c['mode']} | {c['case']} | {len(sources)}/{len(c['urls'])} | 200 | {chk['cited']}/{chk['sentences']} | "
+                         f"{chk['bad_refs']} | {chk['verified']}/{chk['quotes']} | {secs:.1f} |")
+            answers += [f"### {n}. {c['mode']}: {c['case']}", "", text, ""]
+            answers += [f"- {'✓' if ok else '✗'} \"{q}\" → {refs}" for q, refs, ok in chk["quote_detail"]]
+            answers += [""] + [f"[{i}] {s['title']} ({s['domain']}) {s['url']}" for i, s in enumerate(sources, 1)] + [""]
+        else:
+            err = resp.get("error", {}).get("message", "") if isinstance(resp, dict) else str(resp)
+            lines.append(f"| {n} | {c['mode']} | {c['case']} | {len(sources)}/{len(c['urls'])} | {status} | - | - | - | {secs:.1f} |")
+            answers += [f"### {n}. {c['case']}", "", f"HTTP {status}: {err[:300]}", ""]
+        print(lines[-1], flush=True)
+        time.sleep(args.delay)
+    (out / "report.md").write_text("\n".join(lines + ["", "## Answers", ""] + answers) + "\n", encoding="utf-8")
+
+
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--selftest", action="store_true")
@@ -351,9 +476,12 @@ def main():
     p.add_argument("--delay", type=float, default=7.0, help="seconds between requests (free tier per-minute limits)")
     p.add_argument("--out", default=str(HERE / "out"))
     p.add_argument("--probe", default="", help="comma-separated models: one short question each, without and with search")
+    p.add_argument("--sources", action="store_true", help="the Gemini free + Tavily pipeline with fetched pages (cases_sources.json)")
     args = p.parse_args()
     if args.selftest:
         selftest()
+    elif args.sources:
+        run_sources(args)
     elif args.probe:
         probe([m.strip() for m in args.probe.split(",") if m.strip()], args.out)
     else:

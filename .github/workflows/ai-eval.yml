@@ -14,14 +14,21 @@ on:
     paths: ['tools/ai-eval/**', '.github/workflows/ai-eval.yml']
   workflow_dispatch:
     inputs:
+      mode:
+        description: >-
+          sources: the "Gemini 무료 + Tavily" pipeline with real pages (cases_sources.json) and the free model;
+          probe: which models answer with and without Google Search; full: Google Search grounded evaluation.
+        type: choice
+        options: [sources, probe, full]
+        default: sources
       probe:
         description: >-
           Comma-separated models to probe (one short question each, without and with Google Search). Leave empty
           to run the full evaluation with the model below.
         default: gemini-2.5-flash-lite,gemini-2.5-pro,gemini-3.8-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite
       model:
-        description: Gemini model for the full evaluation
-        default: gemini-3.8-flash
+        description: Gemini model for sources / full
+        default: gemini-3.5-flash-lite
       notes:
         description: How many notes to explain (mode A, up to 20)
         default: '12'
@@ -49,9 +56,10 @@ jobs:
       - name: Ask Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_DEBUG }}
-          # a push only probes the models; the full evaluation is started by hand once a model is known to work
-          PROBE: ${{ github.event_name == 'push' && 'gemini-2.5-flash-lite,gemini-2.5-pro,gemini-3.8-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite' || inputs.probe }}
-          MODEL: ${{ inputs.model || 'gemini-3.8-flash' }}
+          # a push runs the sources pipeline with the free model (the free key cannot use Google Search)
+          MODE: ${{ inputs.mode || 'sources' }}
+          PROBE: ${{ inputs.probe || 'gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite' }}
+          MODEL: ${{ inputs.model || 'gemini-3.5-flash-lite' }}
           NOTES: ${{ inputs.notes || '12' }}
           DESCRIBES: ${{ inputs.describes || '6' }}
         run: |
@@ -59,7 +67,9 @@ jobs:
             echo "::warning::The GEMINI_API_KEY_DEBUG secret is not set; only the self-test ran."
             exit 0
           fi
-          if [ -n "$PROBE" ]; then
+          if [ "$MODE" = "sources" ]; then
+            python3 tools/ai-eval/eval.py --sources --model "$MODEL" --out ai-eval-out
+          elif [ "$MODE" = "probe" ]; then
             python3 tools/ai-eval/eval.py --probe "$PROBE" --out ai-eval-out
           else
             python3 tools/ai-eval/eval.py --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
