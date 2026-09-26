@@ -85,6 +85,8 @@ fun AppNav() {
             NavHost(navController = nav, startDestination = Route.Extract) {
                 appGraph(nav)
             }
+            // a notification or the home-screen widget asked for a screen
+            LaunchRequestHandler(nav)
         }
     }
 }

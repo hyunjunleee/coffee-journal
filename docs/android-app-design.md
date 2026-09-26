@@ -31,6 +31,7 @@
 | kotlinx-datetime / serialization / coroutines | 0.7.x / 1.9.x / 1.10.x | 날짜·백업 JSON·비동기 |
 | Koin | 4.2.x | DI (KMP) |
 | Coil 3 | 3.6.x | 사진 표시 (KMP) |
+| WorkManager / Jetpack Glance | 2.12.0 / 1.2.0 | 하루 한 번 알림 점검, 홈 화면 위젯 (Android 전용, 2차 §3) |
 | minSdk / targetSdk / compileSdk | 26 / 35 / 35 | Android 8.0+ |
 
 정확한 조합은 스캐폴드 빌드(`:androidApp:assembleDebug`)로 검증 후 `gradle/libs.versions.toml`에 고정한다.
@@ -76,6 +77,7 @@
 23. 추출 비교·계산기(§2.2): 홈 원두 그룹을 펼치면 기록 2개 이상일 때 "📊 추출 비교"(`Route.BrewCompare`). 기준 열(베스트 레시피, 없으면 SCA 2004 최고 점수, 그것도 없으면 CVA 최고 점수)과 다른 값을 굵게·바탕색으로 표시하고 차이(+1g, −1°C, +10s)를 적는다. 행 이름은 고정, 기록 열은 하나의 스크롤 상태로 함께 옆으로 밀린다(320dp에서 2열). 계산기는 기록 폼 레시피 영역의 접이식 "🧮 비율 · 추출수율 계산기": 원두량·비율 1:x·물량 중 둘로 나머지를 계산하고, EY% = TDS% × 추출액 g ÷ 원두량 g. 비교 기준은 SCA가 25 매거진 13호에 실은 고전 Coffee Brewing Control Chart의 IDEAL OPTIMUM BALANCE(추출수율 18–22%, TDS 1.15–1.35%, 2026-09 대조)이며 참고 범위로만 표시한다. "메모에 추가"는 한 줄 요약을 추출 관련 메모에 덧붙인다(계산기 값 자체는 저장하지 않음).
 24. SCA CVA(§2.3): 테이스팅과 커핑 원두마다 "SCA 2004 | CVA". CVA는 SCA-103(묘사: 섹션 강도 0–15, 향·맛 CATA 최대 5, 주요 맛 최대 2, 마우스필 최대 2)과 SCA-104(정동: 8개 섹션 품질 인상 1–9, 5컵 중 균일하지 않은 컵·결점 컵, 결점 종류)의 결합 양식 배치를 따르고, 점수는 S = 0.65625·Σh + 52.75 − 2u − 4d를 0.25점 단위(반올림 half-up, 표준 §7.1 표와 일치)로. 결점 컵은 결점 종류를 함께 골라야 계산된다(SCA-104 §5.4.1). 한 기록에는 고른 양식 하나만 저장한다. 저장은 스키마 변경 없이 기존 JSON 맵(`attributes`/`attributeNotes`, 커핑 원두 `evaluationScores`/`evaluation`)의 `cva.` 접두 키. SCA 2004 합계·최고 점수·베스트 로직은 `cva.` 키를 보지 않고, CVA 점수는 "CVA 84.25 / 100", "CVA 최고 84.25"처럼 따로 표시한다. 웹은 모르는 키를 무시하며 웹 편집 시에도 `attributes`는 통째로 복사되어 보존된다(커핑 원두 평가는 웹에서 편집하면 CVA 키가 빠진다).
 25. 통계(§2.4): 홈 액션 줄의 "통계"(`Route.Stats`). 이번 달(일별)/3개월/올해/전체(월별) 잔 수 막대(집 추출·카페 누적), 원두 사용량, 지출(봉투 가격 ÷ 용량 × 원두량 — 기록에 없으면 같은 원두의 첫 기록, 보관함 봉투 순; 직접 블렌드는 구성 원두별; 카페는 한 잔 가격), 산지·가공·품종·로스터리 상위 5, 점수 추이(SCA 2004는 선으로 잇고 CVA는 속 빈 사각형), 비율·온도와 점수 산점도. 모두 기기에서 `deriveOffMain`으로 계산해 Compose Canvas로 그리고, 차트마다 요약 문장을 TalkBack 설명으로 단다.
+26. 앱 전용 알림·홈 화면 위젯(2차 §3, 웹에는 없음): 하루 한 번 보관함 피크 시작·원두 소진 임박·D-day 마일스톤을 알리고(기타 탭 하단 "알림 설정"), 위젯은 D-day·마시는 중 원두·잔여량과 "+ 새 기록"을 보여준다. 문구와 계산은 홈 화면(D-day 알약, 마시는 중 카드)과 같은 규칙을 쓴다. 알림 설정은 기기 설정이라 백업에 넣지 않는다.
 
 ---
 
@@ -98,11 +100,12 @@ coffee-journal/
 │     │  ├─ ui/theme/            # 색·타이포·형태 토큰, 컴포넌트
 │     │  ├─ ui/nav/              # AppNav, Routes(type-safe), BottomBar
 │     │  ├─ ui/extract/ ui/form/ ui/calendar/ ui/bean/ ui/misc/ ui/backup/  # 화면 + ViewModel
+│     │  ├─ ui/notify/           # 알림 설정 화면, 하루 점검(ReminderCheck), 위젯 데이터(HomeWidgetFeed) — 2차 §3
 │     │  └─ di/                  # Koin 모듈
-│     ├─ androidMain/kotlin/     # Room 드라이버/DB 빌더, PhotoStore·ImagePicker·ImageResizer·BackupFileIo 실제 구현
+│     ├─ androidMain/kotlin/     # Room 드라이버/DB 빌더, PhotoStore·ImagePicker·ImageResizer·BackupFileIo 실제 구현, WorkManager 알림(ReminderWorker·ReminderNotifier)
 │     ├─ iosMain/kotlin/         # 동일 expect의 iOS 실제 구현 자리(1차: 파일 저장·리사이즈 스텁, 선택기 TODO)
 │     └─ commonTest/kotlin/      # 도메인 규칙·백업 코덱·DB 마이그레이션 테스트
-├─ androidApp/                   # Android 애플리케이션 (MainActivity → App())
+├─ androidApp/                   # Android 애플리케이션 (MainActivity → App()), 홈 화면 위젯(Glance, widget/)
 └─ iosApp/                       # SwiftUI 진입점 스켈레톤(이 환경에서는 미빌드)
 ```
 
@@ -120,6 +123,8 @@ coffee-journal/
 | `ImageResizer` | Bitmap 디코드·EXIF 회전·긴 변 1280px·JPEG 82 | UIImage |
 | `BackupFileIo` | SAF `CreateDocument`/`OpenDocument` + 공유 시트 | UIDocumentPicker / ShareSheet |
 | `Clock/Locale` | kotlinx-datetime 공통 | 공통 |
+| `ReminderPlatform`(platformModule) | WorkManager 고유 주기 작업(24시간, 첫 실행 = 정한 시각) + 종류별 알림 채널, 알림을 누르면 보관함/홈 | 미연결 스텁(`IosReminderPlatform`, 알림 불가로 보고) — UNUserNotificationCenter·BGTaskScheduler 자리 |
+| `rememberNotificationPermissionRequest` | Android 13+ `POST_NOTIFICATIONS` 요청(그 전은 앱 알림 켜짐 여부) | 항상 거절로 응답(미연결) |
 | `openMapUri(uri, fallback)` | 암시적 VIEW 인텐트(BROWSABLE), `ActivityNotFoundException`이면 웹 대체 URL | `canOpenURL`(Info.plist `LSApplicationQueriesSchemes`: nmap) 후 `openURL`, 안 되면 웹 대체 URL |
 
 ---
@@ -144,7 +149,7 @@ coffee-journal/
 | `roadmap_phases` | id, position, title, range_label, day_start, day_end, items(JSON) | 기본 1단계 시드 |
 | `bean_summaries` | bean_key PK, text, generated_at | 수동 총정리 |
 | `best_recipes` | bean_key PK, entry_id | |
-| `settings` | key PK, value | `brew-start-date`, 마지막 필터 등 |
+| `settings` | key PK, value | `brew-start-date`, 마지막 필터 등. `device.` 접두 키는 이 기기 설정(알림: `device.reminders.enabled/peak/lowStock/dday/time/sent`)으로 백업하지 않는다 |
 
 - 마이그레이션: `room-gradle-plugin` 스키마 export(`shared/schemas/…/1.json, 2.json`) + `autoMigrations`. v1 → v2(2차 지도 기능)는 `AutoMigration(1, 2)`: `misc_items`에 `lat`/`lng` 열 추가, `cafe_places` 생성. 기존 행은 그대로이고 좌표는 비어 있다(`DatabaseMigrationTest`가 1.json대로 만든 v1 파일을 앱의 빌더로 열어 확인). 실제 열 이름은 엔티티 속성 이름(`createdAt` 등)을 따른다.
 - 커핑 원두 이외의 목록형 필드(steps, recipeRef, blendComponents, attributes, attributeNotes, tags, 사진 파일명)와 웹 전용 필드(`legacy_extra`: beanGuidance·photoFeedback·adviceChat 등)는 kotlinx-serialization JSON 컬럼으로 저장한다.
@@ -165,6 +170,7 @@ coffee-journal/
 - 지도 데이터(schema 2): `miscItems`의 `lat`/`lng`는 둘 다 유한하고 범위 안일 때만 좌표로 읽는다(깨진 값은 좌표 없음, 파일 거절 아님). 병합에서 백업 항목에 좌표가 없으면(웹 파일) 기존 좌표를 유지하고, 교체는 백업 값 그대로. `cafePlaces`는 이름으로 병합(백업 행이 이긴다), 교체는 표를 통째로 바꾸며, 키가 없는 파일(웹 백업)은 카페 위치를 건드리지 않는다. 결과 줄은 `cafePlaces: ✓ N개 복원됨`.
 - 원자성: 사진 파일 → DB 트랜잭션 1회 → 커밋 후 참조가 끊긴 옛 사진 파일 삭제. 도중 실패 시 롤백 + 이번 복원이 쓴 파일 삭제로 복원 전 상태를 그대로 유지한다. 결과는 웹과 같은 문구의 항목별 줄(`entries: ✓ 3개 복원됨` 등)로 보고한다.
 - 파일 크기 상한: `BackupFileLimits.maxFileBytes(힙)` = 힙/5, 16–256MB로 제한. 일반 기기(힙 256–512MB)에서 50–100MB 정도가 한계이며, 더 큰 웹 백업을 받으려면 `android:largeHeap` 사용 여부를 결정해야 한다(현재 미사용).
+- `settings`는 통째로 내보내되 `device.` 접두 키(알림 설정·보낸 알림 기록)는 빼고, 가져올 때 파일에 있어도 무시하며, 교체도 이 기기의 값은 지우지 않는다(다른 폰의 알림이 권한 없이 켜지는 일 방지).
 - 기기 백업(Android Auto Backup / 기기 간 전송)은 DB·WAL·사진 폴더만 포함한다. 클라우드 백업은 앱당 25MB 할당량을 넘으면 Android가 통째로 건너뛰므로, 앱 내 JSON 백업이 기본 이전 수단이다.
 - 내보내기: 사진을 data URL로 포함(웹과 동일)하되 용량 안내 표시. 파일명 `커피일지-백업-YYYY-MM-DD.json`.
 
@@ -174,7 +180,8 @@ coffee-journal/
 
 ### 5.1 내비게이션
 - 하단 탭 4개: 새로운 추출 · 커피 달력 · 원두 · 기타 (웹 메인 탭 순서 유지, 탭별 백스택 보존).
-- 전체 화면 라우트: `RecordForm(entryId?, mode)`, `EntryDetail(id)`, `PantryEditor(id?)`, `BlendForm(id?)`, `BookForm(id?)`, `VideoForm(id?)`, `ClassForm(id?)`, `MiscForm(type, id?)`, `FlatItemForm(type, id?)`(로스터리·수입사·농장·가공), `RecipeLauncher(kind)`, `BackupRestore`, `CountryDetail(en)`, `NoteDetail(key)`, `VarietyDetail(key)`, `ProcessDetail(name)`, `MapPicker(target, name, scope, point?)`("지도에서 위치 지정": 로스터리는 폼으로 좌표를 돌려주고, 카페는 바로 저장), 2차: `BrewTimer(recipe?, hasLog)`(추출 타이머, 결과는 폼 목적지의 SavedStateHandle로 돌려줌), `BrewCompare(beanKey)`(추출 비교), `Stats`(통계).
+- 전체 화면 라우트: `RecordForm(entryId?, mode)`, `EntryDetail(id)`, `PantryEditor(id?)`, `BlendForm(id?)`, `BookForm(id?)`, `VideoForm(id?)`, `ClassForm(id?)`, `MiscForm(type, id?)`, `FlatItemForm(type, id?)`(로스터리·수입사·농장·가공), `RecipeLauncher(kind)`, `BackupRestore`, `CountryDetail(en)`, `NoteDetail(key)`, `VarietyDetail(key)`, `ProcessDetail(name)`, `MapPicker(target, name, scope, point?)`("지도에서 위치 지정": 로스터리는 폼으로 좌표를 돌려주고, 카페는 바로 저장), 2차: `BrewTimer(recipe?, hasLog)`(추출 타이머, 결과는 폼 목적지의 SavedStateHandle로 돌려줌), `BrewCompare(beanKey)`(추출 비교), `Stats`(통계), `NotificationSettings`(알림 설정).
+- 앱 밖에서 여는 화면(알림·위젯): `LaunchRequests`에 홈 / 보관함 / 새 기록을 넣으면 내비게이션이 한 번 받아 홈 탭 루트 위에 연다(`MainActivity`가 인텐트에서 읽음).
 - 웹의 "펼침 카드"는 모바일에서 `EntryDetail` 화면 + 목록의 접이식 요약으로 대체.
 
 ### 5.2 탭별 화면
@@ -201,7 +208,15 @@ coffee-journal/
 
 **위치 지정(MapPicker)**: 로스터리 폼("지도 위치" 칸의 "지도에서 위치 지정/변경", "위치 지우기"), 카페 기록 상세의 "카페 위치", 달력 카페 목록 아래 "카페 위치"에서 연다. 국내는 전국에서 시·도를 눌러 확대한 뒤 누른 곳이 위치(빨간 표식), 찾은 "시·도 시·군·구"와 좌표를 보여준다. 해외 로스터리는 세계지도에서 누르고 나라 이름을 보여준다. 로스터리는 "확인"으로 폼에 돌려주고(지역 칸이 비어 있으면 "서울특별시 성동구"나 "일본"으로 채움) 폼에서 저장해야 반영된다. 카페는 "저장"으로 바로 저장. 기존 위치가 있으면 그 시·도에서 시작한다.
 
-**기타(장비)**: 유형 칩 → 정렬 토글 → 카드(사진·이름·시작일·메모) → FAB 추가.
+**기타(장비)**: 유형 칩 → 정렬 토글 → 카드(사진·이름·시작일·메모) → FAB 추가. 목록 맨 아래 "알림 설정 →" · "출처 · 오픈소스 라이선스 →".
+
+### 5.4 알림 · 홈 화면 위젯 (2차 §3)
+- **알림 설정**: 안내문 → "알림 받기"(마스터, 처음엔 꺼짐) → 알림 종류(피크 시작 / 원두 소진 임박 / D-day 마일스톤, 기본 켜짐) → 알림 시각(기본 09:00, 기록 폼과 같은 시간 선택 창). 스위치는 사각·헤어라인·켜지면 잉크. Android 13+에서 켤 때 알림 권한을 묻고, 거절하면 스위치는 꺼진 채 빨간 안내와 "알림 설정 열기 →"(앱 알림 설정 화면). 켜 둔 뒤 권한이 사라지면 같은 안내를 보인다. 시각을 바꾸면 하루 점검을 다시 예약한다.
+- **하루 점검**: WorkManager 주기 작업이 정한 시각에 `ReminderCheck`를 돌려 ① 보관함 원두의 예상 피크 시작일(`PantryRules.peakWindow`) ② 마시는 중 카드의 잔여량 ≤ 2잔(1잔 = 그 원두 기록 원두량의 중앙값, 없으면 15 g) ③ Coffee D-day 30·100일 단위를 알린다. 보낸 알림은 키로 기억해 다시 보내지 않고, 권한이 없거나 채널을 끈 날은 보낸 것으로 치지 않는다. 채널 이름: 피크 시작 / 원두 소진 임박 / D-day 마일스톤. 피크·소진은 누르면 원두 보관함, D-day는 홈.
+- **홈 화면 위젯**(Jetpack Glance, 3×2 기본, 가로·세로 크기 조절, 최소 180×100dp): D-day 알약 문구(큰 크기에서는 "YYYY.MM.DD 첫 추출"과 기념 문구), 마시는 중 카드의 이름·"잔여량 Ng/Ng"(큰 크기에서는 "마시는 중 · …" 줄, 개봉 원두가 여럿이면 "외 N"), 빈 상태 "커피 처음 마신 날을 기록해두면 며칠째인지 보여드려요." / "아직 마시는 중인 원두가 없어요. 오늘 내린 커피부터 남겨보세요.", "+ 새 기록"(새 기록 폼으로 바로), 나머지 영역은 홈. 아이보리 바탕·잉크 글자·모노 숫자·직각·헤어라인 테두리. 위젯 선택기 미리보기(`coffee_widget_preview`)와 설명은 한국어.
+- **위젯 갱신**: 앱이 살아 있는 동안 기록·보관함·블렌드·설정 테이블이 바뀌면(Room 무효화 추적, 0.8초 묶음) 그리고 자정에, 앱이 백그라운드로 갈 때(`MainActivity.onStop`), 하루 점검 때, 위젯이 있는 동안 매일 자정 직후(WorkManager `coffee-journal.widget-midnight`).
+- **매니페스트 권한**: `POST_NOTIFICATIONS`(직접 선언). WorkManager가 병합하는 `RECEIVE_BOOT_COMPLETED`(재부팅 후 예약 복구), `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`. 위젯 수신자 `.widget.CoffeeWidgetReceiver`(exported, `APPWIDGET_UPDATE`, `@xml/coffee_widget_info`).
+- iOS: 규칙·점검·위젯 데이터는 공유 코드에 있고, 전달(UNUserNotificationCenter)·위젯(WidgetKit)은 아직 연결하지 않았다.
 
 ### 5.3 디자인 시스템 (웹 "아카이브 라이트" 테마 이식)
 - 색: `bg #F5F4EF`, `surface #FFFFFF`, `surfaceRaised #ECEBE5`, `line #C8C6BD`, `text #191916`, `textMuted #5D5B54`, `textFaint #858177`, `accent(ink) #20201D`, `accentSoft #20201D12`, `bad #9D3026`, `good #4D684D`, `cupping #6E5F8B`, `cafe #8B5C35`, `book #5D6F79`, 범위 띠 6색 `#B58968 #8A6A52 #C9A47E #9C7355 #D9BD9C #6B543E`.
@@ -250,6 +265,7 @@ coffee-journal/
 - 화면 검증: 에뮬레이터 없이 Robolectric + Roborazzi로 실제 Compose 화면을 JVM에서 렌더해 PNG로 남긴다(`./gradlew :androidApp:recordRoborazziDebug` → `androidApp/screenshots/`). 테스트는 인메모리 Room(프레임워크 SQLite 드라이버)과 샘플 데이터(`SampleData`)를 주입한다.
 - 흐름 테스트: 같은 환경에서 실제 `App()`을 띄워 탭·입력으로 사용자 흐름 전체를 수행하고, 화면 문구와 저장된 데이터를 웹 원본 핸들러 기준으로 함께 검증한다(백업 왕복, 원자적 복원, 한글 IME 조합, 자정 전환, 연속 탭 경합, 저장 중 뒤로 가기 포함).
 - 렌더 매트릭스: 모든 라우트를 기본·320dp 폭·글자 1.3/2.0배로 렌더해 줄바꿈·잘림·겹침을 확인한다(`ScreenshotMatrixTest`).
+- 알림·위젯(2차 §3): 규칙 단위 테스트(`RemindersTest`: 피크 시작일, 2잔 경계·중앙값 1잔, 마일스톤, 중복 방지, 종류 끄기, 홈 카드 잔여량 연결), `ReminderPrefsTest`·`WidgetSnapshotTest`, Robolectric에서 WorkManager 테스트 도구로 작업 예약·실행(`ReminderWorkerTest`: 알림 내용·한국어 채널·누르면 열리는 화면, 설정·권한·채널 끔 존중, 같은 시각은 유지·새 시각은 교체), 알림 설정 흐름(`ReminderSettingsFlowTest`: API 35 권한 요청 허용/거절, 시간 변경 재예약), 위젯(`HomeWidgetTest`: Glance 단위 테스트로 큰/작은 배치·빈 상태·"+ 새 기록" 인텐트, 홈 화면과 같은 문구, 앱 관찰자 갱신, RemoteViews PNG), 인텐트로 새 기록 폼·보관함 열기(`LaunchTargetFlowTest`, `LaunchIntentTest`), 백업 제외(`ReminderBackupTest`).
 - 현재 규모: 병합 후 전체 실행 결과로 갱신(아래 README 참고).
 - 접근성: 최소 터치 48dp, 대비 4.5:1(잉크/아이보리), 콘텐츠 설명, 토글·펼침 상태 노출.
 

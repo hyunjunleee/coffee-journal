@@ -214,7 +214,20 @@ class SettingsRepository(private val dao: SettingsDao) {
     fun observeDdayStart(): Flow<LocalDate?> = observe(KEY_DDAY_START).map { Dates.parseIsoDate(it) }
     suspend fun setDdayStart(date: LocalDate) = put(KEY_DDAY_START, Dates.isoDate(date))
 
+    /** Deletes every setting a backup carries; this device's own settings ([isDeviceKey]) stay. */
+    suspend fun deleteAllBackedUp() {
+        dao.getAll().filterNot { isDeviceKey(it.key) }.forEach { dao.delete(it.key) }
+    }
+
     companion object {
         const val KEY_DDAY_START = "brew-start-date"
+
+        /**
+         * Settings that belong to this phone rather than to the journal (notification switches, the reminder time,
+         * the reminders already sent): a backup neither writes nor restores them.
+         */
+        const val DEVICE_PREFIX = "device."
+
+        fun isDeviceKey(key: String): Boolean = key.startsWith(DEVICE_PREFIX)
     }
 }

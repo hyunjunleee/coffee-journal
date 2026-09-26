@@ -105,6 +105,10 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
     implementation(libs.koin.android)
+    implementation(libs.work.runtime)
+    implementation(libs.glance.appwidget)
+    // the widget and the reminder worker read dates through the shared rules
+    implementation(libs.kotlinx.datetime)
 
     // JVM screenshot tests (Robolectric renders the real Compose screens without an emulator)
     testImplementation(libs.junit)
@@ -123,6 +127,8 @@ dependencies {
     testImplementation(libs.kotlinx.datetime)
     testImplementation(libs.kotlinx.serialization.json)
     testImplementation(libs.navigation.compose)
+    testImplementation(libs.work.testing)
+    testImplementation(libs.glance.appwidget.testing)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     sqliteHostNatives(libs.sqlite.bundled.jvm)
 }

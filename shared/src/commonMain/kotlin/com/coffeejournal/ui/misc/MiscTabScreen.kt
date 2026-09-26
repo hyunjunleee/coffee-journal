@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -95,9 +96,10 @@ fun MiscTabScreen(nav: NavHostController) {
                         Spacer(Modifier.height(10.dp))
                     }
                 }
-                // not on the web: where the content, icons and libraries come from (출처 · 라이선스)
+                // not on the web: reminders (알림 설정) and where the content, icons and libraries come from (출처 · 라이선스)
                 item(key = "about") {
-                    Box(Modifier.fillMaxWidth().padding(top = 24.dp), contentAlignment = Alignment.Center) {
+                    FlowRow(Modifier.fillMaxWidth().padding(top = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp, Alignment.CenterHorizontally)) {
+                        TextLink("알림 설정 →", Ink.textMuted, { nav.navigate(Route.NotificationSettings) })
                         TextLink("출처 · 오픈소스 라이선스 →", Ink.textMuted, { nav.navigate(Route.About) })
                     }
                 }

@@ -8,6 +8,8 @@ import com.coffeejournal.data.db.AppDatabase
 import com.coffeejournal.data.photo.PhotoStore
 import com.coffeejournal.di.dataModule
 import com.coffeejournal.ui.nav.Features
+import com.coffeejournal.ui.notify.AndroidReminderPlatform
+import com.coffeejournal.ui.notify.ReminderPlatform
 import kotlinx.coroutines.Dispatchers
 import org.koin.android.ext.koin.androidContext
 import org.koin.core.context.startKoin
@@ -28,6 +30,8 @@ fun testPlatformModule(context: Context) = module {
             .build()
     }
     single<PhotoStore> { TempPhotoStore(File(context.cacheDir, "photos")) }
+    // the production reminder platform: it touches WorkManager only when scheduling (tests that do install a test WorkManager)
+    single<ReminderPlatform> { AndroidReminderPlatform(context) }
 }
 
 class TempPhotoStore(private val dir: File) : PhotoStore {

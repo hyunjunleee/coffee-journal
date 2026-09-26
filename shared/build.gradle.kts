@@ -52,6 +52,7 @@ kotlin {
             implementation(libs.androidx.exifinterface)
             implementation(libs.kotlinx.coroutines.android)
             implementation(libs.koin.android)
+            implementation(libs.work.runtime)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
