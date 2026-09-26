@@ -2,8 +2,9 @@ package com.coffeejournal.android
 
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.coffeejournal.App
@@ -36,16 +37,25 @@ class ScreenshotTest {
         repeat(6) { Thread.sleep(250); compose.waitForIdle() }
     }
 
+    /**
+     * Switches tabs through the click action itself: a simulated touch leaves the tapped tab's press/hover layer on
+     * the captured frame under Robolectric, which a person's tap on a device does not.
+     */
+    private fun openTab(tag: String) {
+        compose.onNodeWithTag(tag).performSemanticsAction(SemanticsActions.OnClick)
+        settle()
+    }
+
     @Test
     fun tabs_render() {
         compose.setContent { App() }
         settle()
         compose.onRoot().captureRoboImage("screenshots/01-home.png")
-        compose.onNodeWithTag("tab-calendar").performClick(); settle()
+        openTab("tab-calendar")
         compose.onRoot().captureRoboImage("screenshots/02-calendar.png")
-        compose.onNodeWithTag("tab-bean").performClick(); settle()
+        openTab("tab-bean")
         compose.onRoot().captureRoboImage("screenshots/03-bean.png")
-        compose.onNodeWithTag("tab-misc").performClick(); settle()
+        openTab("tab-misc")
         compose.onRoot().captureRoboImage("screenshots/04-misc.png")
     }
 }
