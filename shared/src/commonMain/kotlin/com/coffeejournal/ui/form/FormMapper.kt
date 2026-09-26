@@ -15,6 +15,7 @@ import com.coffeejournal.domain.reference.GenericSteps
 import com.coffeejournal.domain.reference.Processes
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.CuppingTypes
+import com.coffeejournal.domain.rules.CvaScoring
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.domain.rules.NoteCanon
@@ -113,8 +114,12 @@ internal object FormMapper {
             waterType = entry.waterType,
             steps = entry.steps.map(StepForm::from),
             appliedRecipeRef = entry.recipeRef,
-            attributes = FormNumbers.finiteAttributes(entry.attributes).let { a -> if (a.any { it.value > 0 }) a else ScaScoring.defaultAttributes() },
-            attributeNotes = entry.attributeNotes,
+            // one form per tasting: the SCA 2004 attributes and a CVA assessment (its `cva.` keys) are kept apart
+            scoreForm = if (CvaScoring.present(entry.attributes, entry.attributeNotes)) ScoreForm.CVA else ScoreForm.SCA2004,
+            attributes = FormNumbers.finiteAttributes(entry.attributes).filterKeys { !CvaScoring.isCvaKey(it) }
+                .let { a -> if (a.any { it.value > 0 }) a else ScaScoring.defaultAttributes() },
+            attributeNotes = entry.attributeNotes.filterKeys { !CvaScoring.isCvaKey(it) },
+            cva = CvaScoring.fromMaps(entry.attributes, entry.attributeNotes),
             actualNotes = NoteCanon.parseChips(entry.actualNotes),
             notes = if (isCupping) "" else entry.notes,
         )
@@ -228,9 +233,17 @@ internal object FormMapper {
             cuppingBeans = cuppingBeans,
             steps = if (isBrew) s.steps.map { it.toStep() }.filter { !it.isEmpty } else emptyList(),
             recipeRef = if (isBrew) s.appliedRecipeRef else null,
-            attributes = if (isCupping) existing?.attributes ?: emptyMap() else s.attributes.filterValues { it > 0 },
-            attributeNotes = if (isCupping) existing?.attributeNotes ?: emptyMap()
-            else s.attributeNotes.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
+            // only the chosen form is saved (a CVA tasting has no 2004 score and the other way round)
+            attributes = when {
+                isCupping -> existing?.attributes ?: emptyMap()
+                s.scoreForm == ScoreForm.CVA -> CvaScoring.toScores(s.cva)
+                else -> s.attributes.filter { (k, v) -> !CvaScoring.isCvaKey(k) && v > 0 }
+            },
+            attributeNotes = when {
+                isCupping -> existing?.attributeNotes ?: emptyMap()
+                s.scoreForm == ScoreForm.CVA -> CvaScoring.toTexts(s.cva)
+                else -> s.attributeNotes.filterKeys { !CvaScoring.isCvaKey(it) }.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() }
+            },
             tags = existing?.tags ?: emptyList(),
             bagPhotos = bagPhotos,
             groundsPhoto = existing?.groundsPhoto,
@@ -279,8 +292,10 @@ internal object FormMapper {
             roast = b.roast,
             expectedNotes = NoteCanon.joinChips(b.expectedNotes),
             actualNotes = NoteCanon.joinChips(b.actualNotes),
-            evaluation = b.evaluation.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
-            evaluationScores = b.evaluationScores.filterValues { it > 0 },
+            evaluation = if (b.scoreForm == ScoreForm.CVA) CvaScoring.toTexts(b.cva)
+            else b.evaluation.filterKeys { !CvaScoring.isCvaKey(it) }.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
+            evaluationScores = if (b.scoreForm == ScoreForm.CVA) CvaScoring.toScores(b.cva)
+            else b.evaluationScores.filter { (k, v) -> !CvaScoring.isCvaKey(k) && v > 0 },
             memo = b.memo.trim(),
             beanMode = if (b.beanMode == BeanMode.BLEND) BeanMode.BLEND else BeanMode.SINGLE,
             blendComponentsText = b.blendComponentsText.trim(),
@@ -313,9 +328,11 @@ internal object FormMapper {
             roast = b.roast,
             expectedNotes = NoteCanon.parseChips(b.expectedNotes),
             actualNotes = NoteCanon.parseChips(b.actualNotes),
-            evaluation = b.evaluation,
-            evaluationScores = b.evaluationScores,
+            evaluation = b.evaluation.filterKeys { !CvaScoring.isCvaKey(it) },
+            evaluationScores = b.evaluationScores.filterKeys { !CvaScoring.isCvaKey(it) },
             evaluationOpen = b.evaluation.isNotEmpty() || b.evaluationScores.isNotEmpty(),
+            scoreForm = if (CvaScoring.present(b.evaluationScores, b.evaluation)) ScoreForm.CVA else ScoreForm.SCA2004,
+            cva = CvaScoring.fromMaps(b.evaluationScores, b.evaluation),
             memo = b.memo,
         )
     }
@@ -408,6 +425,15 @@ internal object FormMapper {
     )
 
     // ---------- steps ----------
+
+    /**
+     * Whether the step log holds rows of the user's own: anything but nothing or the example every new form starts
+     * with. Replacing such a log with the brew timer's rows asks first.
+     */
+    fun hasOwnStepLog(state: FormState): Boolean {
+        val live = state.steps.map { it.toStep() }.filter { !it.isEmpty }
+        return live.isNotEmpty() && live != GenericSteps.example
+    }
 
     /** Web updateStepsSummary: with a log present, 총 추출시간 always mirrors the computed value. */
     fun withStepsTime(state: FormState): FormState {

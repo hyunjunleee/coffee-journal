@@ -1,9 +1,16 @@
 package com.coffeejournal.android
 
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsSelected
+import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasTestTag
+import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onFirst
@@ -24,6 +31,10 @@ import com.coffeejournal.domain.model.GeoPoint
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.Scope
+import com.coffeejournal.domain.model.RecipeRef
+import com.coffeejournal.domain.reference.CafeRecipes
+import com.coffeejournal.ui.form.timer.BrewClock
+import com.coffeejournal.ui.form.timer.BrewTimerResult
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.ui.nav.FormMode
 import com.coffeejournal.ui.nav.Route
@@ -37,6 +48,8 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.koin.core.context.GlobalContext
+import org.koin.core.context.loadKoinModules
+import org.koin.dsl.module
 import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
@@ -172,5 +185,67 @@ class RouteScreenshotTest {
     @Test fun countryDetail() = show(Route.CountryDetail("Ethiopia"), "43-country-detail.png")
     @Test fun about() = show(Route.About, "45-about.png")
     @Test fun variety_detail() = show(Route.VarietyDetail("gesha"), "35-variety-detail.png")
+
+    // ───────── feature-plan-v2 §2: timer, comparison, calculator, CVA, statistics ─────────
+
+    private fun click(text: String, index: Int = 0) {
+        compose.onAllNodes(hasText(text) and hasClickAction())[index].performScrollTo().performClick()
+        settle()
+    }
+
+    /** Scrolls the page so the first node matching [matcher] sits at the top of the screen. */
+    private fun bringToTop(matcher: SemanticsMatcher) {
+        compose.onAllNodes(matcher).onFirst().performScrollTo()
+        settle()
+        val node = compose.onAllNodes(matcher).onFirst().fetchSemanticsNode()
+        val scroller = compose.onAllNodes(SemanticsMatcher.keyIsDefined(SemanticsProperties.VerticalScrollAxisRange))
+            .fetchSemanticsNodes().maxBy { it.boundsInRoot.height }
+        val dy = node.boundsInRoot.top - scroller.boundsInRoot.top - 12 * scroller.layoutInfo.density.density
+        compose.runOnUiThread { scroller.config[SemanticsActions.ScrollBy].action?.invoke(0f, dy) }
+        settle()
+    }
+
+    /** The brew timer with the 유어홈 recipe, mid-way: the first pour just ended and its grams are asked. */
+    @Test fun brewTimer() {
+        val clock = FakeBrewClock()
+        loadKoinModules(module { single<BrewClock> { clock } })
+        val recipe = CafeRecipes.all.first { it.id == "yourhome" }
+        show(Route.BrewTimer(recipe = BrewTimerResult.encodeRecipe(RecipeRef(recipe.name, recipe.steps)), hasLog = true), "53-brew-timer.png") {
+            click("💧 붓기 시작")
+            clock.advance(9_000)
+            settle()
+            click("붓기 끝")
+        }
+    }
+
+    @Test fun brewCompare() = show(Route.BrewCompare("에티오피아 예가체프 워카 첼베사"), "54-brew-compare.png")
+
+    @Test fun calculator() = show(Route.RecordForm(mode = FormMode.EXTRACT, entryId = "e1"), "55-calculator.png") {
+        click("🧮 비율 · 추출수율 계산기")
+        compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("calc-tds"))).performScrollTo().performTextInput("1.35")
+        compose.onNode(hasSetTextAction() and hasAnyAncestor(hasTestTag("calc-beverage"))).performTextInput("200")
+        bringToTop(hasText("🧮 비율 · 추출수율 계산기") and hasClickAction())
+    }
+
+    @Test fun recordForm_cva() = show(Route.RecordForm(mode = FormMode.EXTRACT, entryId = "e2"), "56-form-cva.png") {
+        click("CVA")
+        bringToTop(hasText("SCA 커핑 평가 (100점)"))
+    }
+
+    @Test fun entryDetail_cva() {
+        runBlocking { GlobalContext.get().get<EntryRepository>().upsert(SampleCva.tasting) }
+        show(Route.EntryDetail(SampleCva.tasting.id), "57-detail-cva.png") { bringToTop(hasText("SCA CVA · 묘사 + 정동 평가")) }
+    }
+
+    /** 통계 over the whole journal (the sample records are from September 2026). */
+    @Test fun stats() = show(Route.Stats, "58-stats.png") { click("전체") }
+
+    @Test fun stats_charts() {
+        runBlocking { GlobalContext.get().get<EntryRepository>().upsert(SampleCva.tasting) }
+        show(Route.Stats, "59-stats-charts.png") {
+            click("전체")
+            bringToTop(hasText("점수 추이"))
+        }
+    }
     @Test fun process_detail() = show(Route.ProcessDetail("워시드", "워시드"), "36-process-detail.png")
 }

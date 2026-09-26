@@ -27,6 +27,7 @@ import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.PackageType
 import com.coffeejournal.domain.reference.ScaForm
 import com.coffeejournal.domain.rules.BeanNames
+import com.coffeejournal.domain.rules.CvaScoring
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.ScaScoring
 import com.coffeejournal.ui.form.sections.StepsSummaryBox
@@ -68,6 +69,7 @@ internal fun EntryDetailContent(en: Entry, siblings: List<Entry>, isBest: Boolea
         Text(en.roasterDesc, style = AppType.bodyMuted, modifier = Modifier.fillMaxWidth().padding(top = 12.dp).background(Ink.surfaceRaised).padding(12.dp))
     }
     DetailSca(en)
+    DetailCva(en)
     DetailSteps(en)
     DetailNotes(en, notes.before)
     en.groundsPhoto?.let { name ->
@@ -127,6 +129,14 @@ private fun DetailSca(en: Entry) {
             }
         }
     }
+}
+
+/** The CVA assessment of a tasting (feature-plan-v2 §2.3), labelled apart from the SCA 2004 block. */
+@Composable
+private fun DetailCva(en: Entry) {
+    if (en.isCupping || !CvaScoring.present(en.attributes, en.attributeNotes)) return
+    SectionLabel("SCA CVA · 묘사 + 정동 평가")
+    CvaDetailBlock(CvaScoring.fromMaps(FormNumbers.finiteAttributes(en.attributes), en.attributeNotes))
 }
 
 @Composable

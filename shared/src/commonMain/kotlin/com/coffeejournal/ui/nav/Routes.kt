@@ -30,6 +30,10 @@ sealed interface Route {
     @Serializable data object About : Route
     /** "지도에서 위치 지정": target "roastery" (point handed back to the form) or "cafe" (saved); point = "lat,lng". */
     @Serializable data class MapPicker(val target: String, val name: String = "", val scope: String = "국내", val point: String? = null) : Route
+    /** recipe: the form's applied recipe as JSON (BrewTimerResult.encodeRecipe); hasLog: the form already has a step log. */
+    @Serializable data class BrewTimer(val recipe: String? = null, val hasLog: Boolean = false) : Route
+    @Serializable data class BrewCompare(val beanKey: String) : Route
+    @Serializable data object Stats : Route
 }
 
 object FormMode {

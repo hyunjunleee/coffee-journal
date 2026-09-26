@@ -31,7 +31,7 @@ import com.coffeejournal.ui.theme.SectionLabel
 
 /** 레시피 필드 + 추출 예시(읽기 전용) + 추출 단계 로그. */
 @Composable
-internal fun RecipeSection(state: FormState, suggestions: FormSuggestions, update: ((FormState) -> FormState) -> Unit) {
+internal fun RecipeSection(state: FormState, suggestions: FormSuggestions, update: ((FormState) -> FormState) -> Unit, onOpenTimer: () -> Unit) {
     SectionLabel("레시피")
     TwoUp(
         { m -> AutocompleteField(state.dripper, { v -> update { it.copy(dripper = v) } }, suggestions.drippers, m, label = "드리퍼", placeholder = "칼리타 웨이브") },
@@ -61,8 +61,9 @@ internal fun RecipeSection(state: FormState, suggestions: FormSuggestions, updat
         },
         { m -> AutocompleteField(state.waterType, { v -> update { it.copy(waterType = v) } }, suggestions.waters, m, label = "사용한 물", placeholder = "예: 정수기 물, 스파클 정수") },
     )
+    BrewCalculatorSection(state, update)
     RecipeRefSteps(state.appliedRecipeRef)
-    StepsLog(state, update)
+    StepsLog(state, update, onOpenTimer)
 }
 
 /** Web renderRecipeRefSteps: the applied recipe's steps, or the generic example, read-only. */

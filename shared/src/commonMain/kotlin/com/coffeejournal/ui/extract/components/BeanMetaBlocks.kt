@@ -1,5 +1,6 @@
 package com.coffeejournal.ui.extract.components
 
+import com.coffeejournal.domain.rules.CvaScoring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -14,7 +15,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.rules.Dates
-import com.coffeejournal.domain.rules.ScaScoring
 import com.coffeejournal.ui.extract.ExtractGrouping
 import com.coffeejournal.ui.extract.GroupUi
 import com.coffeejournal.ui.theme.AppTextField
@@ -84,7 +84,7 @@ fun BestRecipeBlock(ui: GroupUi, onOpenPicker: () -> Unit, onPick: (String) -> U
                         "${Dates.isoDate(Dates.toLocalDate(en.createdAt))} · ${ExtractGrouping.recipeSummaryLine(en).ifBlank { "레시피 정보 없음" }}",
                         style = AppType.small.copy(color = Ink.text), modifier = Modifier.weight(1f),
                     )
-                    ScaScoring.effectiveTotal(en.attributes)?.let { Text("${ScaScoring.format2(it)} / 100", style = AppType.monoValue) }
+                    CvaScoring.scoreText(en)?.let { Text(it, style = AppType.monoValue) }
                 }
             }
         }
@@ -92,6 +92,6 @@ fun BestRecipeBlock(ui: GroupUi, onOpenPicker: () -> Unit, onPick: (String) -> U
 }
 
 private fun bestLine(en: Entry): String {
-    val score = ScaScoring.effectiveTotal(en.attributes)?.let { " · ${ScaScoring.format2(it)} / 100" } ?: ""
+    val score = CvaScoring.scoreText(en)?.let { " · $it" } ?: ""
     return "${Dates.isoDate(Dates.toLocalDate(en.createdAt))} 기록 · ${ExtractGrouping.recipeSummaryLine(en)}$score"
 }

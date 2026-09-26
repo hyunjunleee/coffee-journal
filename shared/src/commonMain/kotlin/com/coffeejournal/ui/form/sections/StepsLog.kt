@@ -3,6 +3,7 @@ package com.coffeejournal.ui.form.sections
 import androidx.compose.foundation.background
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,7 +39,7 @@ import com.coffeejournal.ui.theme.SectionLabel
 
 /** 추출 단계 로그 (실제 추출) — editable rows (web #steps-list). */
 @Composable
-internal fun StepsLog(state: FormState, update: ((FormState) -> FormState) -> Unit) {
+internal fun StepsLog(state: FormState, update: ((FormState) -> FormState) -> Unit, onOpenTimer: () -> Unit) {
     SectionLabel("추출 단계 로그 (실제 추출)", hint = "(선택)")
     HintText("레시피대로 안 됐어도 괜찮아요 — 실수로 더 붓거나 늦게 부은 것까지 실제 그대로 적으세요. 그래야 레시피랑 뭐가 달랐는지, 그게 맛에 어떤 영향을 줬는지 나중에 비교해볼 수 있어요.")
     Spacer(Modifier.height(8.dp))
@@ -58,7 +59,10 @@ internal fun StepsLog(state: FormState, update: ((FormState) -> FormState) -> Un
         }
     }
     Spacer(Modifier.height(8.dp))
-    GhostButton("+ 단계 추가", small = true, onClick = { update { it.copy(steps = it.steps + StepForm()) } })
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        GhostButton("+ 단계 추가", small = true, onClick = { update { it.copy(steps = it.steps + StepForm()) } })
+        GhostButton("⏱ 타이머로 기록", small = true, onClick = onOpenTimer)
+    }
     if (state.steps.isNotEmpty()) HintText("마지막 행의 대기(초)가 드로우다운 시간이에요.")
     val live = state.steps.map { it.toStep() }.filter { !it.isEmpty }
     StepsSummaryBox(live, state.water, state.time, state.appliedRecipeRef)

@@ -35,9 +35,27 @@ object Credits {
         ),
         Credit(
             "SCA 커핑 폼",
-            "커핑 점수의 10개 항목과 점수 범위(6~10점, 0.25점 단위, 균일성·클린컵·단맛은 컵당 2점)는 SCA(구 SCAA)의 2004년 커핑 프로토콜과 양식을 따라요. " +
-                "SCA는 2024년에 이 양식을 CVA(Coffee Value Assessment, SCA-102~104) 표준으로 대체했어요. 향·산미·바디의 강도 1~5점(0.5 단위)은 SCA 양식이 아니라 웹 앱이 정한 척도예요.",
-            links = listOf("SCA Coffee Value Assessment" to "https://sca.coffee/value-assessment"),
+            "SCA 2004: 커핑 점수의 10개 항목과 점수 범위(6~10점, 0.25점 단위, 균일성·클린컵·단맛은 컵당 2점)는 SCA(구 SCAA)의 2004년 커핑 프로토콜과 양식을 따라요. " +
+                "향·산미·바디의 강도 1~5점(0.5 단위)은 SCA 양식이 아니라 웹 앱이 정한 척도예요.\n" +
+                "CVA: SCA는 2024년에 이 양식을 CVA(Coffee Value Assessment) 표준으로 대체했어요. 앱의 CVA 양식은 SCA-103(묘사 평가: 섹션별 강도 0~15, " +
+                "향·맛 묘사 최대 5개, 주요 맛 최대 2개, 마우스필 최대 2개)과 SCA-104(정동 평가: 8개 섹션 품질 인상 1~9, 5컵 중 균일하지 않은 컵·결점 컵, " +
+                "결점 종류 곰팡이·페놀·감자) 표준 문서와 SCA의 한국어 양식을 항목마다 대조해 만들었어요(2026-09 확인). " +
+                "점수는 SCA-104 5.5의 식 S = 0.65625 × Σ(8개 섹션) + 52.75 − 2 × 균일하지 않은 컵 − 4 × 결점 컵을 0.25점 단위로 반올림한 값으로, " +
+                "SCA 점수 계산기(sca.coffee/cuppingscore)와 같아요. 결점 컵은 결점 종류를 함께 골라야 계산돼요(SCA-104 5.4.1).",
+            links = listOf(
+                "SCA Coffee Value Assessment" to "https://sca.coffee/value-assessment",
+                "SCA-103 묘사 평가" to "https://sca.coffee/s/AW_SCA-103_Descriptive-Assessment_Sept2024_Secured.pdf",
+                "SCA-104 정동 평가" to "https://sca.coffee/s/AW_SCA-104_Affective-Assessment_Sept2024_Secured.pdf",
+                "CVA 한국어 양식" to "https://sca.coffee/s/CVA-Cupping-Forms-Korean.pdf",
+                "CVA 점수 계산기" to "https://sca.coffee/cuppingscore",
+            ),
+        ),
+        Credit(
+            "SCA 추출 조절 차트",
+            "계산기의 추출수율(EY) = TDS × 추출액 무게 ÷ 원두량이고, 비교 기준은 SCA가 25 매거진 13호 \"Towards a New Brewing Chart\"(2020)에 " +
+                "실은 고전 Coffee Brewing Control Chart의 IDEAL OPTIMUM BALANCE 구역(추출수율 18~22%, TDS 1.15~1.35%)이에요(2026-09 확인). " +
+                "같은 글에서 SCA는 이 차트가 맛 묘사와 취향을 섞었다며 새 차트를 연구 중이라고 밝혀서, 앱은 참고 범위로만 보여줘요.",
+            links = listOf("25 매거진 13호 (보관본)" to "https://web.archive.org/web/20210811223756/https://sca.coffee/sca-news/25/issue-13/towards-a-new-brewing-chart"),
         ),
         Credit(
             "카페 레시피",

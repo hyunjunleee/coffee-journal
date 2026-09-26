@@ -25,6 +25,7 @@ import com.coffeejournal.ui.extract.ExtractGrouping
 import com.coffeejournal.ui.extract.GroupUi
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
+import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.HairlineCard
 import com.coffeejournal.ui.theme.Ink
@@ -39,6 +40,7 @@ class GroupActions(
     val onCancelSummary: () -> Unit,
     val onOpenPicker: () -> Unit,
     val onPick: (String) -> Unit,
+    val onCompare: () -> Unit = {},
 )
 
 /** Web .bean-group: collapsible header, then summary / best recipe / record rows. */
@@ -55,6 +57,10 @@ fun BeanGroupCard(ui: GroupUi, summaryDraft: String, photoStore: PhotoStore, act
                     onSave = actions.onSaveSummary, onCancel = actions.onCancelSummary,
                 )
                 BestRecipeBlock(ui, onOpenPicker = actions.onOpenPicker, onPick = actions.onPick)
+                // 추출 비교: this bean's brews side by side (feature-plan-v2 §2.2)
+                if (ui.group.recipeEntries.size >= 2) {
+                    Row(Modifier.padding(bottom = 8.dp)) { GhostButton("📊 추출 비교", small = true, onClick = actions.onCompare) }
+                }
                 Spacer(Modifier.height(6.dp))
                 Hairline()
                 ui.group.entries.forEach { listed ->
@@ -90,6 +96,7 @@ private fun GroupHeader(ui: GroupUi, photoStore: PhotoStore, onClick: () -> Unit
         Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (g.count > 1) Text("${g.count}개 기록", style = AppType.monoSmall)
             g.highestScore?.let { Text("최고 ${ScaScoring.format2(it)}", style = AppType.monoValue) }
+            g.highestCva?.let { Text("CVA 최고 ${ScaScoring.format2(it)}", style = AppType.monoValue) }
             Text(if (ui.expanded) "▴" else "▾", style = AppType.small)
         }
     }

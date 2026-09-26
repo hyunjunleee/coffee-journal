@@ -1,5 +1,6 @@
 package com.coffeejournal.ui.calendar.components
 
+import com.coffeejournal.domain.rules.CvaScoring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -23,7 +24,6 @@ import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.Dates
-import com.coffeejournal.domain.rules.ScaScoring
 import com.coffeejournal.ui.calendar.CalendarGrid
 import com.coffeejournal.ui.calendar.DayCell
 import com.coffeejournal.ui.theme.AppType
@@ -67,8 +67,8 @@ internal fun DayPanelSheet(cell: DayCell, onDismiss: () -> Unit, onEntry: (Entry
 
 internal fun scoreText(entry: Entry): String? {
     if (entry.isCupping) return null
-    val total = ScaScoring.effectiveTotal(entry.attributes) ?: return null
-    return "${ScaScoring.format2(total)} / 100"
+    // "83.50 / 100" for an SCA 2004 score, "CVA 84.25 / 100" for a CVA tasting
+    return CvaScoring.scoreText(entry)
 }
 
 @Composable

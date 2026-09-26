@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.reference.ScaForm
+import com.coffeejournal.domain.rules.CvaScoring
 import com.coffeejournal.domain.rules.ScaScoring
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.KeyValueRow
@@ -27,7 +28,8 @@ internal fun CuppingBeansList(en: Entry) {
     Text("CUPPING BEANS · ${en.cuppingBeans.size}", style = AppType.monoSmall, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
     en.cuppingBeans.forEachIndexed { index, bean ->
         val meta = listOf(bean.country, bean.variety, bean.process).filter { it.isNotBlank() }.joinToString(" · ")
-        val title = "${(index + 1).toString().padStart(2, '0')}  ${bean.name}" + if (meta.isNotBlank()) "  ·  $meta" else ""
+        val cva = CvaScoring.scoreOf(bean.evaluationScores, bean.evaluation)?.let { "  ·  CVA ${CvaScoring.format(it)}" } ?: ""
+        val title = "${(index + 1).toString().padStart(2, '0')}  ${bean.name}" + (if (meta.isNotBlank()) "  ·  $meta" else "") + cva
         Collapsible(title = title, open = open[index] == true, onToggle = { open[index] = open[index] != true }, modifier = Modifier.padding(bottom = 6.dp)) {
             CuppingBeanBody(bean)
         }
@@ -59,6 +61,10 @@ private fun CuppingBeanBody(bean: CuppingBean) {
                     Text(bean.evaluation[k] ?: "", style = AppType.small.copy(color = com.coffeejournal.ui.theme.Ink.text), modifier = Modifier.weight(1f))
                 }
             }
+        }
+        if (CvaScoring.present(bean.evaluationScores, bean.evaluation)) {
+            Text("SCA CVA", style = AppType.monoSmall, modifier = Modifier.padding(top = 8.dp, bottom = 4.dp))
+            CvaDetailBlock(CvaScoring.fromMaps(bean.evaluationScores, bean.evaluation))
         }
         NoteBlock("메모", bean.memo)
     }

@@ -48,6 +48,14 @@ export ANDROID_HOME=/opt/android-sdk
 - 파생 계산: 기록 전체를 다시 묶는 계산(그룹핑·통계·추천)은 `Flow.deriveOffMain { … }`으로 `Dispatchers.Default`에서, 최신 입력만 반영해 수행한다. 메인 스레드에서 직접 계산하지 않는다(기록 1,000건에서 110–150ms).
 - 큰 글자·좁은 화면: 한 줄이어야 하는 짧은 라벨은 `FitText`(줄바꿈 대신 축소), 고정 폭 숫자 열은 `N.dp.fontScaled()`(글자 배율만큼, 최대 1.6배 확장). `Seg`는 웹 flex-wrap처럼 넘치면 다음 줄로 옮긴다.
 - 동시 수정: 읽고-고쳐-쓰는 저장(로드맵, 보관함 편집, 즐겨찾기)은 `Mutex` 안에서 행을 다시 읽은 뒤 쓴다. 빠른 연속 탭이나 다른 화면의 변경이 덮이지 않게 한다.
+- 2차 기록·분석 헬퍼(feature-plan-v2 §2):
+  - `BrewMath`(`domain/rules`): 비율 `ratio`/`ratioText`("1:16.7"), `extractionYield`(EY% = TDS% × 추출액 ÷ 원두량), 계산기 `solve`, SCA 고전 추출 차트 구역 `ClassicChart`(18–22%, 1.15–1.35%, 출처 주석)와 `eyVerdict`/`tdsVerdict`.
+  - `CvaForm`(`domain/reference`, SCA-103/104와 한국어 양식 대조)·`CvaScoring`·`CvaAssessment`(`domain/rules`): CVA 점수(`affectiveScore`, §5.5 식, 결점 종류 규칙), 저장은 `toScores`/`toTexts` → 기존 맵의 `cva.` 키, 읽기는 `fromMaps`. 점수 표시는 `CvaScoring.scoreText(entry)`("83.50 / 100" 또는 "CVA 84.25 / 100")를 쓰고, 결점 종류가 텍스트 맵에 있으므로 숫자 맵만으로 CVA 점수를 계산하지 않는다. SCA 2004 합계(`ScaScoring`)는 `cva.` 키를 보지 않는다.
+  - 타이머: `BrewClock`(단조 `monotonicMs` + 프로세스 복원용 `wallMs`, Koin `single`, 테스트는 가짜 시계로 교체), 순수 규칙 `BrewTimerEngine`(행 → `RecipeStep`, 레시피 안내, 진동 경계), 결과 전달 `BrewTimerResult`(목적지 SavedStateHandle 키). 플랫폼 경계 `KeepScreenOn(enabled)`, `rememberStepBuzz()`(`ui/platform/BrewTimerPlatform*`, Android VIBRATE 권한).
+  - `SliderRow(description = …)`: 같은 이름의 행이 둘일 때(CVA 강도/품질 인상) TalkBack 이름을 따로 준다.
+  - 통계 `StatsCalc`(기간, 막대, 지출 단가 `unitPrice`, 상위 목록), 비교 `BrewCompare`(기준 선택, 셀 차이) — 둘 다 순수 함수, 화면은 `deriveOffMain`.
+  - 차트는 Compose Canvas(`ui/extract/stats/StatsCharts.kt`): 헤어라인, 잉크 막대, `rememberTextMeasurer`로 모노 숫자. 차트 노드는 `clearAndSetSemantics { contentDescription = 요약 }`.
+  - Robolectric 흐름 테스트에서 `AlertDialog` 안에 텍스트 필드를 두면 대화상자가 열린 동안 Compose가 idle이 되지 않았다(타이머 물량 입력). 입력은 화면 안의 패널로 두었다.
 - 탭 간 요청: 다른 화면에서 원두 탭의 특정 서브뷰를 열 때는 `BeanViewRequests`(Koin single)에 요청을 넣고 탭을 전환한다(라우트 인자는 탭 전환 시 이전 값으로 복원되므로 쓰지 않음).
 
 ## 지도 헬퍼 (2차 §1, 재사용)

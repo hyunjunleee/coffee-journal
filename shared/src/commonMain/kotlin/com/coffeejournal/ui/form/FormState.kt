@@ -6,6 +6,7 @@ import com.coffeejournal.domain.model.CuppingType
 import com.coffeejournal.domain.model.PackageType
 import com.coffeejournal.domain.model.RecipeRef
 import com.coffeejournal.domain.model.RecipeStep
+import com.coffeejournal.domain.rules.CvaAssessment
 import com.coffeejournal.ui.nav.FormMode
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
@@ -71,8 +72,18 @@ data class CuppingBeanForm(
     val evaluation: Map<String, String> = emptyMap(),
     val evaluationScores: Map<String, Double> = emptyMap(),
     val evaluationOpen: Boolean = false,
+    /** "항목별 평가" form: [ScoreForm.SCA2004] (the 8 fields above) or [ScoreForm.CVA]. */
+    val scoreForm: String = ScoreForm.SCA2004,
+    val cva: CvaAssessment = CvaAssessment(),
     val memo: String = "",
 )
+
+/** Which cupping form a tasting / cupping bean is scored on (feature-plan-v2 §2.3). One form per tasting is saved. */
+object ScoreForm {
+    const val SCA2004 = "sca2004"
+    const val CVA = "cva"
+    val labels = mapOf(SCA2004 to "SCA 2004", CVA to "CVA")
+}
 
 /**
  * A bag photo slot: an already stored file, a freshly picked image, or empty.
@@ -148,8 +159,14 @@ data class FormState(
     val waterType: String = "",
     val steps: List<StepForm> = emptyList(),
     val appliedRecipeRef: RecipeRef? = null,
+    // 계산기 (저장하지 않음)
+    val calcOpen: Boolean = false,
+    val calc: CalcForm = CalcForm(),
     // 테이스팅
+    val scoreForm: String = ScoreForm.SCA2004,
+    /** SCA 2004 attributes only; the CVA assessment is [cva]. */
     val attributes: Map<String, Double> = emptyMap(),
+    val cva: CvaAssessment = CvaAssessment(),
     val attributeNotes: Map<String, String> = emptyMap(),
     val actualNotes: List<String> = emptyList(),
     val actualInput: String = "",

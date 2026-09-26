@@ -25,6 +25,7 @@ import com.coffeejournal.ui.form.FormMapper
 import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
 import com.coffeejournal.ui.form.RemoveButton
+import com.coffeejournal.ui.form.ScoreForm
 import com.coffeejournal.ui.form.SliderRow
 import com.coffeejournal.ui.form.TwoUp
 import com.coffeejournal.ui.theme.InputFilters
@@ -135,7 +136,11 @@ private fun CuppingBeanNotes(bean: CuppingBeanForm, onChange: (CuppingBeanForm) 
     )
     Spacer(Modifier.height(12.dp))
     Collapsible(title = "항목별 평가 (선택)", open = bean.evaluationOpen, onToggle = { onChange(bean.copy(evaluationOpen = !bean.evaluationOpen)) }) {
-        ScaForm.cuppingEvaluationFields.forEach { (key, label) ->
+        ScoreFormSeg(bean.scoreForm) { onChange(bean.copy(scoreForm = it)) }
+        Spacer(Modifier.height(8.dp))
+        if (bean.scoreForm == ScoreForm.CVA) {
+            CvaSheet(bean.cva, onChange = { onChange(bean.copy(cva = it)) })
+        } else ScaForm.cuppingEvaluationFields.forEach { (key, label) ->
             val score = bean.evaluationScores[key]
             SliderRow(
                 label = label, value = score, min = 6.0, max = 10.0, step = 0.25,
