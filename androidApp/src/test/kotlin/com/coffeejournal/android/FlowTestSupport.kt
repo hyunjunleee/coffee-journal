@@ -143,10 +143,20 @@ abstract class FlowTestBase {
 
     fun tab(tag: String) = clickNode(hasTestTag(tag))
 
-    /** Scrolls the vertical lazy list that contains [anchor] until [target] is composed. */
-    fun scrollListTo(anchor: SemanticsMatcher, target: SemanticsMatcher) {
-        waitFor(hasScrollToIndexAction() and hasAnyDescendant(anchor), "list containing ${anchor.description}")
-        node(hasScrollToIndexAction() and hasAnyDescendant(anchor)).performScrollToNode(target)
+    /**
+     * Scrolls the vertical lazy list that contains [anchor] until [target] is composed. The target can depend on data
+     * that is still on its way (a Room flow re-emitting after a write), so a miss is retried until [timeoutMs] instead
+     * of failing on the first frame that does not show it yet.
+     */
+    fun scrollListTo(anchor: SemanticsMatcher, target: SemanticsMatcher, timeoutMs: Long = 10_000) {
+        val list = hasScrollToIndexAction() and hasAnyDescendant(anchor)
+        waitFor(list, "list containing ${anchor.description}")
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (true) {
+            val miss = runCatching { node(list).performScrollToNode(target) }.exceptionOrNull() ?: break
+            if (System.currentTimeMillis() > deadline) throw miss
+            settle(1)
+        }
         settle(1)
     }
 
