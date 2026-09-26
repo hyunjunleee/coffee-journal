@@ -77,7 +77,8 @@ class BackupService(
         val miscItems = misc.getAll()
         val miscPhotos = mutableListOf<PhotoBlob>()
         for (m in miscItems) m.photos.forEachIndexed { i, name -> photos.readBytes(name)?.let { miscPhotos += PhotoBlob(m.id, PhotoKind.MISC, i, it) } }
-        val allSettings = settings.getAll()
+        // this phone's own settings (reminders) stay out of the file
+        val allSettings = settings.getAll().filterKeys { !SettingsRepository.isDeviceKey(it) }
         return BackupSnapshot(
             entries = allEntries,
             photos = entryPhotos,
@@ -206,10 +207,12 @@ class BackupService(
         lines += collection(BackupKeys.BEST, s.bestRecipes, BackupKeys.BEST in s.present) { if (replace) beanMeta.deleteAllBest(); beanMeta.upsertBestAll(it) }
         lines += collection(BackupKeys.VIDEOS, s.videos, BackupKeys.VIDEOS in s.present) { if (replace) study.deleteAllVideos(); study.upsertVideos(it) }
         lines += collection(BackupKeys.PANTRY, s.pantryItems, BackupKeys.PANTRY in s.present) { if (replace) pantry.deleteAll(); pantry.upsertAll(it) }
-        if (BackupKeys.SETTINGS in s.present && s.settings.isNotEmpty()) {
-            if (replace) settings.deleteAll()
-            s.settings.forEach { (k, v) -> settings.put(k, v) }
-            lines += ImportLine(BackupKeys.SETTINGS, ok = s.settings.size)
+        // device settings (reminders) are never taken from a file, and 교체 keeps this phone's own
+        val incomingSettings = s.settings.filterKeys { !SettingsRepository.isDeviceKey(it) }
+        if (BackupKeys.SETTINGS in s.present && incomingSettings.isNotEmpty()) {
+            if (replace) settings.deleteAllBackedUp()
+            incomingSettings.forEach { (k, v) -> settings.put(k, v) }
+            lines += ImportLine(BackupKeys.SETTINGS, ok = incomingSettings.size)
         }
         // ── café positions (app extension): merged by name; 교체 swaps the table. Web files have no such key. ──
         if (BackupKeys.CAFE_PLACES in s.present) {

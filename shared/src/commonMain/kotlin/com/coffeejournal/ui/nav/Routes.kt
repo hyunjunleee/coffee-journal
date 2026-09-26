@@ -30,6 +30,8 @@ sealed interface Route {
     @Serializable data object About : Route
     /** "지도에서 위치 지정": target "roastery" (point handed back to the form) or "cafe" (saved); point = "lat,lng". */
     @Serializable data class MapPicker(val target: String, val name: String = "", val scope: String = "국내", val point: String? = null) : Route
+    /** 알림 설정 (reminders), from the bottom of the 기타 tab. */
+    @Serializable data object NotificationSettings : Route
 }
 
 object FormMode {

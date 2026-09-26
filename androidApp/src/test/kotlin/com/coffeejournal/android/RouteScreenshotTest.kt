@@ -25,9 +25,13 @@ import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.rules.Dates
+import com.coffeejournal.domain.rules.ReminderKind
 import com.coffeejournal.ui.nav.FormMode
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.nav.appGraph
+import com.coffeejournal.ui.notify.ReminderPrefs
+import com.coffeejournal.ui.notify.ReminderTexts
+import com.coffeejournal.ui.notify.ReminderTime
 import com.coffeejournal.ui.theme.CoffeeJournalTheme
 import com.github.takahirom.roborazzi.captureRoboImage
 import kotlinx.coroutines.runBlocking
@@ -173,4 +177,20 @@ class RouteScreenshotTest {
     @Test fun about() = show(Route.About, "45-about.png")
     @Test fun variety_detail() = show(Route.VarietyDetail("gesha"), "35-variety-detail.png")
     @Test fun process_detail() = show(Route.ProcessDetail("워시드", "워시드"), "36-process-detail.png")
+
+    // 알림 설정 (feature plan v2 §3): first visit (off, every kind on, 09:00), and on at 07:30 with the permission taken away
+    @Test fun notificationSettings() = show(Route.NotificationSettings, "60-notification-settings.png") {
+        compose.onNode(hasText("알림 받기")).assertIsDisplayed()
+    }
+    @Test fun notificationSettings_on() {
+        runBlocking {
+            val prefs = GlobalContext.get().get<ReminderPrefs>()
+            prefs.setEnabled(true)
+            prefs.setKind(ReminderKind.LOW_STOCK, false)
+            prefs.setTime(ReminderTime(7, 30))
+        }
+        show(Route.NotificationSettings, "61-notification-settings-on.png") {
+            compose.onNode(hasText(ReminderTexts.BLOCKED)).assertIsDisplayed()
+        }
+    }
 }

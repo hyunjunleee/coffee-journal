@@ -87,6 +87,9 @@ data class OpenedBagCard(
     val remainingLine: String,
     val priceText: String,
     val windowText: String,
+    /** The numbers behind [remainingLine], for the low-stock reminder (Reminders.lowStock). */
+    val remainingGrams: Double = 0.0,
+    val bagGrams: Double = 0.0,
 )
 
 data class RecentBeanCard(
@@ -96,6 +99,9 @@ data class RecentBeanCard(
     val remainingLine: String,
     /** Farm memo from the misc list (the web's AI blurb is not implemented). */
     val description: String?,
+    /** The numbers behind [remainingLine], for the low-stock reminder (Reminders.lowStock). */
+    val remainingGrams: Double = 0.0,
+    val bagGrams: Double = 0.0,
 )
 
 data class EntryRow(
@@ -363,6 +369,8 @@ object ExtractGrouping {
                 infoLines = lines,
                 remainingLine = remainingLine(remaining, bag),
                 description = description,
+                remainingGrams = remaining,
+                bagGrams = bag,
             )
         )
     }
@@ -380,6 +388,8 @@ object ExtractGrouping {
             remainingLine = remainingLine(remaining, bag),
             priceText = PantryRules.priceText(item.weight, item.price),
             windowText = PantryRules.drinkWindowText(item),
+            remainingGrams = remaining,
+            bagGrams = bag,
         )
     }
 

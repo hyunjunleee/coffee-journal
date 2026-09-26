@@ -8,6 +8,8 @@
             <action android:name="android.media.action.IMAGE_CAPTURE" />
         </intent>
     </queries>
+    <!-- reminders (알림 설정): Android 13+ asks when the user turns them on; WorkManager adds its own scheduling permissions -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <application
         android:name=".CoffeeJournalApplication"
         android:allowBackup="true"
@@ -35,5 +37,15 @@
             android:grantUriPermissions="true">
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/file_paths" />
         </provider>
+        <!-- home-screen widget (Jetpack Glance): Coffee D-day, the bean being drunk, "+ 새 기록" -->
+        <receiver
+            android:name=".widget.CoffeeWidgetReceiver"
+            android:exported="true"
+            android:label="@string/widget_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data android:name="android.appwidget.provider" android:resource="@xml/coffee_widget_info" />
+        </receiver>
     </application>
 </manifest>
