@@ -9,15 +9,21 @@ import com.coffeejournal.ui.ai.AiHttp
 import com.coffeejournal.ui.ai.IosAiHttp
 import com.coffeejournal.ui.ai.IosSecretStore
 import com.coffeejournal.ui.ai.SecretStore
+import com.coffeejournal.ui.notify.IosNotifications
 import com.coffeejournal.ui.notify.IosReminderPlatform
+import com.coffeejournal.ui.notify.ReminderCheck
 import com.coffeejournal.ui.notify.ReminderPlatform
+import com.coffeejournal.ui.notify.ReminderScheduleAhead
 import org.koin.core.module.Module
+import org.koin.dsl.bind
 import org.koin.dsl.module
 
 actual val platformModule: Module = module {
     single<AppDatabase> { iosDatabaseBuilder().buildAppDatabase() }
     single<PhotoStore> { IosPhotoStore() }
-    single<ReminderPlatform> { IosReminderPlatform() }
+    // reminders: scheduled ahead as local notifications (UNUserNotificationCenter), see IosReminderPlatform
+    single { IosNotifications() }
+    single { IosReminderPlatform(get(), ReminderScheduleAhead(get(), get<ReminderCheck>()::data, get<IosNotifications>())) } bind ReminderPlatform::class
     // AI 노트 도우미: HTTP on NSURLSession, keys in the Keychain (this device only)
     single<AiHttp> { IosAiHttp() }
     single<SecretStore> { IosSecretStore() }

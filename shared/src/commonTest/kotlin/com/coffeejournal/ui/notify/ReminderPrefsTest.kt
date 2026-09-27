@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.runTest
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -70,6 +71,28 @@ class ReminderPrefsTest {
         // an unreadable value counts as nothing sent (it is rewritten at the next send)
         settings.put(ReminderPrefs.KEY_SENT, "{not json")
         assertTrue(prefs.sent().isEmpty())
+    }
+
+    @Test fun scheduledAheadRoundTrips_underADeviceKey() = runTest {
+        assertTrue(prefs.scheduled().isEmpty())
+        val plan = mapOf(
+            "peak:p1:2026-09-26" to LocalDateTime(2026, 9, 26, 9, 0),
+            "low:pantry:p1" to LocalDateTime(2026, 9, 27, 21, 30),
+        )
+        prefs.setScheduled(plan)
+        assertEquals(plan, prefs.scheduled())
+        assertTrue(SettingsRepository.isDeviceKey(ReminderPrefs.KEY_SCHEDULED))
+        // an unchanged plan is not written again (a settings write would wake every observer of the table)
+        val before = dao.rows.value
+        prefs.setScheduled(plan.toList().reversed().toMap())
+        assertTrue(before === dao.rows.value)
+        prefs.setScheduled(emptyMap())
+        assertTrue(prefs.scheduled().isEmpty())
+        // unreadable values count as nothing scheduled
+        settings.put(ReminderPrefs.KEY_SCHEDULED, """{"a":"not a time"}""")
+        assertTrue(prefs.scheduled().isEmpty())
+        settings.put(ReminderPrefs.KEY_SCHEDULED, "{not json")
+        assertTrue(prefs.scheduled().isEmpty())
     }
 
     @Test fun reminderTime_parsesAndFindsTheNextRun() {

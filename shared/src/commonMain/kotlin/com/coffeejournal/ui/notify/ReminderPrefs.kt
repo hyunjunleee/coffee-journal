@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -51,8 +52,9 @@ data class ReminderSettings(
 )
 
 /**
- * The reminder settings and the reminders already sent, kept in [SettingsRepository] under device keys
- * ([SettingsRepository.DEVICE_PREFIX]): they belong to this phone, so a backup neither carries nor restores them.
+ * The reminder settings, the reminders already sent and (iOS) those scheduled ahead, kept in [SettingsRepository]
+ * under device keys ([SettingsRepository.DEVICE_PREFIX]): they belong to this phone, so a backup neither carries nor
+ * restores them.
  */
 class ReminderPrefs(private val settings: SettingsRepository) {
     private val sentLock = Mutex()
@@ -82,7 +84,24 @@ class ReminderPrefs(private val settings: SettingsRepository) {
     suspend fun markSent(keys: Collection<String>, today: LocalDate) = sentLock.withLock {
         val oldest = Dates.plusDays(today, -KEEP_SENT_DAYS)
         val merged = sent().filterValues { it >= oldest } + keys.associateWith { today }
-        settings.put(KEY_SENT, json.encodeToString(sentSerializer, merged.mapValues { Dates.isoDate(it.value) }))
+        settings.put(KEY_SENT, json.encodeToString(stringMapSerializer, merged.mapValues { Dates.isoDate(it.value) }))
+    }
+
+    /**
+     * Schedule-ahead (iOS): the reminders handed to the phone to show later, by key, with the local date and time each
+     * is set for. Once that time has passed the phone has shown it, so the next sync records it as sent.
+     */
+    suspend fun scheduled(): Map<String, LocalDateTime> {
+        val raw = settings.get(KEY_SCHEDULED)
+        if (raw.isNullOrBlank()) return emptyMap()
+        val map = runCatching { json.decodeFromString(stringMapSerializer, raw) }.getOrNull() ?: return emptyMap()
+        return map.mapNotNull { (k, v) -> runCatching { LocalDateTime.parse(v) }.getOrNull()?.let { k to it } }.toMap()
+    }
+
+    /** Replaces [scheduled]; an unchanged plan is not written again. */
+    suspend fun setScheduled(plan: Map<String, LocalDateTime>) {
+        if (plan == scheduled()) return
+        settings.put(KEY_SCHEDULED, json.encodeToString(stringMapSerializer, plan.mapValues { it.value.toString() }))
     }
 
     private fun decode(enabled: String?, peak: String?, low: String?, dday: String?, time: String?) = ReminderSettings(
@@ -93,7 +112,7 @@ class ReminderPrefs(private val settings: SettingsRepository) {
 
     private fun decodeSent(raw: String?): Map<String, LocalDate> {
         if (raw.isNullOrBlank()) return emptyMap()
-        val map = runCatching { json.decodeFromString(sentSerializer, raw) }.getOrNull() ?: return emptyMap()
+        val map = runCatching { json.decodeFromString(stringMapSerializer, raw) }.getOrNull() ?: return emptyMap()
         return map.mapNotNull { (k, v) -> Dates.parseIsoDate(v)?.let { k to it } }.toMap()
     }
 
@@ -104,6 +123,7 @@ class ReminderPrefs(private val settings: SettingsRepository) {
         const val KEY_DDAY = SettingsRepository.DEVICE_PREFIX + "reminders.dday"
         const val KEY_TIME = SettingsRepository.DEVICE_PREFIX + "reminders.time"
         const val KEY_SENT = SettingsRepository.DEVICE_PREFIX + "reminders.sent"
+        const val KEY_SCHEDULED = SettingsRepository.DEVICE_PREFIX + "reminders.scheduled"
 
         /** A year and a bit: a peak or a milestone is never due again once its day has passed. */
         const val KEEP_SENT_DAYS = 400
@@ -115,6 +135,6 @@ class ReminderPrefs(private val settings: SettingsRepository) {
         }
 
         private val json = Json { ignoreUnknownKeys = true }
-        private val sentSerializer = MapSerializer(String.serializer(), String.serializer())
+        private val stringMapSerializer = MapSerializer(String.serializer(), String.serializer())
     }
 }

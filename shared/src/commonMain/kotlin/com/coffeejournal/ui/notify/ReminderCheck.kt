@@ -12,10 +12,15 @@ import com.coffeejournal.domain.rules.BeanStock
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Reminder
 import com.coffeejournal.domain.rules.ReminderKind
+import com.coffeejournal.domain.rules.ReminderKinds
 import com.coffeejournal.domain.rules.Reminders
 import com.coffeejournal.ui.extract.DrinkingState
 import com.coffeejournal.ui.extract.ExtractGrouping
 import com.coffeejournal.ui.nav.LaunchTarget
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.LocalDate
@@ -61,6 +66,31 @@ val ReminderKind.launchTarget: LaunchTarget
     }
 
 /**
+ * The journal as the reminder rules read it, read once, so every day asked about sees the same data: the daily check
+ * asks about today, schedule-ahead (iOS, [ReminderPlan]) about each of the coming days.
+ */
+class ReminderData(
+    val entries: List<Entry>,
+    val pantry: List<PantryItem>,
+    val blends: List<Blend>,
+    val ddayStart: LocalDate?,
+) {
+    /**
+     * What the daily check would send on [day] for [kinds] if nothing changed before then, minus [sent]: [Reminders]
+     * with the home card's beans in use ([ReminderInputs.inUse]) as of [day].
+     */
+    fun dueOn(day: LocalDate, kinds: ReminderKinds, sent: Set<String>): List<Reminder> = Reminders.due(
+        pantry = pantry,
+        entries = entries,
+        inUse = ReminderInputs.inUse(entries, pantry, blends, day),
+        ddayStart = ddayStart,
+        today = day,
+        kinds = kinds,
+        sent = sent,
+    )
+}
+
+/**
  * The daily check, independent of how a platform schedules it or shows a notification: reads the journal and the
  * settings, asks [Reminders] what is due and remembers what was posted, so nothing is sent twice.
  */
@@ -73,22 +103,27 @@ class ReminderCheck(
 ) {
     private val lock = Mutex()
 
+    /** The journal as it is now. */
+    suspend fun data(): ReminderData = ReminderData(
+        entries = entries.getAll(),
+        pantry = pantry.getAll(),
+        blends = blends.getAll(),
+        ddayStart = Dates.parseIsoDate(settings.get(SettingsRepository.KEY_DDAY_START)),
+    )
+
+    /**
+     * Emits at once and again after every change to what the rules read: records, the pantry, blends, the D-day start
+     * and the reminder settings (not the log of sent reminders). Schedule-ahead plans again on each.
+     */
+    fun changes(): Flow<Unit> = combine(
+        entries.observeAll(), pantry.observeAll(), blends.observeAll(), settings.observeDdayStart(), prefs.observe(),
+    ) { e, p, b, d, s -> listOf(e, p, b, d, s) }.distinctUntilChanged().map { }
+
     /** What is due [today] under the saved settings (nothing while reminders are off), minus what was already sent. */
     suspend fun dueToday(today: LocalDate): List<Reminder> {
         val s = prefs.load()
         if (!s.enabled) return emptyList()
-        val allEntries = entries.getAll()
-        val allPantry = pantry.getAll()
-        val allBlends = blends.getAll()
-        return Reminders.due(
-            pantry = allPantry,
-            entries = allEntries,
-            inUse = ReminderInputs.inUse(allEntries, allPantry, allBlends, today),
-            ddayStart = Dates.parseIsoDate(settings.get(SettingsRepository.KEY_DDAY_START)),
-            today = today,
-            kinds = s.kinds,
-            sent = prefs.sent().keys,
-        )
+        return data().dueOn(today, s.kinds, prefs.sent().keys)
     }
 
     /**
