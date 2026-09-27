@@ -515,7 +515,7 @@ def write_queries(model, key, mode, case):
     body = {
         "system_instruction": {"parts": [{"text": query_prompt()}]},
         "contents": [{"role": "user", "parts": [{"text": ("노트: " if mode == "note" else "맛 묘사: ") + case}]}],
-        "generationConfig": {"temperature": 0, "maxOutputTokens": 200, "responseMimeType": "application/json",
+        "generationConfig": {"temperature": 0, "maxOutputTokens": 1024, "responseMimeType": "application/json",
                              "responseSchema": {"type": "OBJECT", "properties": {"queries": {"type": "ARRAY", "items": {"type": "STRING"}}},
                                                 "required": ["queries"]}},
     }
@@ -679,9 +679,16 @@ def run_retrieval(args):
 def people_line(text, personal_ids):
     """The people's-impressions line of an answer: "cited" when it cites a personal source, "empty" when it found none,
     "other" when it cites only other sources, "-" when the answer has no such line."""
-    for line in text.splitlines():
+    lines = text.splitlines()
+    for i, line in enumerate(lines):
         if line.lstrip("-* ").startswith(("사람들의 느낌", "비슷하게 느낀 사람들의 말")):
-            refs = {int(x) for x in re.findall(r"\[(\d+)\]", line)}
+            indent = len(line) - len(line.lstrip())
+            block = [line]
+            for more in lines[i + 1:]:  # its sub-items, if the answer lists them under the line
+                if more.strip() and len(more) - len(more.lstrip()) <= indent:
+                    break
+                block.append(more)
+            refs = {int(x) for x in re.findall(r"\[(\d+)\]", "\n".join(block))}
             if refs & personal_ids:
                 return "cited"
             return "empty" if not refs else "other"
