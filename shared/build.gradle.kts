@@ -10,8 +10,12 @@ plugins {
     alias(libs.plugins.room)
 }
 
+// The iOS targets: on a Mac with coffeejournal.enableIos=true (the Xcode build, iosApp/project.yml); on any host with
+// coffeejournal.iosKlibs=true, which compiles the iOS code to klibs only (Kotlin/Native cross-compilation, enabled in
+// gradle.properties) and is how Linux CI checks it (.github/workflows/ios.yml).
 val enableIos = (findProperty("coffeejournal.enableIos") as String?).toBoolean() &&
-    org.gradle.internal.os.OperatingSystem.current().isMacOsX
+    org.gradle.internal.os.OperatingSystem.current().isMacOsX ||
+    (findProperty("coffeejournal.iosKlibs") as String?).toBoolean()
 
 kotlin {
     androidTarget {
@@ -75,6 +79,19 @@ android {
 
 room {
     schemaDirectory("$projectDir/schemas")
+}
+
+// The iOS app's "출처 · 라이선스" list, generated like the Android one (gradle/third-party-notices.gradle.kts) from the
+// klibs linked into the framework, plus what Kotlin/Native and skiko carry without a POM of their own.
+if (enableIos) {
+    extra["noticesTarget"] = file("src/iosMain/kotlin/com/coffeejournal/ui/about/PlatformLibraries.ios.kt")
+    extra["noticesConfiguration"] = "iosArm64CompileKlibraries"
+    extra["noticesApp"] = "iOS app"
+    extra["noticesBundled"] = listOf(
+        listOf("org.jetbrains.kotlin", "kotlin-native-runtime", libs.versions.kotlin.get(), "Kotlin/Native runtime and standard library", "https://kotlinlang.org/", "Apache-2.0"),
+        listOf("org.jetbrains.skia", "skia", "bundled in skiko", "Skia", "https://skia.org/", "BSD-3-Clause"),
+    )
+    apply(from = rootProject.file("gradle/third-party-notices.gradle.kts"))
 }
 
 dependencies {

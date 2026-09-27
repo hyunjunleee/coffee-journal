@@ -5,7 +5,7 @@ import platform.UIKit.UIApplication
 
 /*
  * canOpenURL answers true for an nmap:// link only when Naver Map is installed and the scheme is listed under
- * LSApplicationQueriesSchemes in iosApp/iosApp/Info.plist. Not compiled in this repository's Linux CI.
+ * LSApplicationQueriesSchemes in iosApp/iosApp/Info.plist.
  */
 actual fun openMapUri(uri: String, fallbackUrl: String?) {
     val app = UIApplication.sharedApplication

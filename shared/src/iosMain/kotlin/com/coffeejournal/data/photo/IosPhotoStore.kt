@@ -21,7 +21,6 @@ import platform.posix.memcpy
 
 /**
  * iOS counterpart of AndroidPhotoStore: JPEG files under Documents/photos.
- * Not compiled in this repository's Linux CI; verify on macOS when enabling the iOS target.
  */
 @OptIn(ExperimentalForeignApi::class)
 class IosPhotoStore : PhotoStore {

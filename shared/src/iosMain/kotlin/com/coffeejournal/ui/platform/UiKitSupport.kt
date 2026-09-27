@@ -20,7 +20,6 @@ import platform.posix.memcpy
 
 /*
  * UIKit plumbing shared by the iOS actuals (pickers, document picker, share sheet).
- * Not compiled in this repository's Linux CI; verify on macOS when enabling the iOS target.
  */
 
 /** The view controller currently on top of the key window: the one a picker or share sheet is presented from. */

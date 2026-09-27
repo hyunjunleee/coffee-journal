@@ -25,7 +25,7 @@ internal object ImportMerge {
         val rows = LinkedHashMap<String, MiscItem>()
         local.forEach { rows[it.id] = it }
         val byName = HashMap<String, String>()
-        local.forEach { m -> nameKey(m)?.let { byName.putIfAbsent(it, m.id) } }
+        local.forEach { m -> nameKey(m)?.let { byName.getOrPut(it) { m.id } } }
         val touched = LinkedHashSet<String>()
         val obsolete = mutableListOf<String>()
         for (m in incoming) {
@@ -43,7 +43,7 @@ internal object ImportMerge {
             rows[row.id] = row
             touched += row.id
             if (key != null) {
-                if (m.type in registryTypes) byName.putIfAbsent(key, row.id)
+                if (m.type in registryTypes) byName.getOrPut(key) { row.id }
                 else if (byName[key] == row.id) byName.remove(key) // an equipment row is claimed by one backup item only
             }
         }

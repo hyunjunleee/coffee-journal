@@ -1,0 +1,151 @@
+# Builds the iOS app from the same shared Kotlin code as the Android app and keeps an unsigned .ipa.
+#
+#   klibs  Linux, on every push that touches the shared code or iosApp: compiles the iOS Kotlin code to klibs
+#          (Kotlin/Native cross-compilation), so a change that breaks iOS fails early and costs Linux minutes only.
+#   app    macOS, by hand (Actions › iOS › Run workflow) or on a tag v*: a macOS minute costs about ten Linux minutes
+#          in a private repository, so it does not run on every push. It links the Shared framework, generates the
+#          Xcode project (iosApp/project.yml, XcodeGen) and builds the app for iPhone without code signing.
+#   collect  keeps every .ipa in the "iOS builds" release. An unsigned .ipa is installed with a tool that signs it
+#          with the user's own Apple ID (iosApp/README.md); there is no Apple developer account in this repository.
+name: iOS
+
+on:
+  push:
+    branches: [main, 'claude/**']
+    tags: ['v*']
+    paths: ['shared/**', 'iosApp/**', 'gradle/**', 'gradle.properties', 'build.gradle.kts', 'settings.gradle.kts', '.github/workflows/ios.yml']
+  workflow_dispatch:
+    inputs:
+      tests:
+        description: Also run the shared tests on an iPhone simulator (about 10 more macOS minutes)
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+
+jobs:
+  klibs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v5
+      # also checks that the iOS app's library list (출처 · 라이선스) matches its dependencies
+      - name: Compile the iOS code
+        run: ./gradlew :shared:compileKotlinIosArm64 :shared:compileKotlinIosSimulatorArm64 :shared:checkThirdPartyNotices -Pcoffeejournal.iosKlibs=true --no-daemon
+
+  app:
+    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    needs: klibs
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v5
+
+      # gradle/verification-metadata.xml is written on Linux, so what only a Mac resolves (Kotlin/Native's macOS
+      # compiler) may be missing. This step records the checksums of what the framework build resolves; if that
+      # changed the file, the job stops before anything is built for release and keeps the difference as an artifact,
+      # to be checked (every entry must come from Maven Central, Google or JetBrains) and committed.
+      - name: Check the macOS-only dependency checksums
+        run: |
+          ./gradlew --write-verification-metadata sha256 :shared:linkReleaseFrameworkIosArm64 -Pcoffeejournal.enableIos=true --no-daemon
+          if ! git diff --quiet -- gradle/verification-metadata.xml; then
+            mkdir -p verification
+            git diff -- gradle/verification-metadata.xml > verification/verification-metadata.diff
+            cp gradle/verification-metadata.xml verification/
+            echo "::error::gradle/verification-metadata.xml is missing entries only a Mac resolves; see the verification artifact."
+            exit 1
+          fi
+
+      - name: Keep the missing checksums
+        if: failure() && hashFiles('verification/verification-metadata.diff') != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: verification
+          path: verification/
+
+      - name: Shared tests on an iPhone simulator
+        if: inputs.tests
+        run: ./gradlew :shared:iosSimulatorArm64Test -Pcoffeejournal.enableIos=true --no-daemon
+
+      - name: Generate the Xcode project
+        run: |
+          command -v xcodegen > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+          xcodegen --version
+          xcodebuild -version
+          cd iosApp && xcodegen generate
+
+      # The version is the Android app's: the same version name, and the build number computed exactly as
+      # androidApp/build.gradle.kts computes the version code (minutes from 2026-01-01 to the commit time).
+      - name: Build the app for iPhone (unsigned)
+        run: |
+          set -o pipefail
+          code=$(( ($(git log -1 --format=%ct) - 1767225600) / 60 ))
+          name=$(sed -n 's/.*versionName = "\([0-9.]*\) .*/\1/p' androidApp/build.gradle.kts)
+          echo "IPA_NAME=coffee-journal-${code}-$(git rev-parse --short HEAD)-unsigned.ipa" >> "$GITHUB_ENV"
+          mkdir -p build
+          xcodebuild -project iosApp/CoffeeJournal.xcodeproj -scheme CoffeeJournal -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build/ios \
+            MARKETING_VERSION="$name" CURRENT_PROJECT_VERSION="$code" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build > build/xcodebuild.log 2>&1 || { grep -E "error|FAILED" build/xcodebuild.log | head -50; exit 1; }
+          tail -3 build/xcodebuild.log
+
+      - name: Package the .ipa
+        run: |
+          mkdir -p dist/Payload
+          cp -R build/ios/Build/Products/Release-iphoneos/CoffeeJournal.app dist/Payload/
+          (cd dist && zip -qry "$IPA_NAME" Payload && rm -rf Payload)
+          ls -l dist
+
+      - name: Keep the Xcode log
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: xcodebuild-log
+          path: build/xcodebuild.log
+          if-no-files-found: ignore
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: coffee-journal-ipa
+          path: dist/*.ipa
+          if-no-files-found: error
+
+  collect:
+    needs: app
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: ios-builds-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: coffee-journal-ipa
+          path: dist
+      - name: Add the .ipa to the "iOS builds" release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view ios-builds --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            gh release create ios-builds --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --latest=false \
+              --title "iOS builds" \
+              --notes "iOS 빌드마다 서명하지 않은 .ipa가 이 한 곳에 쌓입니다. 파일 이름은 coffee-journal-<빌드 번호>-<커밋>-unsigned.ipa이고, 빌드 번호가 클수록 최신입니다. 서명이 없어 그대로는 설치되지 않고, Sideloadly나 AltStore 같은 도구로 본인 Apple ID로 서명해 설치합니다(iosApp/README.md)."
+          fi
+          gh release upload ios-builds dist/*.ipa --repo "$GITHUB_REPOSITORY" --clobber

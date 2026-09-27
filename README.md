@@ -7,13 +7,13 @@
 - `docs/android-app-design.md` — 앱 설계서(스택 결정, 모듈, DB 스키마, 화면, 디자인 토큰, 규칙, 마일스톤)
 - `docs/dev/implementation-notes.md` — 구현 규약(빌드, 패키지 소유, API, 디자인)
 - `docs/feature-plan-v2.md` — 2차 기능 설계(SGIS 한국 지도·OpenStreetMap 상세 지도·지도 앱 링크, 추출 타이머, 비교표·계산기, CVA 양식, 통계, 알림·위젯, 서명 키·CI)
-- `iosApp/README.md` — iOS 호스트 앱 준비 절차
+- `iosApp/README.md` — iOS 앱 빌드(CI·Mac)와 앱스토어 없이 아이폰에 설치하는 방법
 
 ## 구조
 ```
 shared/      KMP 공유 모듈: domain(model·rules·reference) / data(db·repo·backup·photo) / ui(theme·nav·features) / di
 androidApp/  Android 앱 (MainActivity → shared App()), JVM 스크린샷 테스트(Robolectric + Roborazzi)
-iosApp/      SwiftUI 호스트 스켈레톤 (macOS에서 coffeejournal.enableIos=true 로 활성화)
+iosApp/      iOS 앱: SwiftUI 호스트 + XcodeGen 프로젝트(project.yml). CI(ios.yml)가 서명 없는 .ipa를 "iOS builds" 릴리스에 올림
 ```
 
 ## 빌드·테스트
@@ -61,7 +61,7 @@ export ANDROID_HOME=/opt/android-sdk          # Android SDK 위치 (local.proper
 - 방식(설정 › AI 노트 도우미): **Gemini 무료 + Tavily**(기본, 두 서비스 모두 무료 등급 있음; Gemini가 노트나 맛 묘사를 짧은 영어 검색어 하나로 바꾸면 Tavily가 찾습니다. 설정의 "검색"에서 기본(1크레딧, 더 빠름) / 정밀(2크레딧, 그 향미를 다루는 페이지와 긴 인용 조각) / 정밀+기본(3크레딧, 같은 검색어를 두 방식으로 찾아 더 여러 사이트)을 고르고, "사람들 의견"을 켜면(+1크레딧) 네이버 블로그·티스토리·브런치 후기를 한국어로 한 번 더 찾아 "사람들의 느낌"을 개인 의견으로 덧붙입니다. 기본값은 정밀 + 사람들 의견으로 질문 한 번에 3크레딧, 무료 월 1,000크레딧이면 약 330번입니다), **Gemini + Google 검색**(결제를 켠 Google 프로젝트), **GPT (OpenAI)**, **Claude (Anthropic)**(유료). 모델은 추천 칩에서 고르거나 직접 적습니다.
 - 앱·저장소·CI 빌드에는 어떤 키도 없습니다. 각자 자기 키를 받아 설정에 붙여 넣습니다. 앱 안의 "키 받는 방법"에 서비스별 순서와 링크가 있고, "키 확인"은 가장 싼 요청 한 번으로 키를 확인합니다. 키는 Android Keystore의 내보낼 수 없는 키로 암호화해 이 휴대폰에만(`noBackupFilesDir`) 저장되고, JSON 백업·클라우드 백업에 들어가지 않습니다.
 - 방식마다 처음 물을 때 무엇을 어디로 보내는지 확인합니다. 보내는 것은 질문 글(노트 이름이나 맛 묘사)뿐이고 기록·원두·장소·사진은 보내지 않습니다. Gemini 무료 등급에서는 보낸 질문과 받은 답이 Google의 제품 개선에 쓰이고 사람이 읽어 볼 수 있습니다. 답은 화면을 닫으면 남지 않습니다.
-- 새 라이브러리는 없습니다(HTTP는 Android의 `HttpURLConnection`). 설계와 검증 내용은 `docs/ai-note-helper-plan.md` 12장, 프롬프트 평가 도구는 `tools/ai-eval/`에 있습니다. iOS는 아직 연결하지 않았습니다.
+- 새 라이브러리는 없습니다(HTTP는 Android의 `HttpURLConnection`, iOS의 `NSURLSession`). iOS에서는 키를 Keychain에 이 기기 전용으로 저장합니다. 설계와 검증 내용은 `docs/ai-note-helper-plan.md` 12장, 프롬프트 평가 도구는 `tools/ai-eval/`에 있습니다.
 
 ### 출처 · 라이선스
 - 설정 › 정보의 "출처 · 오픈소스 라이선스"에서 데이터·디자인 출처(웹 템플릿, SCA·WCR 플레이버 휠, SCA 커핑 폼(2004·CVA SCA-103/104), SCA 추출 조절 차트, 카페 레시피, Natural Earth, 한국 지도(통계청 SGIS 경계 · vuski/admdongkor), 상세 지도(OpenStreetMap ODbL 1.0 · OpenMapTiles · OpenFreeMap · MapLibre, MapLibre Native가 함께 넣은 라이브러리들의 고지 원문 포함), AI 노트 도우미가 부르는 서비스(Gemini API·Tavily·OpenAI·Anthropic의 약관·개인정보 처리방침 링크), Lucide·Feather 아이콘)와 APK에 들어간 오픈소스 라이브러리 전체를 라이선스별로 보여줍니다.

@@ -7,8 +7,6 @@ import platform.UIKit.UIApplication
 import platform.UIKit.UIImpactFeedbackGenerator
 import platform.UIKit.UIImpactFeedbackStyle
 
-/* Not compiled in this repository's Linux CI; verify on macOS when enabling the iOS target. */
-
 @Composable
 actual fun KeepScreenOn(enabled: Boolean) {
     DisposableEffect(enabled) {

@@ -5,7 +5,7 @@ package com.coffeejournal.ui.notify
  * ReminderPrefs), so wiring them here means: schedule a daily UNCalendarNotificationTrigger or a BGAppRefreshTask
  * that runs ReminderCheck, post through UNUserNotificationCenter, and ask for authorization in
  * rememberNotificationPermissionRequest. Until then nothing is scheduled, and 알림 설정 keeps its switch off with
- * the "알림 권한" hint because canNotify() is false. Not compiled in this repository's Linux CI.
+ * the "알림 권한" hint because canNotify() is false.
  */
 class IosReminderPlatform : ReminderPlatform {
     override suspend fun schedule(time: ReminderTime) {}

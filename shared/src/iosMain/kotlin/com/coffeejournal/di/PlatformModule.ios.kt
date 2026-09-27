@@ -18,7 +18,7 @@ actual val platformModule: Module = module {
     single<AppDatabase> { iosDatabaseBuilder().buildAppDatabase() }
     single<PhotoStore> { IosPhotoStore() }
     single<ReminderPlatform> { IosReminderPlatform() }
-    // AI 노트 도우미: not connected on iOS yet (Keychain and NSURLSession would go here)
+    // AI 노트 도우미: HTTP on NSURLSession, keys in the Keychain (this device only)
     single<AiHttp> { IosAiHttp() }
     single<SecretStore> { IosSecretStore() }
 }

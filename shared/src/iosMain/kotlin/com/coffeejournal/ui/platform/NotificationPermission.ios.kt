@@ -7,7 +7,7 @@ import androidx.compose.runtime.rememberUpdatedState
 /*
  * Reminders are not delivered on iOS yet (IosReminderPlatform), so there is nothing to ask for: the answer is "no",
  * and 알림 설정 keeps its switch off with the hint. Wiring them means asking
- * UNUserNotificationCenter.requestAuthorizationWithOptions here. Not compiled in this repository's Linux CI.
+ * UNUserNotificationCenter.requestAuthorizationWithOptions here.
  */
 @Composable
 actual fun rememberNotificationPermissionRequest(onResult: (granted: Boolean) -> Unit): () -> Unit {

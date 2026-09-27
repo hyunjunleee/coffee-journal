@@ -31,7 +31,6 @@ import kotlin.coroutines.resume
 
 /*
  * iOS photo picker (PHPickerViewController, images only), camera (UIImagePickerController) and URL opening.
- * Not compiled in this repository's Linux CI; verify on macOS when enabling the iOS target.
  */
 
 /** Uniform type identifier every picked image conforms to (HEIC, JPEG, PNG ...). */

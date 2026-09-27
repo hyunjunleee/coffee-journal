@@ -8,7 +8,7 @@ import androidx.compose.ui.Modifier
  * library; iOS: not connected yet). Tests bind a fake, so no test ever reaches the network.
  */
 interface AiHttp {
-    /** False where the platform cannot call the services yet (iOS). */
+    /** False where the platform cannot call the services (the screens then say so instead). */
     val supported: Boolean get() = true
 
     /**
@@ -32,7 +32,8 @@ class AiConnectionException(message: String, cause: Throwable? = null) : Excepti
 /**
  * Where the user's API keys are kept, bound in Koin by the platform module. Android: encrypted with a non-exportable
  * AES-256/GCM key in the Android Keystore, the ciphertext under noBackupFilesDir (never in the database, a JSON backup,
- * a cloud backup or a device transfer). iOS: not supported yet ([supported] false).
+ * a cloud backup or a device transfer). iOS: the Keychain, readable on this device only after its first unlock (never
+ * in iCloud Keychain or a backup restored to another device).
  */
 interface SecretStore {
     val supported: Boolean

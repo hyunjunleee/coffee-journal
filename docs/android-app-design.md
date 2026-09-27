@@ -22,8 +22,8 @@
 
 | 구성 요소 | 버전 | 비고 |
 |---|---|---|
-| Kotlin | 2.2.21 | K2 컴파일러 |
-| Compose Multiplatform | 1.9.3 (Material3 1.9.0) | Kotlin 2.2.x 계열 |
+| Kotlin | 2.3.20 | K2 컴파일러. Koin 4.2의 iOS 라이브러리가 2.3.20으로 빌드되어 맞춤(2.2 컴파일러는 새 klib ABI를 읽지 못함) |
+| Compose Multiplatform | 1.9.3 (Material3 1.9.0) | Kotlin 2.2 이상 |
 | Android Gradle Plugin / Gradle | 8.13.2 / 8.14.3 | 환경에 설치된 Gradle 사용 |
 | KSP | 2.3.x (KSP2) | Room 컴파일러 |
 | Room (KMP) + sqlite-bundled | 2.8.5 / 2.6.x | `room-gradle-plugin`으로 스키마 내보내기 |
