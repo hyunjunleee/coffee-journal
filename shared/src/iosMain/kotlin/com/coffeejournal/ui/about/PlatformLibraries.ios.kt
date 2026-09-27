@@ -2,7 +2,7 @@
 // (gradle/third-party-notices.gradle.kts). Do not edit by hand.
 package com.coffeejournal.ui.about
 
-/** Every library in the iOS app (69), with the licenses its POM declares. */
+/** Every library in the iOS app (76), with the licenses its POM declares. */
 actual val platformLibraries: List<Library> = listOf(
     Library("androidx.annotation", "annotation-iosarm64", "1.9.1", "Annotation", "https://developer.android.com/jetpack/androidx/releases/annotation#1.9.1", listOf("Apache-2.0")),
     Library("androidx.collection", "collection-iosarm64", "1.5.0", "collections", "https://developer.android.com/jetpack/androidx/releases/collection#1.5.0", listOf("Apache-2.0")),
@@ -23,6 +23,8 @@ actual val platformLibraries: List<Library> = listOf(
     Library("androidx.sqlite", "sqlite-bundled-iosarm64", "2.6.2", "SQLite Bundled Integration", "https://developer.android.com/jetpack/androidx/releases/sqlite#2.6.2", listOf("Apache-2.0")),
     Library("androidx.sqlite", "sqlite-framework-iosarm64", "2.6.2", "SQLite Framework Integration", "https://developer.android.com/jetpack/androidx/releases/sqlite#2.6.2", listOf("Apache-2.0")),
     Library("androidx.sqlite", "sqlite-iosarm64", "2.6.2", "SQLite", "https://developer.android.com/jetpack/androidx/releases/sqlite#2.6.2", listOf("Apache-2.0")),
+    Library("co.touchlab", "kermit-core-iosarm64", "2.0.8", "Kermit", "https://github.com/touchlab/Kermit", listOf("Apache-2.0")),
+    Library("co.touchlab", "kermit-iosarm64", "2.0.8", "Kermit", "https://github.com/touchlab/Kermit", listOf("Apache-2.0")),
     Library("co.touchlab", "stately-concurrency-iosarm64", "2.1.0", "Stately", "https://github.com/touchlab/Stately", listOf("Apache-2.0")),
     Library("co.touchlab", "stately-concurrent-collections-iosarm64", "2.1.0", "Stately", "https://github.com/touchlab/Stately", listOf("Apache-2.0")),
     Library("co.touchlab", "stately-strict-iosarm64", "2.1.0", "Stately", "https://github.com/touchlab/Stately", listOf("Apache-2.0")),
@@ -35,6 +37,7 @@ actual val platformLibraries: List<Library> = listOf(
     Library("io.insert-koin", "koin-compose-viewmodel-iosarm64", "4.2.2", "Koin", "https://insert-koin.io/", listOf("Apache-2.0")),
     Library("io.insert-koin", "koin-core-iosarm64", "4.2.2", "Koin", "https://insert-koin.io/", listOf("Apache-2.0")),
     Library("io.insert-koin", "koin-core-viewmodel-iosarm64", "4.2.2", "Koin", "https://insert-koin.io/", listOf("Apache-2.0")),
+    Library("org.jetbrains", "annotations-iosArm64", "26.0.2-1", "JetBrains Java Annotations", "https://github.com/JetBrains/java-annotations", listOf("Apache-2.0")),
     Library("org.jetbrains.androidx.lifecycle", "lifecycle-common", "2.9.6", "Lifecycle-Common", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.androidx.lifecycle", "lifecycle-runtime", "2.9.6", "Lifecycle Runtime", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.androidx.lifecycle", "lifecycle-runtime-compose-uikitarm64", "2.9.6", "Lifecycle Runtime Compose", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
@@ -50,6 +53,7 @@ actual val platformLibraries: List<Library> = listOf(
     Library("org.jetbrains.compose.animation", "animation-uikitarm64", "1.10.2", "Compose Animation", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.annotation-internal", "annotation", "1.10.2", "Annotation", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.collection-internal", "collection", "1.10.2", "collections", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
+    Library("org.jetbrains.compose.components", "components-resources-iosArm64", "1.9.2", "Resources for Compose JB", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.foundation", "foundation-layout-uikitarm64", "1.10.2", "Compose Layouts", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.foundation", "foundation-uikitarm64", "1.10.2", "Compose Foundation", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
     Library("org.jetbrains.compose.material", "material-ripple-uikitarm64", "1.9.1", "Compose Material Ripple", "https://github.com/JetBrains/compose-jb", listOf("Apache-2.0")),
@@ -71,6 +75,9 @@ actual val platformLibraries: List<Library> = listOf(
     Library("org.jetbrains.kotlinx", "kotlinx-serialization-core-iosarm64", "1.9.0", "kotlinx-serialization-core", "https://github.com/Kotlin/kotlinx.serialization", listOf("Apache-2.0")),
     Library("org.jetbrains.kotlinx", "kotlinx-serialization-json-iosarm64", "1.9.0", "kotlinx-serialization-json", "https://github.com/Kotlin/kotlinx.serialization", listOf("Apache-2.0")),
     Library("org.jetbrains.skiko", "skiko-iosarm64", "0.9.37.4", "Skiko IosArm64", "https://www.github.com/JetBrains/skiko", listOf("Apache-2.0")),
+    Library("org.maplibre.compose", "maplibre-compose-iosarm64", "0.12.1", "MapLibre Compose", "https://github.com/maplibre/maplibre-compose", listOf("BSD-3-Clause")),
+    Library("org.maplibre.spatialk", "geojson-iosarm64", "0.6.0", "Spatial K GeoJSON", "https://maplibre.org/spatial-k/", listOf("MIT")),
     Library("org.jetbrains.kotlin", "kotlin-native-runtime", "2.3.20", "Kotlin/Native runtime and standard library", "https://kotlinlang.org/", listOf("Apache-2.0")),
     Library("org.jetbrains.skia", "skia", "bundled in skiko", "Skia", "https://skia.org/", listOf("BSD-3-Clause")),
+    Library("github.com/maplibre/maplibre-gl-native-distribution", "MapLibre", "6.17.1", "MapLibre Native iOS", "https://github.com/maplibre/maplibre-native", listOf("BSD-2-Clause")),
 )

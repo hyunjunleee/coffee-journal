@@ -5,6 +5,14 @@ options:
   deploymentTarget:
     iOS: "16.0"
   createIntermediateGroups: true
+# MapLibre Native iOS for the detail map, from MapLibre's official Swift package (a prebuilt dynamic MapLibre.xcframework,
+# checksum pinned in the package's Package.swift). The version is the one maplibre-compose was built against
+# (gradle/libs.versions.toml maplibreIos; the Gradle build checks the two agree): the Shared framework's references to
+# MapLibre are resolved when the app links it, and Xcode embeds the framework in the app.
+packages:
+  MapLibre:
+    url: https://github.com/maplibre/maplibre-gl-native-distribution
+    exactVersion: 6.17.1
 settings:
   base:
     # CI passes the Android app's version name and code (androidApp/build.gradle.kts) so both builds carry the same
@@ -30,6 +38,14 @@ targets:
         OTHER_LDFLAGS: ["$(inherited)", "-framework", "Shared"]
         # the Gradle build below reads and writes outside the sandbox Xcode gives run scripts
         ENABLE_USER_SCRIPT_SANDBOXING: NO
+      configs:
+        # only a debug Shared framework needs the stand-in MLNScaleBar (iosApp/MLNScaleBarStub.m)
+        Release:
+          EXCLUDED_SOURCE_FILE_NAMES: MLNScaleBarStub.m
+    dependencies:
+      # the Shared framework is static: what its Kotlin code calls in MapLibre links here
+      - package: MapLibre
+        product: MapLibre
     preBuildScripts:
       - name: Build the shared Kotlin framework
         basedOnDependencyAnalysis: false

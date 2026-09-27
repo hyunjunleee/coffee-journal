@@ -5,8 +5,11 @@
 #   app    macOS, by hand (Actions › iOS › Run workflow) or on a tag v*: a macOS minute costs about ten Linux minutes
 #          in a private repository, so it does not run on every push. It links the Shared framework, generates the
 #          Xcode project (iosApp/project.yml, XcodeGen) and builds the app for iPhone without code signing.
-#   collect  keeps every .ipa in the "iOS builds" release. An unsigned .ipa is installed with a tool that signs it
-#          with the user's own Apple ID (iosApp/README.md); there is no Apple developer account in this repository.
+#   tests  macOS, by hand (tests on): the shared tests on an iPhone simulator, then the app built in Debug (the Mac
+#          build iosApp/README.md describes) and started on the simulator, with a screenshot kept.
+#   collect  keeps every .ipa in the "iOS builds" release, and on a tag v* attaches it to that tag's release beside the
+#          APK (android.yml). An unsigned .ipa is installed with a tool that signs it with the user's own Apple ID
+#          (iosApp/README.md); there is no Apple developer account in this repository.
 name: iOS
 
 on:
@@ -16,8 +19,12 @@ on:
     paths: ['shared/**', 'iosApp/**', 'gradle/**', 'gradle.properties', 'build.gradle.kts', 'settings.gradle.kts', '.github/workflows/ios.yml']
   workflow_dispatch:
     inputs:
+      app:
+        description: Build the app (.ipa); turn off to run only the simulator tests
+        type: boolean
+        default: true
       tests:
-        description: Also run the shared tests on an iPhone simulator (about 10 more macOS minutes)
+        description: Also run the shared tests on an iPhone simulator and start a Debug build of the app there, in a job of its own beside the app build (about 25 more macOS minutes)
         type: boolean
         default: false
 
@@ -44,7 +51,7 @@ jobs:
         run: ./gradlew :shared:compileKotlinIosArm64 :shared:compileKotlinIosSimulatorArm64 :shared:checkThirdPartyNotices -Pcoffeejournal.iosKlibs=true --no-daemon
 
   app:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'workflow_dispatch' && inputs.app) || startsWith(github.ref, 'refs/tags/v')
     needs: klibs
     runs-on: macos-26
     timeout-minutes: 75
@@ -87,10 +94,6 @@ jobs:
           name: verification
           path: verification/
 
-      - name: Shared tests on an iPhone simulator
-        if: inputs.tests
-        run: ./gradlew :shared:iosSimulatorArm64Test -Pcoffeejournal.enableIos=true --no-daemon
-
       - name: Generate the Xcode project
         run: |
           command -v xcodegen > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
@@ -114,8 +117,11 @@ jobs:
             build > build/xcodebuild.log 2>&1 || { grep -E "error|FAILED" build/xcodebuild.log | head -50; exit 1; }
           tail -3 build/xcodebuild.log
 
+      # the detail map's MapLibre framework comes from its Swift package (iosApp/project.yml) and must be in the app
       - name: Package the .ipa
         run: |
+          test -f build/ios/Build/Products/Release-iphoneos/CoffeeJournal.app/Frameworks/MapLibre.framework/MapLibre \
+            || { echo "::error::MapLibre.framework is not embedded in the app"; exit 1; }
           mkdir -p dist/Payload
           cp -R build/ios/Build/Products/Release-iphoneos/CoffeeJournal.app dist/Payload/
           (cd dist && zip -qry "$IPA_NAME" Payload && rm -rf Payload)
@@ -134,6 +140,86 @@ jobs:
           name: coffee-journal-ipa
           path: dist/*.ipa
           if-no-files-found: error
+
+  # The shared tests (commonTest and iosTest) on an iPhone simulator, and the app in Debug started there, beside the app
+  # build: a failure here does not hold back the .ipa.
+  tests:
+    if: github.event_name == 'workflow_dispatch' && inputs.tests
+    needs: klibs
+    runs-on: macos-26
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v5
+      - name: More memory for Kotlin/Native
+        run: |
+          mkdir -p "${GRADLE_USER_HOME:-$HOME/.gradle}"
+          echo "org.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" >> "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties"
+
+      # The test executable links MapLibre as the app does, from the release the Swift package in iosApp/project.yml
+      # pins: its URL and checksum are read from that package's Package.swift.
+      - name: Shared tests on an iPhone simulator
+        run: |
+          v=$(sed -n 's/^ *exactVersion: *//p' iosApp/project.yml)
+          pkg=$(curl -fsSL "https://raw.githubusercontent.com/maplibre/maplibre-gl-native-distribution/$v/Package.swift")
+          url=$(echo "$pkg" | sed -n 's/.*url: *"\([^"]*\.zip\)".*/\1/p')
+          sum=$(echo "$pkg" | sed -n 's/.*checksum: *"\([0-9a-f]*\)".*/\1/p')
+          mkdir -p build/maplibre
+          curl -fsSL -o build/maplibre/MapLibre.zip "$url"
+          echo "$sum  build/maplibre/MapLibre.zip" | shasum -a 256 -c
+          unzip -q build/maplibre/MapLibre.zip -d build/maplibre
+          ./gradlew :shared:iosSimulatorArm64Test -Pcoffeejournal.enableIos=true --no-daemon \
+            -Pcoffeejournal.maplibreFrameworkDir="$PWD/build/maplibre/MapLibre.xcframework/ios-arm64_x86_64-simulator"
+
+      - name: Keep the test reports
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ios-test-reports
+          path: shared/build/reports/tests/
+          if-no-files-found: ignore
+
+      # The Mac build iosApp/README.md describes is a Debug build, and a debug framework keeps more code than the release
+      # framework the .ipa is linked from; this builds it for the simulator (the Swift package's MapLibre included).
+      - name: Build the app in Debug for the simulator
+        if: ${{ !cancelled() }}
+        run: |
+          set -o pipefail
+          command -v xcodegen > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
+          (cd iosApp && xcodegen generate)
+          mkdir -p build
+          xcodebuild -project iosApp/CoffeeJournal.xcodeproj -scheme CoffeeJournal -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath build/ios-debug \
+            ARCHS=arm64 CODE_SIGNING_ALLOWED=NO \
+            build > build/xcodebuild-debug.log 2>&1 || { grep -E "error|FAILED" build/xcodebuild-debug.log | head -50; exit 1; }
+          tail -3 build/xcodebuild-debug.log
+
+      # installs it on an iPhone simulator, starts it and checks it is still running 30 seconds later
+      - name: Start the app on a simulator
+        run: |
+          udid=$(xcrun simctl list devices available -j | python3 -c 'import json, sys; print(next(d["udid"] for runtime, devices in json.load(sys.stdin)["devices"].items() if "iOS" in runtime for d in devices if d["name"].startswith("iPhone")))')
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b > /dev/null
+          xcrun simctl install "$udid" build/ios-debug/Build/Products/Debug-iphonesimulator/CoffeeJournal.app
+          xcrun simctl launch "$udid" com.coffeejournal.app
+          sleep 30
+          xcrun simctl io "$udid" screenshot build/simulator-launch.png
+          xcrun simctl spawn "$udid" launchctl list | grep -q "UIKitApplication:com.coffeejournal.app" \
+            || { echo "::error::The app is not running 30 seconds after it was started."; exit 1; }
+
+      - name: Keep the simulator screenshot and the Xcode log
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v6
+        with:
+          name: ios-debug-app
+          path: |
+            build/simulator-launch.png
+            build/xcodebuild-debug.log
+          if-no-files-found: ignore
 
   collect:
     needs: app
@@ -158,3 +244,18 @@ jobs:
               --notes "iOS 빌드마다 서명하지 않은 .ipa가 이 한 곳에 쌓입니다. 파일 이름은 coffee-journal-<빌드 번호>-<커밋>-unsigned.ipa이고, 빌드 번호가 클수록 최신입니다. 서명이 없어 그대로는 설치되지 않고, Sideloadly나 AltStore 같은 도구로 본인 Apple ID로 서명해 설치합니다(iosApp/README.md)."
           fi
           gh release upload ios-builds dist/*.ipa --repo "$GITHUB_REPOSITORY" --clobber
+
+      # The release of a tag v* holds the APK (android.yml) and the .ipa; whichever workflow gets there first creates it.
+      - name: Attach the .ipa to the tag's release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOTES: >-
+            안드로이드: coffee-journal-<버전 코드>-<커밋>.apk를 받아 설치합니다. 같은 키로 서명되어 앞 버전 위에 덮어 설치됩니다.
+            아이폰: coffee-journal-<빌드 번호>-<커밋>-unsigned.ipa는 서명이 없어 그대로는 설치되지 않고, Sideloadly · AltStore ·
+            SideStore로 본인 Apple ID로 서명해 설치합니다(iosApp/README.md). .ipa는 macOS 빌드가 끝난 뒤(약 40분) 붙습니다.
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes "$NOTES" \
+            || gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null
+          gh release upload "$GITHUB_REF_NAME" dist/*.ipa --repo "$GITHUB_REPOSITORY" --clobber

@@ -345,6 +345,12 @@ class DetailMapControllerTest {
     @Test fun unavailableRenderer_hidesTheButtons() {
         assertFalse(UnavailableDetailMapRenderer.isSupported)
     }
+
+    @Test fun platformRenderer_showsTheButtons_onAndroidAndIos() {
+        // MapLibre Native on both platforms; the privacy note names the system that goes in its User-Agent
+        assertTrue(platformDetailMapRenderer().isSupported)
+        assertTrue("앱·$detailMapUserAgentOs 버전(User-Agent)" in DetailMapPrivacy.NOTE)
+    }
 }
 
 class DetailMapCreditTest {

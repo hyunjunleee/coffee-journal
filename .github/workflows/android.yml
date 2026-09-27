@@ -7,7 +7,7 @@
 #   COFFEEJOURNAL_KEY_PASSWORD       key password (same as the keystore password for a PKCS12 keystore)
 # Without them the tests still run and the release APK is built unsigned (not installable), with a warning.
 # Every signed APK from a push is also collected in the "APK builds" release (one place, no expiry);
-# a tag v* attaches the signed APK to its own GitHub Release.
+# a tag v* attaches the signed APK to its own GitHub Release, which the iOS workflow gives the .ipa too.
 name: Android
 
 on:
@@ -149,7 +149,16 @@ jobs:
         with:
           name: coffee-journal-apk
           path: dist
+      # The release of a tag v* holds the APK and the .ipa (ios.yml); whichever workflow gets there first creates it.
       - name: Attach the APK to a GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/*.apk --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --generate-notes
+          NOTES: >-
+            안드로이드: coffee-journal-<버전 코드>-<커밋>.apk를 받아 설치합니다. 같은 키로 서명되어 앞 버전 위에 덮어 설치됩니다.
+            아이폰: coffee-journal-<빌드 번호>-<커밋>-unsigned.ipa는 서명이 없어 그대로는 설치되지 않고, Sideloadly · AltStore ·
+            SideStore로 본인 Apple ID로 서명해 설치합니다(iosApp/README.md). .ipa는 macOS 빌드가 끝난 뒤(약 40분) 붙습니다.
+        run: |
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag --title "$GITHUB_REF_NAME" --notes "$NOTES" \
+            || gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" > /dev/null
+          gh release upload "$GITHUB_REF_NAME" dist/*.apk --repo "$GITHUB_REPOSITORY" --clobber

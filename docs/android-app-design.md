@@ -33,7 +33,7 @@
 | Coil 3 | 3.6.x | 사진 표시 (KMP) |
 | WorkManager / Jetpack Glance | 2.12.0 / 1.2.0 | 하루 한 번 알림 점검, 홈 화면 위젯 (Android 전용, 2차 §3) |
 | minSdk / targetSdk / compileSdk | 26 / 35 / 35 | Android 8.0+ |
-| MapLibre Compose / MapLibre Native Android | 0.12.1 / 12.0.1 | 상세 지도(2차 §1.7), Android 전용 의존성 |
+| MapLibre Compose / MapLibre Native Android / MapLibre Native iOS | 0.12.1 / 12.0.1 / 6.17.1 | 상세 지도(2차 §1.7). MapLibre Compose는 공용(`commonMain`) 의존성, iOS의 MapLibre 프레임워크는 Gradle이 아니라 Xcode 프로젝트가 공식 Swift 패키지로 링크(`iosApp/project.yml`) |
 
 정확한 조합은 스캐폴드 빌드(`:androidApp:assembleDebug`)로 검증 후 `gradle/libs.versions.toml`에 고정한다.
 
@@ -104,7 +104,7 @@ coffee-journal/
 │     │  ├─ ui/theme/            # 색·타이포·형태 토큰, 컴포넌트
 │     │  ├─ ui/nav/              # AppNav, Routes(type-safe), BottomBar
 │     │  ├─ ui/extract/ ui/form/ ui/calendar/ ui/bean/ ui/misc/ ui/backup/  # 화면 + ViewModel
-│     │  ├─ ui/notify/           # 알림 설정 절, 하루 점검(ReminderCheck), 위젯 데이터(HomeWidgetFeed) — 2차 §3
+│     │  ├─ ui/notify/           # 알림 설정 절, 하루 점검(ReminderCheck), iOS 미리 예약(ReminderScheduleAhead), 위젯 데이터(HomeWidgetFeed) — 2차 §3
 │     │  ├─ ui/settings/         # 설정 페이지(화면·알림·AI·정보), 화면 설정 저장(DisplayPrefs)
 │     │  ├─ ui/ai/               # AI 노트 도우미: 제공자별 요청·응답(Gemini·Tavily·OpenAI·Claude), 출처 번호·원문 확인, 설정 절, 답 화면
 │     │  └─ di/                  # Koin 모듈
@@ -129,13 +129,13 @@ coffee-journal/
 | `ImageResizer` | Bitmap 디코드·EXIF 회전·긴 변 1280px·JPEG 82 | UIImage |
 | `BackupFileIo` | SAF `CreateDocument`/`OpenDocument` + 공유 시트 | UIDocumentPicker / ShareSheet |
 | `Clock/Locale` | kotlinx-datetime 공통 | 공통 |
-| `ReminderPlatform`(platformModule) | WorkManager 고유 주기 작업(24시간, 첫 실행 = 정한 시각) + 종류별 알림 채널, 알림을 누르면 보관함/홈 | 미연결 스텁(`IosReminderPlatform`, 알림 불가로 보고) — UNUserNotificationCenter·BGTaskScheduler 자리 |
-| `rememberNotificationPermissionRequest` | Android 13+ `POST_NOTIFICATIONS` 요청(그 전은 앱 알림 켜짐 여부) | 항상 거절로 응답(미연결) |
+| `ReminderPlatform`(platformModule) | WorkManager 고유 주기 작업(24시간, 첫 실행 = 정한 시각) + 종류별 알림 채널, 알림을 누르면 보관함/홈 | 미리 예약(`IosReminderPlatform` + 공통 `ReminderScheduleAhead`): 다음 30번의 알림 시각에 보낼 알림을 `UNCalendarNotificationTrigger`로 예약(가까운 것부터 최대 64개), 앱 시작·포그라운드 복귀·데이터/설정 변경 때 다시 계산, 시각이 지난 것은 보낸 것으로 기록. 권한 상태는 캐시(`canNotifyChanges`로 화면 갱신), 앱을 쓰는 중에도 배너, 누르면 앱이 열림 |
+| `rememberNotificationPermissionRequest` | Android 13+ `POST_NOTIFICATIONS` 요청(그 전은 앱 알림 켜짐 여부) | `requestAuthorizationWithOptions`(알림·소리·배지), 결과는 캐시를 갱신한 뒤 메인 스레드로 |
 | `openMapUri(uri, fallback)` | 암시적 VIEW 인텐트(BROWSABLE), `ActivityNotFoundException`이면 웹 대체 URL | `canOpenURL`(Info.plist `LSApplicationQueriesSchemes`: nmap) 후 `openURL`, 안 되면 웹 대체 URL |
 | `AiHttp`(platformModule) | `AndroidAiHttp`: `HttpURLConnection`(연결 15초·읽기 120초, IO 디스패처, 4xx/5xx는 오류 스트림) | 미연결(`IosAiHttp`, 지원 안 함으로 보고) — NSURLSession 자리 |
 | `SecretStore`(platformModule) | `AndroidSecretStore`: Android Keystore의 내보낼 수 없는 AES-256/GCM 키(`coffeejournal.ai`)로 암호화한 파일을 `noBackupFilesDir/ai-keys/`에 | 미연결(`IosSecretStore`, 저장 불가로 보고) — Keychain 자리 |
 | `normalizeNfc` · `SearchSuggestions` | `java.text.Normalizer` · WebView(`loadDataWithBaseURL`, 스크립트 끔, 누르면 브라우저) | `precomposedStringWithCanonicalMapping` · 표시 없음 |
-| `DetailMapRenderer`(Koin) | `MapLibreDetailMapRenderer`: MapLibre Compose + MapLibre Native, `ConnectivityManager`로 온라인 확인, 네이티브 라이브러리를 못 올리면 실패 보고 | `UnavailableDetailMapRenderer`(버튼 숨김, SGIS 지도 사용) — MapLibre iOS를 Xcode 프로젝트에 넣으면 교체 |
+| `DetailMapRenderer`(Koin) | `MapLibreDetailMapRenderer`: 공용 `MapLibreDetailMap`(MapLibre Compose + MapLibre Native Android), `ConnectivityManager`로 온라인 확인, 네이티브 라이브러리를 못 올리면 실패 보고 | `MapLibreDetailMapRenderer`: 같은 `MapLibreDetailMap`(MapLibre Native iOS, Swift 패키지), Network 프레임워크 경로 모니터(`nw_path_monitor`)로 온라인 확인 |
 
 ---
 
@@ -159,7 +159,7 @@ coffee-journal/
 | `roadmap_phases` | id, position, title, range_label, day_start, day_end, items(JSON) | 기본 1단계 시드 |
 | `bean_summaries` | bean_key PK, text, generated_at | 수동 총정리 |
 | `best_recipes` | bean_key PK, entry_id | |
-| `settings` | key PK, value | `brew-start-date`, 마지막 필터 등. `device.` 접두 키는 이 기기 설정(알림: `device.reminders.enabled/peak/lowStock/dday/time/sent`)으로 백업하지 않는다 |
+| `settings` | key PK, value | `brew-start-date`, 마지막 필터 등. `device.` 접두 키는 이 기기 설정(알림: `device.reminders.enabled/peak/lowStock/dday/time/sent`, iOS의 `device.reminders.scheduled`)으로 백업하지 않는다 |
 
 - 마이그레이션: `room-gradle-plugin` 스키마 export(`shared/schemas/…/1.json, 2.json`) + `autoMigrations`. v1 → v2(2차 지도 기능)는 `AutoMigration(1, 2)`: `misc_items`에 `lat`/`lng` 열 추가, `cafe_places` 생성. 기존 행은 그대로이고 좌표는 비어 있다(`DatabaseMigrationTest`가 1.json대로 만든 v1 파일을 앱의 빌더로 열어 확인). 실제 열 이름은 엔티티 속성 이름(`createdAt` 등)을 따른다.
 - 커핑 원두 이외의 목록형 필드(steps, recipeRef, blendComponents, attributes, attributeNotes, tags, 사진 파일명)와 웹 전용 필드(`legacy_extra`: beanGuidance·photoFeedback·adviceChat 등)는 kotlinx-serialization JSON 컬럼으로 저장한다.
@@ -228,12 +228,12 @@ coffee-journal/
 **AI 노트 도우미(NoteHelper)**: 제목줄 → 질문(모드 이름, “질문”) → 처음이면 보내는 내용 확인 창 → 묻는 동안 "출처를 찾아 답을 쓰고 있어요"와 점 셋이 하나씩 늘었다 다시 시작(480ms마다, 화면 전환 끔이면 멈춘 "…")하고, 그 아래 단계 줄(Gemini 무료 + Tavily "검색어 만들기 › 검색 › 답 쓰기", 고친 검색어로 다시 물으면 첫 단계를 그어 건너뜀; 다른 방식은 요청 하나라 "검색하고 답 쓰기"): 진행 중인 단계는 굵게 + 같은 점, 끝난 단계 ✓, 남은 단계 흐리게 → 방식·모델 줄, "AI 요약은 틀릴 수 있어요. 출처를 확인해 주세요." → 답(문장마다 작은 [n] 링크, 출처 없는 문장은 회색, Tavily·Claude는 인용 문구와 "✓ 원문 확인" 배지) → "검색어: …"(Tavily 방식은 "검색어 고치기" 입력칸과 "이 검색어로 다시 묻기") → (Google 검색) 검색 제안 → (모드 B) 노트 후보 칩과 "노트에 추가" → 출처 목록(번호·제목·도메인·기관/개인 의견 배지, 누르면 브라우저) → "다시 묻기". 키가 없거나 틀리면 이유와 "설정에서 키 넣기 →"(설정이 AI 절로 스크롤되어 열림).
 
 ### 5.4 알림 · 홈 화면 위젯 (2차 §3)
-- **알림(설정 페이지의 절)**: 안내문 → "알림 받기"(마스터, 처음엔 꺼짐) → 알림 종류(피크 시작 / 원두 소진 임박 / D-day 마일스톤, 기본 켜짐) → 알림 시각(기본 09:00, 기록 폼과 같은 시간 선택 창). 스위치는 사각·헤어라인·켜지면 잉크. Android 13+에서 켤 때 알림 권한을 묻고, 거절하면 스위치는 꺼진 채 빨간 안내와 "알림 설정 열기 →"(앱 알림 설정 화면). 켜 둔 뒤 권한이 사라지면 같은 안내를 보인다. 시각을 바꾸면 하루 점검을 다시 예약한다.
+- **알림(설정 페이지의 절)**: 안내문 → "알림 받기"(마스터, 처음엔 꺼짐) → 알림 종류(피크 시작 / 원두 소진 임박 / D-day 마일스톤, 기본 켜짐) → 알림 시각(기본 09:00, 기록 폼과 같은 시간 선택 창). 스위치는 사각·헤어라인·켜지면 잉크. Android 13+와 iOS에서 켤 때 알림 권한을 묻고, 거절하면 스위치는 꺼진 채 빨간 안내와 "알림 설정 열기 →"(앱 알림 설정 화면, iOS는 설정 › 알림 › 이 앱). 켜 둔 뒤 권한이 사라지면 같은 안내를 보인다. 시각을 바꾸면 하루 점검을 다시 예약한다.
 - **하루 점검**: WorkManager 주기 작업이 정한 시각에 `ReminderCheck`를 돌려 ① 보관함 원두의 예상 피크 시작일(`PantryRules.peakWindow`) ② 마시는 중 카드의 잔여량 ≤ 2잔(1잔 = 그 원두 기록 원두량의 중앙값, 없으면 15 g) ③ Coffee D-day 30·100일 단위를 알린다. 보낸 알림은 키로 기억해 다시 보내지 않고, 권한이 없거나 채널을 끈 날은 보낸 것으로 치지 않는다. 채널 이름: 피크 시작 / 원두 소진 임박 / D-day 마일스톤. 피크·소진은 누르면 원두 보관함, D-day는 홈.
 - **홈 화면 위젯**(Jetpack Glance, 3×2 기본, 가로·세로 크기 조절, 최소 180×100dp): D-day 알약 문구(큰 크기에서는 "YYYY.MM.DD 첫 추출"과 기념 문구), 마시는 중 카드의 이름·"잔여량 Ng/Ng"(큰 크기에서는 "마시는 중 · …" 줄, 개봉 원두가 여럿이면 "외 N"), 빈 상태 "커피 처음 마신 날을 기록해두면 며칠째인지 보여드려요." / "아직 마시는 중인 원두가 없어요. 오늘 내린 커피부터 남겨보세요.", "+ 새 기록"(새 기록 폼으로 바로), 나머지 영역은 홈. 아이보리 바탕·잉크 글자·모노 숫자·직각·헤어라인 테두리. 위젯 선택기 미리보기(`coffee_widget_preview`)와 설명은 한국어.
 - **위젯 갱신**: 앱이 살아 있는 동안 기록·보관함·블렌드·설정 테이블이 바뀌면(Room 무효화 추적, 0.8초 묶음) 그리고 자정에, 앱이 백그라운드로 갈 때(`MainActivity.onStop`), 하루 점검 때, 위젯이 있는 동안 매일 자정 직후(WorkManager `coffee-journal.widget-midnight`).
 - **매니페스트 권한**: `POST_NOTIFICATIONS`(직접 선언). WorkManager가 병합하는 `RECEIVE_BOOT_COMPLETED`(재부팅 후 예약 복구), `WAKE_LOCK`, `ACCESS_NETWORK_STATE`, `FOREGROUND_SERVICE`. 위젯 수신자 `.widget.CoffeeWidgetReceiver`(exported, `APPWIDGET_UPDATE`, `@xml/coffee_widget_info`).
-- iOS: 규칙·점검·위젯 데이터는 공유 코드에 있고, 전달(UNUserNotificationCenter)·위젯(WidgetKit)은 아직 연결하지 않았다.
+- **iOS 미리 예약**: iOS는 백그라운드에서 매일 도는 점검을 보장하지 않으므로, 앱 시작·포그라운드 복귀·기록/보관함/블렌드/D-day 시작일/알림 설정 변경(0.8초 묶음) 때 같은 규칙(`ReminderData.dueOn`, 하루 점검과 같은 함수)으로 다음 30번의 알림 시각마다 보낼 알림을 구해 각 알림을 처음 나오는 날 한 번 `UNCalendarNotificationTrigger`(현지 날짜·시각)로 예약한다. 이 앱의 예약(식별자 접두 `coffee-journal.reminder.`)만 바꾸고, iOS 대기 알림 한도 때문에 가까운 것부터 최대 64개. 시각이 지난 예약은 iOS가 보낸 것이므로 다음 계산 때 같은 보낸 기록에 적고 다시 예약하지 않는다. 피크·D-day는 날짜가 정해져 있고, 소진 임박은 계산 때의 기록(기록한 추출의 원두량)으로 정해져 기록을 고치면 옮겨지거나 취소된다. 권한이 없으면 예약하지 않는다. 앱을 쓰는 중에도 배너+소리, 누르면 앱이 열린다. 위젯(WidgetKit)은 아직 없다.
 
 ### 5.3 디자인 시스템 (웹 "아카이브 라이트" 테마 이식)
 - 색: `bg #F5F4EF`, `surface #FFFFFF`, `surfaceRaised #ECEBE5`, `line #C8C6BD`, `text #191916`, `textMuted #5D5B54`, `textFaint #858177`, `accent(ink) #20201D`, `accentSoft #20201D12`, `bad #9D3026`, `good #4D684D`, `cupping #6E5F8B`, `cafe #8B5C35`, `book #5D6F79`, 범위 띠 6색 `#B58968 #8A6A52 #C9A47E #9C7355 #D9BD9C #6B543E`.
@@ -282,11 +282,11 @@ coffee-journal/
 - 화면 검증: 에뮬레이터 없이 Robolectric + Roborazzi로 실제 Compose 화면을 JVM에서 렌더해 PNG로 남긴다(`./gradlew :androidApp:recordRoborazziDebug` → `androidApp/screenshots/`). 테스트는 인메모리 Room(프레임워크 SQLite 드라이버)과 샘플 데이터(`SampleData`)를 주입한다.
 - 흐름 테스트: 같은 환경에서 실제 `App()`을 띄워 탭·입력으로 사용자 흐름 전체를 수행하고, 화면 문구와 저장된 데이터를 웹 원본 핸들러 기준으로 함께 검증한다(백업 왕복, 원자적 복원, 한글 IME 조합, 자정 전환, 연속 탭 경합, 저장 중 뒤로 가기 포함).
 - 렌더 매트릭스: 모든 라우트를 기본·320dp 폭·글자 1.3/2.0배로 렌더해 줄바꿈·잘림·겹침을 확인한다(`ScreenshotMatrixTest`).
-- 알림·위젯(2차 §3): 규칙 단위 테스트(`RemindersTest`: 피크 시작일, 2잔 경계·중앙값 1잔, 마일스톤, 중복 방지, 종류 끄기, 홈 카드 잔여량 연결), `ReminderPrefsTest`·`WidgetSnapshotTest`, Robolectric에서 WorkManager 테스트 도구로 작업 예약·실행(`ReminderWorkerTest`: 알림 내용·한국어 채널·누르면 열리는 화면, 설정·권한·채널 끔 존중, 같은 시각은 유지·새 시각은 교체), 알림 설정 흐름(`ReminderSettingsFlowTest`: API 35 권한 요청 허용/거절, 시간 변경 재예약), 위젯(`HomeWidgetTest`: Glance 단위 테스트로 큰/작은 배치·빈 상태·"+ 새 기록" 인텐트, 홈 화면과 같은 문구, 앱 관찰자 갱신, RemoteViews PNG), 인텐트로 새 기록 폼·보관함 열기(`LaunchTargetFlowTest`, `LaunchIntentTest`), 백업 제외(`ReminderBackupTest`).
+- 알림·위젯(2차 §3): 규칙 단위 테스트(`RemindersTest`: 피크 시작일, 2잔 경계·중앙값 1잔, 마일스톤, 중복 방지, 종류 끄기, 홈 카드 잔여량 연결), `ReminderPrefsTest`·`WidgetSnapshotTest`, Robolectric에서 WorkManager 테스트 도구로 작업 예약·실행(`ReminderWorkerTest`: 알림 내용·한국어 채널·누르면 열리는 화면, 설정·권한·채널 끔 존중, 같은 시각은 유지·새 시각은 교체), 알림 설정 흐름(`ReminderSettingsFlowTest`: API 35 권한 요청 허용/거절, 시간 변경 재예약), 위젯(`HomeWidgetTest`: Glance 단위 테스트로 큰/작은 배치·빈 상태·"+ 새 기록" 인텐트, 홈 화면과 같은 문구, 앱 관찰자 갱신, RemoteViews PNG), 인텐트로 새 기록 폼·보관함 열기(`LaunchTargetFlowTest`, `LaunchIntentTest`), 백업 제외(`ReminderBackupTest`). iOS 미리 예약: 공통 `ReminderScheduleAheadTest`(D일 알림 = 그날 하루 점검의 답, 첫날(정한 시각 전·후), 30일 창, 알림마다 한 번, 보낸 키·설정·종류, 64개 한도와 가까운 순, 이 앱 예약만 교체, 시각이 지난 것은 보낸 것으로 기록·다시 예약 안 함, 권한 없음, 끄기, 거절된 예약, 기록·D-day 변경, 0.8초 묶음 동기화)·`ReminderSettingsViewModelTest`(나중에 도착한 권한 상태를 화면이 따름), `ScheduleAheadDataTest`(Robolectric Room: 오늘 계획 = 하루 점검의 답, `ReminderCheck.changes()`는 기록·보관함·블렌드·D-day·알림 설정에만 반응하고 보낸 기록·예약 목록 쓰기에는 반응하지 않음), iOS 전용 `IosReminderPlatformTest`(트리거 날짜 구성, schedule/cancel이 공통 동기화를 거침; macOS CI의 시뮬레이터에서만 실행).
 - AI 노트 도우미(§2.3 29): 단위 테스트(`AiParsersTest`: 네 서비스의 요청 형식과 응답 해석(가짜 JSON), Gemini 그라운딩의 글자·UTF-8 바이트 위치, OpenAI url_citation, Claude 인용 블록·동적 필터링 블록·오류 객체; `AnswerTextTest`: 문장 나누기, [n] 표시, 인용 대조 정규화, 모드 B 용어 찾기; `AiErrorsTest`: 서비스·상태별 안내; `NoteHelperServiceTest`: 방식별 흐름, 검색어 쓰기와 고정 틀로 돌아가기, 검색 깊이, pause_turn 재요청, 키 확인, 단계 보고 순서(검색어 단계 있음/없음, 다른 방식은 한 단계), 움직이는 점의 폭), 흐름 테스트(`AiFlowTest`: 가짜 HTTP·메모리 키 저장소로 설정 절, 검색 깊이, 요청을 붙잡아 둔 채 단계 줄(끝남·진행 중·남음·건너뜀, 화면 전환 끔이면 "…"), 노트 상세 → 답, 검색어 고쳐 다시 묻기, 폼 → 후보 → 노트 추가, 키 없음, 무료 프로젝트의 Google 검색 429, 모델 404, Claude), `AiPlatformTest`(앱 프롬프트 = `tools/ai-eval`의 파일과 `eval.py` 질문 틀, Keystore 파일 형식은 소프트웨어 키로), 스크린샷 70–75(75는 Tavily 검색 중인 단계 줄; 테스트 시계는 무한 애니메이션을 돌리지 않아 점 셋인 첫 프레임으로 고정).
-- 현재 규모(지도·기록 분석·알림·상세 지도·설정·AI 노트 도우미 병합 후): `shared` 단위 348개, `androidApp` 흐름·스크린샷·마이그레이션 360개, 모두 통과(건너뜀 0).
+- 현재 규모(지도·기록 분석·알림·상세 지도·설정·AI 노트 도우미 병합, iOS 상세 지도·알림 미리 예약 후): `shared` 단위 363개, `androidApp` 흐름·스크린샷·마이그레이션 362개, 모두 통과(건너뜀 0).
 - 접근성: 최소 터치 48dp, 대비 4.5:1(잉크/아이보리), 콘텐츠 설명, 토글·펼침 상태 노출.
-- 네트워크(상세 지도, §1.7): 앱에서 네트워크를 쓰는 곳은 상세 지도와, 사용자가 키를 넣고 질문했을 때의 AI 노트 도우미(§2.3 29)뿐이다(INTERNET·ACCESS_NETWORK_STATE; MapLibre가 선언한 위치·Wi-Fi 권한은 제거). 요청은 OpenFreeMap(tiles.openfreemap.org)의 보이는 지역 타일·글리프뿐, 미리 받기 없음, MapLibre 앰비언트 캐시만. 흐름 테스트는 MapLibre 네이티브 렌더러가 JVM에서 돌지 않으므로 `DetailMapRenderer`를 가짜로 바꿔(Koin) 핀·카메라·오프라인·실패·느린 로딩을 검증하고, 실제 렌더러는 네이티브 라이브러리를 못 올릴 때 안전하게 안내로 떨어지는지 확인한다. 스타일은 단위 테스트(구조·출처·팔레트)와 MapLibre style-spec 검증기(개발 중 수동)로 확인했다.
+- 네트워크(상세 지도, §1.7): 앱에서 네트워크를 쓰는 곳은 상세 지도와, 사용자가 키를 넣고 질문했을 때의 AI 노트 도우미(§2.3 29)뿐이다(INTERNET·ACCESS_NETWORK_STATE; MapLibre가 선언한 위치·Wi-Fi 권한은 제거). 요청은 OpenFreeMap(tiles.openfreemap.org)의 보이는 지역 타일·글리프뿐, 미리 받기 없음, MapLibre 앰비언트 캐시만. 흐름 테스트는 MapLibre 네이티브 렌더러가 JVM에서 돌지 않으므로 `DetailMapRenderer`를 가짜로 바꿔(Koin) 핀·카메라·오프라인·실패·느린 로딩을 검증하고, 실제 렌더러는 네이티브 라이브러리를 못 올릴 때 안전하게 안내로 떨어지는지 확인한다. iOS도 같은 렌더링 코드(`MapLibreDetailMap`)를 쓰고, Linux에서는 klib 컴파일까지만 확인한다(앱 링크·Swift 패키지 해석은 macOS CI). 스타일은 단위 테스트(구조·출처·팔레트)와 MapLibre style-spec 검증기(개발 중 수동)로 확인했다.
 
 ## 9. iOS 확장 경로 (2차)
 1. macOS에서 `coffeejournal.enableIos=true`로 iOS 타깃 활성화 → `shared` 프레임워크 생성.
