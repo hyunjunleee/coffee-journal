@@ -56,6 +56,14 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v5
 
+      # Linking the release framework takes far more memory than the Android build (the first try ran out of a 2 GB
+      # heap after ten minutes): Gradle, and the Kotlin/Native compiler that runs inside it, get 5 GB of the runner's
+      # 7 GB here, also for the Gradle build Xcode starts.
+      - name: More memory for Kotlin/Native
+        run: |
+          mkdir -p "${GRADLE_USER_HOME:-$HOME/.gradle}"
+          echo "org.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" >> "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties"
+
       # gradle/verification-metadata.xml is written on Linux, so what only a Mac resolves (Kotlin/Native's macOS
       # compiler) may be missing. This step records the checksums of what the framework build resolves; if that
       # changed the file, the job stops before anything is built for release and keeps the difference as an artifact,
