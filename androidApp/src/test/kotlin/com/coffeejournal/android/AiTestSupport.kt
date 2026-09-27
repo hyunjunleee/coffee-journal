@@ -15,22 +15,24 @@ import org.koin.core.context.GlobalContext
 import java.util.Collections
 
 /**
- * The AI services for the flow tests: every request is answered by the first rule whose URL part matches (added
- * order) and recorded; nothing reaches the network. Bound by [testPlatformModule].
+ * The AI services for the flow tests: every request is answered by the first rule whose URL part (and body part, when
+ * given) matches, in the order added, and recorded; nothing reaches the network. Bound by [testPlatformModule].
  */
 class FakeAiHttp : AiHttp {
     val requests: MutableList<AiHttpRequest> = Collections.synchronizedList(mutableListOf())
-    private val rules = Collections.synchronizedList(mutableListOf<Pair<String, (AiHttpRequest) -> AiHttpResponse>>())
+    private class Rule(val url: String, val body: String?, val reply: (AiHttpRequest) -> AiHttpResponse)
+    private val rules = Collections.synchronizedList(mutableListOf<Rule>())
 
-    fun on(urlPart: String, status: Int = 200, body: () -> String) = apply { rules += urlPart to { _ -> AiHttpResponse(status, body()) } }
+    fun on(urlPart: String, status: Int = 200, bodyPart: String? = null, body: () -> String) =
+        apply { rules += Rule(urlPart, bodyPart) { AiHttpResponse(status, body()) } }
 
     fun clear() = apply { rules.clear(); requests.clear() }
 
     override suspend fun send(request: AiHttpRequest): AiHttpResponse {
         requests += request
-        val rule = synchronized(rules) { rules.firstOrNull { request.url.contains(it.first) } }
+        val rule = synchronized(rules) { rules.firstOrNull { request.url.contains(it.url) && (it.body == null || request.body?.contains(it.body) == true) } }
             ?: throw AiConnectionException("no fake reply for ${request.url}")
-        return rule.second(request)
+        return rule.reply(request)
     }
 }
 
@@ -59,9 +61,14 @@ object AiSetup {
         p.keys.forEach { key(it) }
     }
 
-    /** Tavily's five pages and Gemini's answer from them (mode A), or Gemini's answer to a described taste (mode B). */
-    fun tavilyAnswers(geminiText: String = AiReplies.NOTE_ANSWER) {
-        http.on("api.tavily.com") { AiReplies.TAVILY }.on("generativelanguage") { AiReplies.gemini(geminiText) }
+    /**
+     * Gemini's query, Tavily's pages for it and Gemini's answer from the pages: mode A by default, or mode B with
+     * [AiReplies.DESCRIBE_ANSWER] and [AiReplies.DESCRIBE_QUERIES].
+     */
+    fun tavilyAnswers(geminiText: String = AiReplies.NOTE_ANSWER, queries: String = AiReplies.NOTE_QUERIES) {
+        http.on("generativelanguage", bodyPart = AiReplies.QUERY_STEP) { AiReplies.gemini(queries) }
+            .on("api.tavily.com") { AiReplies.TAVILY }
+            .on("generativelanguage") { AiReplies.gemini(geminiText) }
     }
 }
 
@@ -81,6 +88,11 @@ object AiReplies {
        "content": "개인적으로 자스민은 “꽃차 같은 향”이라고 느꼈다.", "score": 0.5, "raw_content": null}
     ], "response_time": 1.2}
     """
+
+    /** Only the query step's request asks for JSON. */
+    const val QUERY_STEP = "responseMimeType"
+    const val NOTE_QUERIES = """{"queries": ["jasmine tasting note specialty coffee"]}"""
+    const val DESCRIBE_QUERIES = """{"queries": ["ripe plum bitter finish tasting notes specialty coffee"]}"""
 
     const val NOTE_SENTENCE_1 = "한 줄 뜻: SCA는 자스민을 \"a sweet floral aroma\"라고 설명한다."
     const val NOTE_SENTENCE_3 = "한 로스터리는 \"honey sweetness\"도 적었다."

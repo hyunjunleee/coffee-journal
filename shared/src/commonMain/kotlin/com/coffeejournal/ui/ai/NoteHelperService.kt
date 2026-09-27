@@ -19,12 +19,22 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
 
     suspend fun missingKeys(provider: AiProvider): List<AiKeySlot> = provider.keys - keys(provider.keys).keys
 
-    suspend fun ask(question: NoteQuestion, provider: AiProvider, model: String): GroundedAnswer {
+    /**
+     * [queries] and [depth]: GEMINI_TAVILY only, a search the user corrected on the answer screen ("검색어 고치기",
+     * replacing the query step) and how deep Tavily searches (설정 › 검색). The other services choose their own searches.
+     */
+    suspend fun ask(
+        question: NoteQuestion,
+        provider: AiProvider,
+        model: String,
+        queries: List<String>? = null,
+        depth: SearchDepth = SearchDepth.DEFAULT,
+    ): GroundedAnswer {
         if (!http.supported || !secrets.supported) throw AiFailure(AiErrors.unsupported)
         val keys = keys(provider.keys)
         val missing = provider.keys - keys.keys
         if (missing.isNotEmpty()) throw AiFailure(AiErrors.missingKeys(missing))
-        val answer = answerer(provider).answer(question, model, keys)
+        val answer = answerer(provider, depth).answer(question, model, keys, queries?.takeIf { it.isNotEmpty() })
         // an answer with no sentence tied to a source is never shown
         if (answer.sources.isEmpty() || answer.citedRuns == 0) throw AiFailure(AiErrors.noSources())
         return answer
@@ -67,8 +77,8 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
         }
     }
 
-    private fun answerer(p: AiProvider): NoteAnswerer = when (p) {
-        AiProvider.GEMINI_TAVILY -> GeminiTavilyAnswerer()
+    private fun answerer(p: AiProvider, depth: SearchDepth): NoteAnswerer = when (p) {
+        AiProvider.GEMINI_TAVILY -> GeminiTavilyAnswerer(depth)
         AiProvider.GEMINI_SEARCH -> GeminiSearchAnswerer()
         AiProvider.OPENAI -> OpenAiAnswerer()
         AiProvider.CLAUDE -> ClaudeAnswerer()
@@ -76,30 +86,54 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
 
     /** One way of answering from web sources. */
     private fun interface NoteAnswerer {
-        suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>): GroundedAnswer
+        suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer
     }
 
-    /** Tavily finds five pages; Gemini (no tools) answers from them with [n] marks; the app checks the quotes. */
-    private inner class GeminiTavilyAnswerer : NoteAnswerer {
-        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>): GroundedAnswer {
-            val found = exchange(AiService.TAVILY, TavilyApi.request(keys.getValue(AiKeySlot.TAVILY), NoteHelperPrompts.tavilyQuery(q))) {
+    /**
+     * Gemini writes one English query, Tavily searches it once at [depth], Gemini (no tools) answers from the pages with
+     * [n] marks, and the app checks the quotes. A corrected query ([queries]) skips the first step.
+     */
+    private inner class GeminiTavilyAnswerer(private val depth: SearchDepth) : NoteAnswerer {
+        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer {
+            val geminiKey = keys.getValue(AiKeySlot.GEMINI)
+            val searches = (queries ?: writeQueries(q, model, geminiKey)).take(SearchQueries.MAX)
+            val found = exchange(AiService.TAVILY, TavilyApi.request(keys.getValue(AiKeySlot.TAVILY), searches.first(), depth)) {
                 AiErrors.tavily(it.status, it.body)
             }
             val results = TavilyApi.parse(found) ?: throw AiFailure(AiErrors.unreadable(AiService.TAVILY))
             if (results.isEmpty()) throw AiFailure(AiErrors.noSources("Tavily: 0 results"))
             val user = NoteHelperPrompts.withSources(NoteHelperPrompts.question(q), results)
-            val body = exchange(AiService.GEMINI, GeminiApi.request(keys.getValue(AiKeySlot.GEMINI), model, NoteHelperPrompts.SOURCES_SYSTEM, user, search = false)) {
+            val body = exchange(AiService.GEMINI, GeminiApi.request(geminiKey, model, NoteHelperPrompts.SOURCES_SYSTEM, user, search = false)) {
                 AiErrors.gemini(it.status, it.body, model, search = false)
             }
             val reply = GeminiApi.parse(body) ?: throw AiFailure(AiErrors.unreadable(AiService.GEMINI))
             GeminiApi.blocked(reply)?.let { throw AiFailure(AiErrors.blocked(it)) }
-            return SourcedAnswer.answer(reply.text, results, model, GeminiApi.truncationNotes(reply.finishReason))
+            return SourcedAnswer.answer(reply.text, results, model, GeminiApi.truncationNotes(reply.finishReason), searches)
         }
     }
 
-    /** Gemini with Google Search grounding: the grounding metadata ties the answer to its sources. */
+    /**
+     * The query step: Gemini turns the note or the described taste into one short English query. Anything but
+     * a refused key (an error status, no connection, a reply that is not the asked JSON) falls back quietly to the fixed
+     * template; the answer step reports a real problem with the model or the quota anyway.
+     */
+    private suspend fun writeQueries(q: NoteQuestion, model: String, key: String): List<String> {
+        val fallback = listOf(NoteHelperPrompts.fallbackQuery(q))
+        val response = try {
+            http.send(GeminiApi.queryRequest(key, model, NoteHelperPrompts.QUERY_SYSTEM, NoteHelperPrompts.queryInput(q)))
+        } catch (e: AiConnectionException) {
+            return fallback
+        }
+        if (response.status !in 200..299) {
+            val error = AiErrors.gemini(response.status, response.body, model, search = false)
+            if (error.kind == AiErrorKind.KEY_INVALID) throw AiFailure(error)
+            return fallback
+        }
+        return SearchQueries.parse(GeminiApi.parse(response.body)?.text) ?: fallback
+    }
+
     private inner class GeminiSearchAnswerer : NoteAnswerer {
-        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>): GroundedAnswer {
+        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer {
             val request = GeminiApi.request(keys.getValue(AiKeySlot.GEMINI), model, NoteHelperPrompts.SEARCH_SYSTEM, NoteHelperPrompts.question(q), search = true)
             val body = exchange(AiService.GEMINI, request) { AiErrors.gemini(it.status, it.body, model, search = true) }
             val reply = GeminiApi.parse(body) ?: throw AiFailure(AiErrors.unreadable(AiService.GEMINI))
@@ -109,19 +143,20 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
     }
 
     private inner class OpenAiAnswerer : NoteAnswerer {
-        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>): GroundedAnswer {
+        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer {
             val body = exchange(AiService.OPENAI, OpenAiApi.request(keys.getValue(AiKeySlot.OPENAI), model, NoteHelperPrompts.question(q))) {
                 AiErrors.openAi(it.status, it.body)
             }
             val (text, annotations) = OpenAiApi.parse(body) ?: throw AiFailure(AiErrors.unreadable(AiService.OPENAI))
             val incomplete = AiJson.parse(body)["status"].str == "incomplete"
-            return OpenAiApi.answer(text, annotations, model, if (incomplete) listOf("답이 끝나기 전에 멈췄어요.") else emptyList())
+            val notes = if (incomplete) listOf("답이 끝나기 전에 멈췄어요.") else emptyList()
+            return OpenAiApi.answer(text, annotations, model, notes, OpenAiApi.searchQueries(body))
         }
     }
 
     /** Claude with web search; a paused turn (pause_turn) is resumed by sending the content back, up to 3 times. */
     private inner class ClaudeAnswerer : NoteAnswerer {
-        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>): GroundedAnswer {
+        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer {
             val key = keys.getValue(AiKeySlot.CLAUDE)
             val question = NoteHelperPrompts.question(q)
             val content = mutableListOf<JsonElement>()

@@ -105,6 +105,12 @@ object AiFixtures {
             "- 같은 로스터리는 \"honey sweetness\"도 적었다.[2][9]\n" +
             "- 비슷한 표현은 찾지 못했어요."
 
+    /** The query step's request is the one Gemini request asking for JSON. */
+    const val QUERY_STEP = "responseMimeType"
+
+    /** The query step's reply: Gemini's JSON text in the usual reply. */
+    fun geminiQueries(json: String) = geminiPlain(json)
+
     const val TAVILY_401 = """{"detail": {"error": "Unauthorized: missing or invalid API key."}}"""
     const val TAVILY_432 = """{"detail": {"error": "This request exceeds your plan's set usage limit. Please upgrade your plan or contact support@tavily.com"}}"""
 
@@ -130,6 +136,8 @@ object AiFixtures {
             {"type": "web_search_call", "id": "ws_1", "status": "completed",
              "action": {"type": "search", "query": "bergamot coffee tasting note",
                         "sources": [{"type": "url", "url": "https://sca.coffee/sca-news/flavor-notes-bergamot"}, {"type": "url", "url": "https://www.example-roaster.com/products/yirgacheffe-konga"}]}},
+            {"type": "web_search_call", "id": "ws_2", "status": "completed", "action": {"type": "open_page", "url": "https://sca.coffee/sca-news/flavor-notes-bergamot"}},
+            {"type": "web_search_call", "id": "ws_3", "status": "completed", "action": {"type": "search", "query": "yirgacheffe bergamot jasmine roaster"}},
             {"type": "message", "id": "msg_1", "status": "completed", "role": "assistant", "content": [
               {"type": "output_text", "text": ${q(OPENAI_TEXT)}, "logprobs": [], "annotations": [
                 {"type": "url_citation", "start_index": $a1s, "end_index": $a1e, "url": "https://sca.coffee/sca-news/flavor-notes-bergamot?utm_source=openai", "title": "Flavor notes: bergamot"},

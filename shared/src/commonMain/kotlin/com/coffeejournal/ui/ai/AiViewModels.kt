@@ -58,6 +58,8 @@ class AiSettingsViewModel(
 
     fun setModel(p: AiProvider, model: String) = write { prefs.setModel(p, model) }
 
+    fun setSearchDepth(depth: SearchDepth) = write { prefs.setSearchDepth(depth) }
+
     /** A pasted key, trimmed (a copied key often carries a line break). */
     fun saveKey(slot: AiKeySlot, typed: String) {
         val key = typed.trim().replace(Regex("\\s+"), "")
@@ -162,12 +164,20 @@ class NoteHelperViewModel(
 
     fun toggle(term: String) = _picked.update { if (term in it) it - term else it + term }
 
-    private suspend fun ask(s: AiSettings) {
+    /** "이 검색어로 다시 묻기" (Gemini 무료 + Tavily): the same question with the search the user corrected. */
+    fun askWith(typed: String) {
+        val queries = SearchQueries.fromTyped(typed)
+        if (queries.isEmpty()) return
+        job?.cancel()
+        job = viewModelScope.launch { ask(prefs.load(), queries) }
+    }
+
+    private suspend fun ask(s: AiSettings, queries: List<String>? = null) {
         val p = s.provider
         val model = s.model(p)
         _state.value = NoteHelperUi.Asking(p, model)
         _state.value = try {
-            val answer = service.ask(NoteQuestion(args.mode, args.query), p, model)
+            val answer = service.ask(NoteQuestion(args.mode, args.query), p, model, queries, s.searchDepth)
             val candidates = if (args.mode == NoteMode.DESCRIBE) NoteTerms.find(answer.plainText) else emptyList()
             NoteHelperUi.Answered(answer, candidates)
         } catch (e: AiFailure) {

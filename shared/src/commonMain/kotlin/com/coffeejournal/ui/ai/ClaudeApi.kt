@@ -115,7 +115,30 @@ object ClaudeApi {
             }
         }
         // the uncited search results stay listed after the cited ones
-        return GroundedAnswer(AiProvider.CLAUDE, model, AnswerComposer.compose(text.toString(), citations, missingQuote = null), sources, notes = notes)
+        return GroundedAnswer(
+            AiProvider.CLAUDE, model, AnswerComposer.compose(text.toString(), citations, missingQuote = null), sources,
+            notes = notes, queries = searchQueries(content),
+        )
+    }
+
+    /**
+     * The searches Claude ran: every server_tool_use named web_search, in order, also those dynamic filtering runs from
+     * its code execution (with a "caller", or inside another block).
+     */
+    fun searchQueries(content: List<JsonElement>): List<String> {
+        val out = mutableListOf<String>()
+        fun walk(e: JsonElement?) {
+            when (e) {
+                is JsonObject -> {
+                    if (e["type"].str == "server_tool_use" && e["name"].str == "web_search") e["input"]["query"].str?.trim()?.takeIf { it.isNotEmpty() }?.let { out += it }
+                    e.values.forEach(::walk)
+                }
+                is JsonArray -> e.forEach(::walk)
+                else -> Unit
+            }
+        }
+        content.forEach(::walk)
+        return out.distinct()
     }
 
     /** The error codes of search attempts that failed (for the "no sources" message). */

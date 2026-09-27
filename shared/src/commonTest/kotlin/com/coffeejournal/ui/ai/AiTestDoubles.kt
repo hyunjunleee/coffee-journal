@@ -1,24 +1,30 @@
 package com.coffeejournal.ui.ai
 
-/** Answers each request with the first rule whose URL part matches (in the order added); records every request. */
+/**
+ * Answers each request with the first rule whose URL part (and body part, when given) matches, in the order added;
+ * records every request.
+ */
 class FakeAiHttp : AiHttp {
     val requests = mutableListOf<AiHttpRequest>()
-    private val rules = mutableListOf<Pair<String, (AiHttpRequest) -> AiHttpResponse>>()
+    private class Rule(val url: String, val body: String?, val reply: (AiHttpRequest) -> AiHttpResponse)
+    private val rules = mutableListOf<Rule>()
 
-    fun on(urlPart: String, status: Int = 200, body: () -> String) = apply { rules += urlPart to { _ -> AiHttpResponse(status, body()) } }
+    fun on(urlPart: String, status: Int = 200, bodyPart: String? = null, body: () -> String) =
+        apply { rules += Rule(urlPart, bodyPart) { AiHttpResponse(status, body()) } }
 
-    /** Several replies for the same URL, one per request, the last one repeated. */
-    fun sequence(urlPart: String, vararg replies: Pair<Int, String>) = apply {
+    /** Several replies for the same URL (and body part), one per request, the last one repeated. */
+    fun sequence(urlPart: String, vararg replies: Pair<Int, String>, bodyPart: String? = null) = apply {
         var i = 0
-        rules += urlPart to { _ -> replies[minOf(i++, replies.lastIndex)].let { (s, b) -> AiHttpResponse(s, b) } }
+        rules += Rule(urlPart, bodyPart) { replies[minOf(i++, replies.lastIndex)].let { (s, b) -> AiHttpResponse(s, b) } }
     }
 
-    fun offline(urlPart: String) = apply { rules += urlPart to { _ -> throw AiConnectionException("Unable to resolve host") } }
+    fun offline(urlPart: String, bodyPart: String? = null) = apply { rules += Rule(urlPart, bodyPart) { throw AiConnectionException("Unable to resolve host") } }
 
     override suspend fun send(request: AiHttpRequest): AiHttpResponse {
         requests += request
-        val rule = rules.firstOrNull { request.url.contains(it.first) } ?: throw AiConnectionException("no fake reply for ${request.url}")
-        return rule.second(request)
+        val rule = rules.firstOrNull { request.url.contains(it.url) && (it.body == null || request.body?.contains(it.body) == true) }
+            ?: throw AiConnectionException("no fake reply for ${request.url}")
+        return rule.reply(request)
     }
 }
 

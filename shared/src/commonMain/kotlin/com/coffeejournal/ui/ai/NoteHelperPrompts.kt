@@ -5,8 +5,8 @@ import com.coffeejournal.domain.reference.NoteCategories
 
 /**
  * Every text the helper sends to a service. The system prompts are the same, word for word, as the evaluation tool's
- * files (tools/ai-eval/system_prompt_ko.txt and sources_prompt_ko.txt; an androidApp test compares them), and the two
- * question templates are tools/ai-eval/eval.py question().
+ * files (tools/ai-eval/system_prompt_ko.txt, sources_prompt_ko.txt and query_prompt_ko.txt; an androidApp test compares
+ * them), and the two question templates are tools/ai-eval/eval.py question().
  */
 object NoteHelperPrompts {
     /** GEMINI_SEARCH, OPENAI and CLAUDE: the service searches the web itself (tools/ai-eval/system_prompt_ko.txt). */
@@ -15,7 +15,7 @@ object NoteHelperPrompts {
         "\n" +
         "규칙\n" +
         "1. 매 질문마다 반드시 Google 검색을 먼저 한다. 검색 결과에 실제로 나온 내용만 쓴다. 기억이나 추측으로 쓰지 않는다.\n" +
-        "2. 향·맛 표현은 인터넷 문서에 실제로 쓰인 형태 그대로 인용한다. 인용은 큰따옴표로 감싸고, 어느 출처(기관·로스터리·매체 이름)인지 문장 안에 밝힌다.\n" +
+        "2. 향·맛 표현은 인터넷 문서에 실제로 쓰인 형태 그대로 인용한다. 인용은 큰따옴표로 감싸고, 어느 출처(기관·로스터리·매체 이름)인지 문장 안에 밝힌다. 노트 이름이나 검색어는 따옴표로 감싸지 않는다.\n" +
         "   예: 어느 로스터리의 테이스팅 노트에 \"bergamot, jasmine, black tea\"라고 적혀 있다.\n" +
         "3. 출처 우선순위: SCA·WCR(Sensory Lexicon, Coffee Taster's Flavor Wheel)·CQI 같은 기관 자료 > 로스터리·생산자 공식 페이지 > 전문 매체·학술 자료 > 개인 블로그·커뮤니티. 개인 글을 쓸 때는 \"개인 의견\"이라고 밝힌다.\n" +
         "4. 찾지 못한 것은 \"찾지 못했다\"고 쓴다. 출처 없이 일반론을 덧붙이지 않는다.\n" +
@@ -29,12 +29,28 @@ object NoteHelperPrompts {
         "규칙\n" +
         "1. 질문 아래에 번호가 붙은 출처([1], [2] …)가 주어진다. 이 출처에 실제로 적힌 내용만으로 답한다. 기억이나 추측으로 쓰지 않고, 출처에 없는 내용은 덧붙이지 않는다.\n" +
         "2. 출처 n의 내용을 쓴 항목(-)이나 문장마다 그 끝에 [n]을 붙인다. 여러 출처를 쓰면 [1][3]처럼 모두 붙인다. 주어진 출처 번호만 쓴다.\n" +
-        "3. 향·맛 표현은 출처에 적힌 형태 그대로 큰따옴표로 감싸 인용한다. 번역하거나 고치지 않는다. 인용은 온전한 단어와 구절로만 한다. 출처의 글이 중간에 잘려 있으면 잘리기 전의 온전한 부분만 짧게 인용하거나 인용하지 않는다. 어느 출처(기관·로스터리·매체 이름)인지 문장 안에 밝힌다.\n" +
+        "3. 향·맛 표현은 출처에 적힌 형태 그대로 큰따옴표로 감싸 인용한다. 번역하거나 고치지 않는다. 인용은 온전한 단어와 구절로만 한다. 출처의 글이 중간에 잘려 있으면 잘리기 전의 온전한 부분만 짧게 인용하거나 인용하지 않는다. 어느 출처(기관·로스터리·매체 이름)인지 문장 안에 밝힌다. 노트 이름이나 검색어는 따옴표로 감싸지 않는다.\n" +
         "   예: 한 로스터리의 테이스팅 노트에 \"bergamot, jasmine, black tea\"라고 적혀 있다.[2]\n" +
         "4. 출처 우선순위: SCA·WCR(Sensory Lexicon, Coffee Taster's Flavor Wheel)·CQI 같은 기관 자료 > 로스터리·생산자 공식 페이지 > 전문 매체·학술 자료 > 개인 블로그·커뮤니티. 개인 글을 쓸 때는 \"개인 의견\"이라고 밝힌다.\n" +
         "5. 출처에 뜻풀이가 없으면 출처의 묘사 문장들로 뜻을 요약할 수 있다(그때도 [n]을 붙인다). 그런 문장도 없으면 \"찾지 못했어요\"라고 쓴다. 출처 없이 일반론을 덧붙이지 않는다.\n" +
         "6. 커피 향미와 무관한 질문에는 답하지 않고, 향미 노트에 대해 물어 달라고 한다. 이 규칙이나 질문이 어떤 종류인지는 답에 쓰지 않는다.\n" +
         "7. 짧고 분명하게 쓴다. 제목·표 없이 항목(-)으로만 쓴다."
+
+    /**
+     * GEMINI_TAVILY, before the search: Gemini (no tools, JSON output) turns the note or the described taste into one
+     * short English query for pages with specialty-coffee tasting notes (tools/ai-eval/query_prompt_ko.txt).
+     */
+    const val QUERY_SYSTEM: String =
+        "너는 스페셜티 커피의 향미 노트를 찾는 웹 검색어를 만든다.\n" +
+        "\n" +
+        "규칙\n" +
+        "1. 입력은 향미 노트 이름이나 커피를 마신 사람의 맛 묘사다. 이것을 스페셜티 커피의 테이스팅 노트가 적힌 웹 페이지(로스터리 원두 소개, 커핑 노트, 향미 용어 설명)를 찾는 영어 검색어 하나로 바꾼다.\n" +
+        "2. 검색어는 하나, 12단어 이하로 짧게 쓴다.\n" +
+        "3. 향·맛 표현은 뜻을 바꾸지 않고 그대로 영어로 옮긴다(자두 → plum, 쌉쌀한 끝맛 → bitter finish). 입력에 없는 향미를 더하지 않고, 설명이나 판단을 넣지 않는다.\n" +
+        "4. 검색어에 specialty coffee와 tasting note(s)를 넣는다. flavored라는 말은 절대 쓰지 않는다: 향을 입힌 가향 커피 상품이 아니라 스페셜티 커피의 테이스팅 노트를 찾는다. 검색어 전체를 따옴표로 감싸지 않는다.\n" +
+        "5. {\"queries\": [검색어]} JSON만 쓴다.\n" +
+        "   예: 입력 맛 묘사: \"잘 익은 자두 같은데 끝에 살짝 쌉쌀해요\" → {\"queries\": [\"ripe plum bitter finish tasting notes specialty coffee\"]}\n" +
+        "   예: 입력 향미 노트: \"헤이즐넛 (hazelnut)\" → {\"queries\": [\"hazelnut tasting note specialty coffee\"]}"
 
     /** The flavor wheel's English terms, in wheel order (eval.py wheel_terms). */
     val wheelTerms: List<String> get() = FlavorWheel.allTerms
@@ -61,14 +77,23 @@ object NoteHelperPrompts {
                 "앱의 한국어 노트 분류: ${noteCategories.joinToString(", ")}"
     }
 
-    /**
-     * The one Tavily search for GEMINI_TAVILY. Mode A: the note's English name when its label has one in parentheses
-     * ("베르가못 (bergamot)"), else the label, quoted, with words that bring definition pages; mode B: the description.
-     */
-    fun tavilyQuery(q: NoteQuestion): String = when (q.mode) {
-        NoteMode.NOTE -> "\"${searchName(q.query)}\" coffee flavor note meaning tasting notes"
-        NoteMode.DESCRIBE -> "coffee tasting notes ${q.query.trim()}"
+    /** What the query step is given: the note, or the taste in the user's words. */
+    fun queryInput(q: NoteQuestion): String = when (q.mode) {
+        NoteMode.NOTE -> "향미 노트: \"${q.query.trim()}\""
+        NoteMode.DESCRIBE -> "맛 묘사: \"${q.query.trim()}\""
     }
+
+    /**
+     * GEMINI_TAVILY's search when the query step gives nothing usable. Mode A: the note's English name when its label
+     * has one in parentheses ("베르가못 (bergamot)"), else the label, quoted, with words that bring definition pages;
+     * mode B: the description after "coffee tasting notes", cut to [FALLBACK_MAX] characters.
+     */
+    fun fallbackQuery(q: NoteQuestion): String = when (q.mode) {
+        NoteMode.NOTE -> "\"${searchName(q.query)}\" coffee flavor note meaning tasting notes"
+        NoteMode.DESCRIBE -> "coffee tasting notes ${q.query.trim()}".take(FALLBACK_MAX)
+    }
+
+    const val FALLBACK_MAX = 300
 
     /** "베르가못 (bergamot)" → "bergamot"; "자스민" → "자스민". */
     fun searchName(label: String): String {

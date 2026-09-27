@@ -75,6 +75,39 @@ class AiParsersTest {
             rendered(a),
         )
         assertTrue(a.paragraphs.all { it.quotes.isEmpty() }, "no quote check without page text")
+        // the searches Google ran, shown under the answer
+        assertEquals(listOf("bergamot coffee tasting note", "베르가못 커피 노트"), a.queries)
+    }
+
+    @Test fun gemini_queryStep_jsonSchemaNoToolsTemperatureZero() {
+        val r = GeminiApi.queryRequest("AQ.k", "gemini-3.5-flash-lite", NoteHelperPrompts.QUERY_SYSTEM, "맛 묘사: \"자두\"")
+        assertTrue(r.url.endsWith("/gemini-3.5-flash-lite:generateContent"))
+        val b = obj(r.body)
+        assertNull(b["tools"])
+        assertEquals(NoteHelperPrompts.QUERY_SYSTEM, b["system_instruction"]!!.jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content)
+        assertEquals(
+            """{"temperature":0,"maxOutputTokens":200,"responseMimeType":"application/json",""" +
+                """"responseSchema":{"type":"OBJECT","properties":{"queries":{"type":"ARRAY","items":{"type":"STRING"}}},"required":["queries"]}}""",
+            b["generationConfig"].toString(),
+        )
+    }
+
+    @Test fun searchQueries_parsedAndChecked_elseNull() {
+        // one search per question: only the first query, spaces tidied
+        assertEquals(listOf("ripe plum bitter finish tasting notes specialty coffee"),
+            SearchQueries.parse("""{"queries": [" ripe plum  bitter finish tasting notes specialty coffee ", "plum bittersweet tasting notes"]}"""))
+        // quotes around a whole query come off; a fenced reply is read
+        assertEquals(listOf("a tasting notes specialty coffee"),
+            SearchQueries.parse("```json\n{\"queries\": [\"\\\"a tasting notes specialty coffee\\\"\", \"b\"]}\n```"))
+        // the partly quoted fallback stays as it is
+        assertEquals(listOf("\"bergamot\" coffee tasting notes"), SearchQueries.parse("""{"queries": ["\"bergamot\" coffee tasting notes"]}"""))
+        for (bad in listOf(null, "", "not json", "{}", """{"queries": []}""", """{"queries": ["  ", ""]}""", """{"queries": "plum"}""",
+            """{"queries": ["${"x".repeat(201)}"]}""", """["plum coffee"]""")) {
+            assertNull(SearchQueries.parse(bad), bad.toString())
+        }
+        assertEquals(listOf("plum tasting notes specialty coffee"), SearchQueries.fromTyped(" \n  plum  tasting notes specialty coffee \n cocoa coffee"))
+        assertEquals(200, SearchQueries.fromTyped("y".repeat(300)).single().length)
+        assertTrue(SearchQueries.fromTyped(" \n ").isEmpty())
     }
 
     @Test fun gemini_segmentsWithoutText_placedByUtf8ByteOffsets_inKoreanText() {
@@ -111,6 +144,13 @@ class AiParsersTest {
         val c = obj(TavilyApi.checkRequest("k").body)
         assertEquals("basic", c["search_depth"]!!.jsonPrimitive.content)
         assertEquals("1", c["max_results"]!!.jsonPrimitive.content)
+        // 설정 › 검색 › 기본: basic (1 credit), no passages per page (advanced only)
+        val basic = obj(TavilyApi.request("k", "q", SearchDepth.BASIC).body)
+        assertEquals("basic", basic["search_depth"]!!.jsonPrimitive.content)
+        assertEquals("5", basic["max_results"]!!.jsonPrimitive.content)
+        assertNull(basic["chunks_per_source"])
+        assertEquals("text", basic["include_raw_content"]!!.jsonPrimitive.content)
+        assertEquals(listOf(2, 1), SearchDepth.entries.map { it.credits })
     }
 
     @Test fun tavily_results() {
@@ -182,6 +222,8 @@ class AiParsersTest {
         assertEquals("example-roaster.com", a.sources[1].domain)
         assertNull(OpenAiApi.parse("""{"error": null}"""))
         assertEquals(listOf("gpt-5-nano", "gpt-5-nano-2025-08-07"), OpenAiApi.modelIds(AiFixtures.OPENAI_MODELS))
+        // searches only: the open_page action is not a query
+        assertEquals(listOf("bergamot coffee tasting note", "yirgacheffe bergamot jasmine roaster"), OpenAiApi.searchQueries(AiFixtures.openAi()))
     }
 
     // ───────────── Claude ─────────────
@@ -249,6 +291,8 @@ class AiParsersTest {
             a.paragraphs.flatMap { it.quotes },
         )
         assertEquals(listOf("max_uses_exceeded"), ClaudeApi.searchErrors(reply.content))
+        // both searches, the one dynamic filtering ran from code execution ("caller") too
+        assertEquals(listOf("bergamot coffee tasting note", "bergamot roaster notes"), a.queries)
         val refusal = ClaudeApi.parse(AiFixtures.CLAUDE_REFUSAL)!!
         assertEquals("refusal", refusal.stopReason)
         assertEquals("declined by a safety classifier", refusal.refusal)

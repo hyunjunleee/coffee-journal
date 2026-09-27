@@ -340,7 +340,7 @@ class RouteScreenshotTest {
         }
     }
 
-    /** Mode A with Tavily + Gemini: marks, a grey sentence, ✓ / ✗ quote badges, sources with their kinds. */
+    /** Mode A with Tavily + Gemini: marks, a grey sentence, ✓ / ✗ quote badges, the queries, sources with their kinds. */
     @Test fun noteHelper_note() {
         AiSetup.ready(AiProvider.GEMINI_TAVILY)
         AiSetup.tavilyAnswers()
@@ -350,7 +350,7 @@ class RouteScreenshotTest {
     /** Mode B from the record form: the candidate notes, one picked. */
     @Test fun noteHelper_describe() {
         AiSetup.ready(AiProvider.GEMINI_TAVILY)
-        AiSetup.tavilyAnswers(AiReplies.DESCRIBE_ANSWER)
+        AiSetup.tavilyAnswers(AiReplies.DESCRIBE_ANSWER, AiReplies.DESCRIBE_QUERIES)
         show(Route.NoteHelper(mode = "describe", query = "잘 익은 자두 같고 끝이 쌉쌀해요", returnToForm = true), "72-note-helper-describe.png") {
             waitForText(AiTexts.CANDIDATES)
             click("자두")

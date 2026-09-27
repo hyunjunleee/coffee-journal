@@ -1,7 +1,9 @@
 package com.coffeejournal.ui.ai
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -53,6 +55,7 @@ import androidx.navigation.NavHostController
 import com.coffeejournal.ui.form.TextLink
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.platform.openUrl
+import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Badge
 import com.coffeejournal.ui.theme.Chip
@@ -115,7 +118,7 @@ fun NoteHelperScreen(nav: NavHostController, route: Route.NoteHelper) {
                 }
                 is NoteHelperUi.Failed -> Failure(s, openSettings, onAskAgain = vm::start)
                 is NoteHelperUi.Answered -> Answer(
-                    s, args, picked, onToggle = vm::toggle, onAdd = { deliver(picked) }, onAskAgain = vm::start,
+                    s, args, picked, onToggle = vm::toggle, onAdd = { deliver(picked) }, onAskAgain = vm::start, onAskWith = vm::askWith,
                 )
             }
             Spacer(Modifier.height(96.dp))
@@ -154,6 +157,7 @@ private fun Answer(
     onToggle: (String) -> Unit,
     onAdd: () -> Unit,
     onAskAgain: () -> Unit,
+    onAskWith: (String) -> Unit,
 ) {
     val answer = s.answer
     val scope = rememberCoroutineScope()
@@ -173,6 +177,7 @@ private fun Answer(
         Text(paragraphText(p, showSource), style = AppType.body, modifier = Modifier.padding(vertical = 3.dp).testTag("answer-paragraph"))
         if (p.quotes.isNotEmpty()) QuoteBadges(p.quotes)
     }
+    SearchQueryLine(answer, onAskWith)
 
     answer.searchSuggestionsHtml?.let { html ->
         SectionLabel(AiTexts.SUGGESTIONS)
@@ -230,6 +235,45 @@ private fun paragraphText(p: AnswerParagraph, onMark: (Int) -> Unit): AnnotatedS
         run.markers.forEach { n ->
             val style = SpanStyle(color = Ink.cafe, fontFamily = AppType.mono, fontSize = 10.5.sp, baselineShift = BaselineShift(0.3f))
             withLink(LinkAnnotation.Clickable("source-$n", TextLinkStyles(style)) { onMark(n) }) { append("[$n]") }
+        }
+    }
+}
+
+/**
+ * "검색어: q1 · q2" under the answer. With Gemini 무료 + Tavily the app chose them, so they can be corrected in a panel
+ * (not a dialog: a text field in a dialog kept the Robolectric flow tests from going idle) and asked again with.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SearchQueryLine(answer: GroundedAnswer, onAskWith: (String) -> Unit) {
+    if (answer.queries.isEmpty()) return
+    val editable = answer.provider == AiProvider.GEMINI_TAVILY
+    var editing by remember(answer) { mutableStateOf(false) }
+    var typed by remember(answer) { mutableStateOf(answer.queries.first()) }
+    FlowRow(
+        Modifier.fillMaxWidth().padding(top = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "${AiTexts.QUERIES}: ${answer.queries.joinToString(" · ")}",
+            style = AppType.monoSmall.copy(color = Ink.textFaint),
+            modifier = Modifier.testTag("answer-queries"),
+        )
+        if (editable && !editing) TextLink(AiTexts.EDIT_QUERIES, Ink.text, { editing = true })
+    }
+    if (editable && editing) {
+        Column(
+            Modifier.fillMaxWidth().padding(vertical = 6.dp)
+                .background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape).padding(12.dp)
+                .testTag("edit-queries"),
+        ) {
+            AppTextField(value = typed, onValueChange = { typed = it }, placeholder = AiTexts.QUERIES, singleLine = false)
+            HintText(AiTexts.QUERIES_HINT)
+            Row(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PrimaryButton(AiTexts.ASK_WITH_QUERIES, small = true, enabled = SearchQueries.fromTyped(typed).isNotEmpty(), onClick = { onAskWith(typed) })
+                GhostButton(AiTexts.CLOSE, small = true, onClick = { editing = false })
+            }
         }
     }
 }
