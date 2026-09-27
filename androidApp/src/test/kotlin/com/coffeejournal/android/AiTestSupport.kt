@@ -10,6 +10,7 @@ import com.coffeejournal.ui.ai.AiProvider
 import com.coffeejournal.ui.ai.NoteHelperService
 import com.coffeejournal.ui.ai.SearchDepth
 import com.coffeejournal.ui.ai.SecretStore
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
 import org.koin.core.context.GlobalContext
@@ -23,14 +24,20 @@ class FakeAiHttp : AiHttp {
     val requests: MutableList<AiHttpRequest> = Collections.synchronizedList(mutableListOf())
     private class Rule(val url: String, val body: String?, val reply: (AiHttpRequest) -> AiHttpResponse)
     private val rules = Collections.synchronizedList(mutableListOf<Rule>())
+    private class Hold(val url: String, val gate: CompletableDeferred<Unit>)
+    private val holds = Collections.synchronizedList(mutableListOf<Hold>())
 
     fun on(urlPart: String, status: Int = 200, bodyPart: String? = null, body: () -> String) =
         apply { rules += Rule(urlPart, bodyPart) { AiHttpResponse(status, body()) } }
 
-    fun clear() = apply { rules.clear(); requests.clear() }
+    /** The next requests to [urlPart] wait (recorded, unanswered) until the returned gate is completed: the question stays at that step. */
+    fun hold(urlPart: String): CompletableDeferred<Unit> = CompletableDeferred<Unit>().also { holds += Hold(urlPart, it) }
+
+    fun clear() = apply { rules.clear(); requests.clear(); holds.forEach { it.gate.complete(Unit) }; holds.clear() }
 
     override suspend fun send(request: AiHttpRequest): AiHttpResponse {
         requests += request
+        synchronized(holds) { holds.firstOrNull { !it.gate.isCompleted && request.url.contains(it.url) } }?.gate?.await()
         val rule = synchronized(rules) { rules.firstOrNull { request.url.contains(it.url) && (it.body == null || request.body?.contains(it.body) == true) } }
             ?: throw AiConnectionException("no fake reply for ${request.url}")
         return rule.reply(request)

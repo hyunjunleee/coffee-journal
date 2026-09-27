@@ -365,6 +365,15 @@ class RouteScreenshotTest {
         show(Route.NoteHelper(mode = "note", query = "자스민"), "73-note-helper-error.png") { waitForText(AiErrors.SEARCH_BILLING) }
     }
 
+    /** Gemini 무료 + Tavily while Tavily searches: the query step done, the search under way with its dots, the answer to come. */
+    @Test fun noteHelper_asking() {
+        AiSetup.ready(AiProvider.GEMINI_TAVILY)
+        val search = AiSetup.http.hold("api.tavily.com")
+        AiSetup.tavilyAnswers()
+        show(Route.NoteHelper(mode = "note", query = "자스민"), "75-note-helper-asking.png") { waitForText("✓ ${AiTexts.STAGE_QUERY}") }
+        search.complete(Unit)
+    }
+
     /** Claude with web search: ✓ from the cited excerpt, the uncited search result listed after the cited one. */
     @Test fun noteHelper_claude() {
         AiSetup.ready(AiProvider.CLAUDE)
