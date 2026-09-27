@@ -33,7 +33,7 @@
 | Coil 3 | 3.6.x | 사진 표시 (KMP) |
 | WorkManager / Jetpack Glance | 2.12.0 / 1.2.0 | 하루 한 번 알림 점검, 홈 화면 위젯 (Android 전용, 2차 §3) |
 | minSdk / targetSdk / compileSdk | 26 / 35 / 35 | Android 8.0+ |
-| MapLibre Compose / MapLibre Native Android | 0.12.1 / 12.0.1 | 상세 지도(2차 §1.7), Android 전용 의존성 |
+| MapLibre Compose / MapLibre Native Android / MapLibre Native iOS | 0.12.1 / 12.0.1 / 6.17.1 | 상세 지도(2차 §1.7). MapLibre Compose는 공용(`commonMain`) 의존성, iOS의 MapLibre 프레임워크는 Gradle이 아니라 Xcode 프로젝트가 공식 Swift 패키지로 링크(`iosApp/project.yml`) |
 
 정확한 조합은 스캐폴드 빌드(`:androidApp:assembleDebug`)로 검증 후 `gradle/libs.versions.toml`에 고정한다.
 
@@ -135,7 +135,7 @@ coffee-journal/
 | `AiHttp`(platformModule) | `AndroidAiHttp`: `HttpURLConnection`(연결 15초·읽기 120초, IO 디스패처, 4xx/5xx는 오류 스트림) | 미연결(`IosAiHttp`, 지원 안 함으로 보고) — NSURLSession 자리 |
 | `SecretStore`(platformModule) | `AndroidSecretStore`: Android Keystore의 내보낼 수 없는 AES-256/GCM 키(`coffeejournal.ai`)로 암호화한 파일을 `noBackupFilesDir/ai-keys/`에 | 미연결(`IosSecretStore`, 저장 불가로 보고) — Keychain 자리 |
 | `normalizeNfc` · `SearchSuggestions` | `java.text.Normalizer` · WebView(`loadDataWithBaseURL`, 스크립트 끔, 누르면 브라우저) | `precomposedStringWithCanonicalMapping` · 표시 없음 |
-| `DetailMapRenderer`(Koin) | `MapLibreDetailMapRenderer`: MapLibre Compose + MapLibre Native, `ConnectivityManager`로 온라인 확인, 네이티브 라이브러리를 못 올리면 실패 보고 | `UnavailableDetailMapRenderer`(버튼 숨김, SGIS 지도 사용) — MapLibre iOS를 Xcode 프로젝트에 넣으면 교체 |
+| `DetailMapRenderer`(Koin) | `MapLibreDetailMapRenderer`: 공용 `MapLibreDetailMap`(MapLibre Compose + MapLibre Native Android), `ConnectivityManager`로 온라인 확인, 네이티브 라이브러리를 못 올리면 실패 보고 | `MapLibreDetailMapRenderer`: 같은 `MapLibreDetailMap`(MapLibre Native iOS, Swift 패키지), Network 프레임워크 경로 모니터(`nw_path_monitor`)로 온라인 확인 |
 
 ---
 
@@ -284,9 +284,9 @@ coffee-journal/
 - 렌더 매트릭스: 모든 라우트를 기본·320dp 폭·글자 1.3/2.0배로 렌더해 줄바꿈·잘림·겹침을 확인한다(`ScreenshotMatrixTest`).
 - 알림·위젯(2차 §3): 규칙 단위 테스트(`RemindersTest`: 피크 시작일, 2잔 경계·중앙값 1잔, 마일스톤, 중복 방지, 종류 끄기, 홈 카드 잔여량 연결), `ReminderPrefsTest`·`WidgetSnapshotTest`, Robolectric에서 WorkManager 테스트 도구로 작업 예약·실행(`ReminderWorkerTest`: 알림 내용·한국어 채널·누르면 열리는 화면, 설정·권한·채널 끔 존중, 같은 시각은 유지·새 시각은 교체), 알림 설정 흐름(`ReminderSettingsFlowTest`: API 35 권한 요청 허용/거절, 시간 변경 재예약), 위젯(`HomeWidgetTest`: Glance 단위 테스트로 큰/작은 배치·빈 상태·"+ 새 기록" 인텐트, 홈 화면과 같은 문구, 앱 관찰자 갱신, RemoteViews PNG), 인텐트로 새 기록 폼·보관함 열기(`LaunchTargetFlowTest`, `LaunchIntentTest`), 백업 제외(`ReminderBackupTest`).
 - AI 노트 도우미(§2.3 29): 단위 테스트(`AiParsersTest`: 네 서비스의 요청 형식과 응답 해석(가짜 JSON), Gemini 그라운딩의 글자·UTF-8 바이트 위치, OpenAI url_citation, Claude 인용 블록·동적 필터링 블록·오류 객체; `AnswerTextTest`: 문장 나누기, [n] 표시, 인용 대조 정규화, 모드 B 용어 찾기; `AiErrorsTest`: 서비스·상태별 안내; `NoteHelperServiceTest`: 방식별 흐름, 검색어 쓰기와 고정 틀로 돌아가기, 검색 깊이, pause_turn 재요청, 키 확인, 단계 보고 순서(검색어 단계 있음/없음, 다른 방식은 한 단계), 움직이는 점의 폭), 흐름 테스트(`AiFlowTest`: 가짜 HTTP·메모리 키 저장소로 설정 절, 검색 깊이, 요청을 붙잡아 둔 채 단계 줄(끝남·진행 중·남음·건너뜀, 화면 전환 끔이면 "…"), 노트 상세 → 답, 검색어 고쳐 다시 묻기, 폼 → 후보 → 노트 추가, 키 없음, 무료 프로젝트의 Google 검색 429, 모델 404, Claude), `AiPlatformTest`(앱 프롬프트 = `tools/ai-eval`의 파일과 `eval.py` 질문 틀, Keystore 파일 형식은 소프트웨어 키로), 스크린샷 70–75(75는 Tavily 검색 중인 단계 줄; 테스트 시계는 무한 애니메이션을 돌리지 않아 점 셋인 첫 프레임으로 고정).
-- 현재 규모(지도·기록 분석·알림·상세 지도·설정·AI 노트 도우미 병합 후): `shared` 단위 348개, `androidApp` 흐름·스크린샷·마이그레이션 360개, 모두 통과(건너뜀 0).
+- 현재 규모(지도·기록 분석·알림·상세 지도·설정·AI 노트 도우미 병합, iOS 상세 지도 후): `shared` 단위 349개, `androidApp` 흐름·스크린샷·마이그레이션 360개, 모두 통과(건너뜀 0).
 - 접근성: 최소 터치 48dp, 대비 4.5:1(잉크/아이보리), 콘텐츠 설명, 토글·펼침 상태 노출.
-- 네트워크(상세 지도, §1.7): 앱에서 네트워크를 쓰는 곳은 상세 지도와, 사용자가 키를 넣고 질문했을 때의 AI 노트 도우미(§2.3 29)뿐이다(INTERNET·ACCESS_NETWORK_STATE; MapLibre가 선언한 위치·Wi-Fi 권한은 제거). 요청은 OpenFreeMap(tiles.openfreemap.org)의 보이는 지역 타일·글리프뿐, 미리 받기 없음, MapLibre 앰비언트 캐시만. 흐름 테스트는 MapLibre 네이티브 렌더러가 JVM에서 돌지 않으므로 `DetailMapRenderer`를 가짜로 바꿔(Koin) 핀·카메라·오프라인·실패·느린 로딩을 검증하고, 실제 렌더러는 네이티브 라이브러리를 못 올릴 때 안전하게 안내로 떨어지는지 확인한다. 스타일은 단위 테스트(구조·출처·팔레트)와 MapLibre style-spec 검증기(개발 중 수동)로 확인했다.
+- 네트워크(상세 지도, §1.7): 앱에서 네트워크를 쓰는 곳은 상세 지도와, 사용자가 키를 넣고 질문했을 때의 AI 노트 도우미(§2.3 29)뿐이다(INTERNET·ACCESS_NETWORK_STATE; MapLibre가 선언한 위치·Wi-Fi 권한은 제거). 요청은 OpenFreeMap(tiles.openfreemap.org)의 보이는 지역 타일·글리프뿐, 미리 받기 없음, MapLibre 앰비언트 캐시만. 흐름 테스트는 MapLibre 네이티브 렌더러가 JVM에서 돌지 않으므로 `DetailMapRenderer`를 가짜로 바꿔(Koin) 핀·카메라·오프라인·실패·느린 로딩을 검증하고, 실제 렌더러는 네이티브 라이브러리를 못 올릴 때 안전하게 안내로 떨어지는지 확인한다. iOS도 같은 렌더링 코드(`MapLibreDetailMap`)를 쓰고, Linux에서는 klib 컴파일까지만 확인한다(앱 링크·Swift 패키지 해석은 macOS CI). 스타일은 단위 테스트(구조·출처·팔레트)와 MapLibre style-spec 검증기(개발 중 수동)로 확인했다.
 
 ## 9. iOS 확장 경로 (2차)
 1. macOS에서 `coffeejournal.enableIos=true`로 iOS 타깃 활성화 → `shared` 프레임워크 생성.

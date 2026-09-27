@@ -23,8 +23,12 @@ junit = "4.13.2"
 work = "2.12.0"
 glance = "1.2.0"
 # the last maplibre-compose release built with Kotlin 2.2.21 / Compose Multiplatform 1.9.x (0.13+ need Kotlin 2.3, which the
-# build now uses; not moved yet); brings MapLibre Native Android 12.0.1
+# build now uses; not moved yet); brings MapLibre Native Android 12.0.1, and on iOS was built against MapLibre Native iOS
+# 6.17.1 (its gradle.properties maplibreIosVersion)
 maplibreCompose = "0.12.1"
+# MapLibre Native iOS, linked by the Xcode project from its Swift package (iosApp/project.yml, exactVersion: the same
+# version; shared/build.gradle.kts checks it) and listed in the iOS app's 출처 · 라이선스; not a Gradle dependency
+maplibreIos = "6.17.1"
 minSdk = "26"
 compileSdk = "36"
 targetSdk = "36"
@@ -71,7 +75,7 @@ work-runtime = { module = "androidx.work:work-runtime", version.ref = "work" }
 work-testing = { module = "androidx.work:work-testing", version.ref = "work" }
 glance-appwidget = { module = "androidx.glance:glance-appwidget", version.ref = "glance" }
 glance-appwidget-testing = { module = "androidx.glance:glance-appwidget-testing", version.ref = "glance" }
-# detail map (OpenStreetMap vector tiles from OpenFreeMap), Android only: MapLibre Native behind a Compose wrapper
+# detail map (OpenStreetMap vector tiles from OpenFreeMap) on Android and iOS: MapLibre Native behind a Compose wrapper
 maplibre-compose = { module = "org.maplibre.compose:maplibre-compose", version.ref = "maplibreCompose" }
 
 [plugins]

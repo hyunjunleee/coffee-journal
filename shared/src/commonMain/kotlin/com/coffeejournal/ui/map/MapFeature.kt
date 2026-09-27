@@ -23,7 +23,7 @@ object MapFeature : Feature {
         viewModelOf(::CafeMapViewModel)
         viewModel { (r: Route.MapPicker) -> MapPickerViewModel(r.target, r.name, r.scope, MapPickResult.decode(r.point), get()) }
         viewModel { (r: Route.DetailMap) -> DetailMapViewModel(r, get(), get(), get()) }
-        // the detail map's renderer (Android: MapLibre Native); the flow tests put a fake in its place
+        // the detail map's renderer (MapLibre Native on Android and iOS); the flow tests put a fake in its place
         single<DetailMapRenderer> { platformDetailMapRenderer() }
     }
 

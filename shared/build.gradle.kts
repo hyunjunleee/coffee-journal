@@ -28,6 +28,20 @@ kotlin {
                 isStatic = true
             }
         }
+        // The simulator test executable is linked by Kotlin/Native itself, so it needs the MapLibre framework that the
+        // app gets from Swift Package Manager: CI passes the folder holding the simulator's MapLibre.framework
+        // (.github/workflows/ios.yml, the release the Swift package pins).
+        val maplibreFrameworkDir = findProperty("coffeejournal.maplibreFrameworkDir") as String?
+        iosSimulatorArm64().binaries.withType<org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable>().configureEach {
+            if (maplibreFrameworkDir != null) linkerOpts("-F$maplibreFrameworkDir", "-rpath", maplibreFrameworkDir)
+            linkTaskProvider.configure {
+                doFirst {
+                    if (maplibreFrameworkDir == null) {
+                        throw GradleException("The iOS tests link MapLibre: pass -Pcoffeejournal.maplibreFrameworkDir=<folder with MapLibre.framework> (see .github/workflows/ios.yml)")
+                    }
+                }
+            }
+        }
     }
 
     sourceSets {
@@ -49,6 +63,9 @@ kotlin {
             implementation(libs.koin.compose)
             implementation(libs.koin.compose.viewmodel)
             implementation(libs.coil.compose)
+            // the detail map (MapLibre Native behind maplibre-compose) on both platforms; on iOS the MapLibre framework
+            // itself is linked by the Xcode project from Swift Package Manager (iosApp/project.yml)
+            implementation(libs.maplibre.compose)
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
@@ -57,8 +74,6 @@ kotlin {
             implementation(libs.kotlinx.coroutines.android)
             implementation(libs.koin.android)
             implementation(libs.work.runtime)
-            // the detail map's renderer (MapLibre Native); common code only sees DetailMapRenderer
-            implementation(libs.maplibre.compose)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
@@ -82,14 +97,21 @@ room {
 }
 
 // The iOS app's "출처 · 라이선스" list, generated like the Android one (gradle/third-party-notices.gradle.kts) from the
-// klibs linked into the framework, plus what Kotlin/Native and skiko carry without a POM of their own.
+// klibs linked into the framework, plus what the app carries without a POM of its own: the Kotlin/Native runtime, the
+// Skia build inside skiko, and MapLibre Native iOS, which the Xcode project links from its Swift package.
 if (enableIos) {
+    val maplibreIos = libs.versions.maplibreIos.get()
+    // the list names the MapLibre framework the app links, so the Xcode project must pin that same version
+    check(Regex("exactVersion: ${Regex.escape(maplibreIos)}\\s").containsMatchIn(rootProject.file("iosApp/project.yml").readText())) {
+        "iosApp/project.yml must pin MapLibre Native iOS $maplibreIos (gradle/libs.versions.toml maplibreIos)"
+    }
     extra["noticesTarget"] = file("src/iosMain/kotlin/com/coffeejournal/ui/about/PlatformLibraries.ios.kt")
     extra["noticesConfiguration"] = "iosArm64CompileKlibraries"
     extra["noticesApp"] = "iOS app"
     extra["noticesBundled"] = listOf(
         listOf("org.jetbrains.kotlin", "kotlin-native-runtime", libs.versions.kotlin.get(), "Kotlin/Native runtime and standard library", "https://kotlinlang.org/", "Apache-2.0"),
         listOf("org.jetbrains.skia", "skia", "bundled in skiko", "Skia", "https://skia.org/", "BSD-3-Clause"),
+        listOf("github.com/maplibre/maplibre-gl-native-distribution", "MapLibre", maplibreIos, "MapLibre Native iOS", "https://github.com/maplibre/maplibre-native", "BSD-2-Clause"),
     )
     apply(from = rootProject.file("gradle/third-party-notices.gradle.kts"))
 }

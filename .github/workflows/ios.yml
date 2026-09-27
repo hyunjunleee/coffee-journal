@@ -87,9 +87,21 @@ jobs:
           name: verification
           path: verification/
 
+      # The test executable links MapLibre as the app does, from the release the Swift package in iosApp/project.yml
+      # pins: its URL and checksum are read from that package's Package.swift.
       - name: Shared tests on an iPhone simulator
         if: inputs.tests
-        run: ./gradlew :shared:iosSimulatorArm64Test -Pcoffeejournal.enableIos=true --no-daemon
+        run: |
+          v=$(sed -n 's/^ *exactVersion: *//p' iosApp/project.yml)
+          pkg=$(curl -fsSL "https://raw.githubusercontent.com/maplibre/maplibre-gl-native-distribution/$v/Package.swift")
+          url=$(echo "$pkg" | sed -n 's/.*url: *"\([^"]*\.zip\)".*/\1/p')
+          sum=$(echo "$pkg" | sed -n 's/.*checksum: *"\([0-9a-f]*\)".*/\1/p')
+          mkdir -p build/maplibre
+          curl -fsSL -o build/maplibre/MapLibre.zip "$url"
+          echo "$sum  build/maplibre/MapLibre.zip" | shasum -a 256 -c
+          unzip -q build/maplibre/MapLibre.zip -d build/maplibre
+          ./gradlew :shared:iosSimulatorArm64Test -Pcoffeejournal.enableIos=true --no-daemon \
+            -Pcoffeejournal.maplibreFrameworkDir="$PWD/build/maplibre/MapLibre.xcframework/ios-arm64_x86_64-simulator"
 
       - name: Generate the Xcode project
         run: |
@@ -114,8 +126,11 @@ jobs:
             build > build/xcodebuild.log 2>&1 || { grep -E "error|FAILED" build/xcodebuild.log | head -50; exit 1; }
           tail -3 build/xcodebuild.log
 
+      # the detail map's MapLibre framework comes from its Swift package (iosApp/project.yml) and must be in the app
       - name: Package the .ipa
         run: |
+          test -f build/ios/Build/Products/Release-iphoneos/CoffeeJournal.app/Frameworks/MapLibre.framework/MapLibre \
+            || { echo "::error::MapLibre.framework is not embedded in the app"; exit 1; }
           mkdir -p dist/Payload
           cp -R build/ios/Build/Products/Release-iphoneos/CoffeeJournal.app dist/Payload/
           (cd dist && zip -qry "$IPA_NAME" Payload && rm -rf Payload)
