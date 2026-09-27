@@ -105,6 +105,24 @@ object AiFixtures {
             "- 같은 로스터리는 \"honey sweetness\"도 적었다.[2][9]\n" +
             "- 비슷한 표현은 찾지 못했어요."
 
+    /** A basic search of the same query: one page the advanced search found too, two new ones. */
+    const val TAVILY_BASIC = """
+    {"query": "q", "results": [
+      {"url": "https://www.example-roaster.com/products/yirgacheffe-konga/", "title": "Yirgacheffe Konga", "content": "Tasting notes: Bergamot.", "score": 0.7, "raw_content": null},
+      {"url": "https://roaster-a.example/beans/kochere", "title": "Kochere", "content": "Notes: bergamot, lemon, honey.", "score": 0.6, "raw_content": null},
+      {"url": "https://roaster-b.example/beans/guji", "title": "Guji", "content": "Notes: bergamot, peach.", "score": 0.5, "raw_content": null}
+    ], "response_time": 0.6}
+    """
+
+    /** The Korean-blog search (사람들 의견): home-café posts. */
+    const val TAVILY_BLOGS = """
+    {"query": "커피 원두 베르가못 노트 후기", "results": [
+      {"url": "https://m.blog.naver.com/someone/224455", "title": "예가체프 코체레 후기", "content": "베르가못 향이 은은하고 \"홍차 같은 여운\"이 길었다.", "score": 0.8, "raw_content": null},
+      {"url": "https://coffeelog.tistory.com/31", "title": "홈카페 원두 기록", "content": "잘 말린 건포도를 먹는 듯한 쫀쫀한 구조감.", "score": 0.7, "raw_content": null},
+      {"url": "https://blog.naver.com/someone/223344", "title": "베르가못 향 커피 후기", "content": "개인적으로 베르가못은 “얼그레이 같은 향”이라고 느꼈다.", "score": 0.6, "raw_content": null}
+    ], "response_time": 0.9}
+    """
+
     /** The query step's request is the one Gemini request asking for JSON. */
     const val QUERY_STEP = "responseMimeType"
 

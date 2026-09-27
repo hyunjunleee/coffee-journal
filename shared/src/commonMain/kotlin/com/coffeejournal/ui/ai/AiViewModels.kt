@@ -60,6 +60,8 @@ class AiSettingsViewModel(
 
     fun setSearchDepth(depth: SearchDepth) = write { prefs.setSearchDepth(depth) }
 
+    fun setPeople(on: Boolean) = write { prefs.setPeople(on) }
+
     /** A pasted key, trimmed (a copied key often carries a line break). */
     fun saveKey(slot: AiKeySlot, typed: String) {
         val key = typed.trim().replace(Regex("\\s+"), "")
@@ -177,7 +179,7 @@ class NoteHelperViewModel(
         val model = s.model(p)
         _state.value = NoteHelperUi.Asking(p, model)
         _state.value = try {
-            val answer = service.ask(NoteQuestion(args.mode, args.query), p, model, queries, s.searchDepth)
+            val answer = service.ask(NoteQuestion(args.mode, args.query), p, model, queries, s.searchDepth, s.people)
             val candidates = if (args.mode == NoteMode.DESCRIBE) NoteTerms.find(answer.plainText) else emptyList()
             NoteHelperUi.Answered(answer, candidates)
         } catch (e: AiFailure) {

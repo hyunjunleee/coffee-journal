@@ -329,14 +329,14 @@ class RouteScreenshotTest {
         settle()
     }
 
-    /** 설정's AI section: Gemini 무료 + Tavily with the Gemini key saved and the key guide open. */
+    /** 설정's AI section from the option's description: the Gemini key saved, the model and the search settings (defaults). */
     @Test fun settings_ai() {
         AiSetup.key(AiKeySlot.GEMINI)
         show(Route.Settings, "70-settings-ai.png") {
             bringToTop(hasText(AiTexts.SECTION))
-            click(AiTexts.GUIDE_OPEN)
-            bringToTop(hasText(AiTexts.SECTION))
             waitForText("저장됨 …a1b2")
+            bringToTop(hasText(AiProvider.GEMINI_TAVILY.summary))
+            waitForText(AiTexts.credits(3))
         }
     }
 

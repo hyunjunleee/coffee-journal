@@ -58,21 +58,32 @@ object NoteHelperPrompts {
     /** The app's Korean note categories (NoteCategories subs, eval.py wheel_terms). */
     val noteCategories: List<String> get() = NoteCategories.all.flatMap { c -> c.subs.map { it.name } }
 
-    /** The question (eval.py question()): mode A explains [NoteQuestion.query]; mode B picks terms for a described taste. */
-    fun question(q: NoteQuestion): String = when (q.mode) {
+    /** 사람들 의견 (mode A): the line added after the Flavor Wheel line (eval.py PEOPLE_NOTE). */
+    const val PEOPLE_NOTE = "- 사람들의 느낌: 커뮤니티·개인 블로그 글에서 사람들이 이 노트를 어떻게 느끼고 표현하는지 " +
+        "(개인 의견이라고 밝히고 문장마다 [n]을 붙인다. 그런 출처가 있을 때만)"
+
+    /** 사람들 의견 (mode B): the line added before the term lists (eval.py PEOPLE_DESCRIBE). */
+    const val PEOPLE_DESCRIBE = "- 비슷하게 느낀 사람들의 말: 커뮤니티·개인 글에서 비슷한 맛을 뭐라고 부르는지 " +
+        "(개인 의견이라고 밝히고 문장마다 [n]을 붙인다. 그런 출처가 있을 때만)"
+
+    /**
+     * The question (eval.py question()): mode A explains [NoteQuestion.query]; mode B picks terms for a described taste.
+     * [people]: 사람들 의견 is on (Gemini 무료 + Tavily), so the answer gets a section for how people put it.
+     */
+    fun question(q: NoteQuestion, people: Boolean = false): String = when (q.mode) {
         NoteMode.NOTE ->
             "노트 설명. 향미 노트: \"${q.query}\"\n" +
                 "형식:\n" +
                 "- 한 줄 뜻: 커피에서 이 노트가 가리키는 향·맛\n" +
                 "- 실제 쓰임 2~4개: 인용 + 어떤 원두·가공·로스팅에서 나왔는지\n" +
                 "- 비슷한 표현·헷갈리는 표현\n" +
-                "- Coffee Taster's Flavor Wheel에서의 위치(찾은 경우에만)"
+                "- Coffee Taster's Flavor Wheel에서의 위치(찾은 경우에만)" + (if (people) "\n$PEOPLE_NOTE" else "")
         NoteMode.DESCRIBE ->
             "맛 묘사로 노트 찾기. 마신 사람의 묘사: \"${q.query}\"\n" +
                 "아래 목록 안에서 어울리는 용어 3~5개를 고르고, 각각 그렇게 부르는 근거를 실제 문서의 인용으로 보여줘.\n" +
                 "형식:\n" +
                 "- 용어: 근거(인용과 출처)\n" +
-                "- 후보를 구별하는 방법(출처가 있을 때만)\n" +
+                "- 후보를 구별하는 방법(출처가 있을 때만)\n" + (if (people) "$PEOPLE_DESCRIBE\n" else "") +
                 "플레이버 휠 용어: ${wheelTerms.joinToString(", ")}\n" +
                 "앱의 한국어 노트 분류: ${noteCategories.joinToString(", ")}"
     }
@@ -94,6 +105,10 @@ object NoteHelperPrompts {
     }
 
     const val FALLBACK_MAX = 300
+
+    /** "베르가못 (bergamot)" → "베르가못": the label without its parenthesised part (eval.py korean_query). */
+    fun koreanName(label: String): String =
+        Regex("""^(.*?)\s*[(（]([^()（）]+)[)）]\s*$""").find(label.trim())?.groupValues?.get(1)?.trim() ?: label.trim()
 
     /** "베르가못 (bergamot)" → "bergamot"; "자스민" → "자스민". */
     fun searchName(label: String): String {

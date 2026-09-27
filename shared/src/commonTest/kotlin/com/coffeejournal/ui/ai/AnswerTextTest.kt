@@ -86,6 +86,9 @@ class AnswerTextTest {
         assertEquals(SourceKind.INSTITUTION, SourceKinds.of("www.sca.coffee"))
         assertEquals(SourceKind.INSTITUTION, SourceKinds.of("store.sca.coffee"))
         assertEquals(SourceKind.PERSONAL, SourceKinds.of("someone.tistory.com"))
+        for (d in listOf("blog.naver.com", "m.blog.naver.com", "cafe.naver.com", "m.cafe.naver.com", "brunch.co.kr", "tistory.com")) {
+            assertEquals(SourceKind.PERSONAL, SourceKinds.of(d), d)
+        }
         assertEquals(SourceKind.OTHER, SourceKinds.of("notsca.coffee.example.com"))
         assertEquals(SourceKind.OTHER, SourceKinds.of("fox.com"), "x.com must not match the end of another name")
         assertEquals("example.com", SourceKinds.domainOf("https://www.Example.com:443/a?b#c"))

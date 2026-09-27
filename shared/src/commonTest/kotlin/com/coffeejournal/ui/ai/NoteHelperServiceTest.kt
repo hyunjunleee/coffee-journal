@@ -94,14 +94,75 @@ class NoteHelperServiceTest {
         assertEquals(1, refused.requests.size)
     }
 
-    @Test fun geminiTavily_searchDepthFromSettings() = runTest {
+    /** The Tavily requests of the last question: (query, depth, include_domains). */
+    private fun tavilyRequests(from: Int = 0): List<Triple<String, String, String?>> = http.requests.drop(from).filter { "tavily" in it.url }.map {
+        val b = AiJson.parseObject(it.body!!)!!
+        Triple(b["query"]!!.jsonPrimitive.content, b["search_depth"]!!.jsonPrimitive.content, b["include_domains"]?.toString())
+    }
+
+    @Test fun geminiTavily_eachSearchSetting_sendsItsSearchesInOrder() = runTest {
         keys(AiKeySlot.GEMINI, AiKeySlot.TAVILY)
         tavilyPipeline()
-        service.ask(note, AiProvider.GEMINI_TAVILY, "m", depth = SearchDepth.BASIC)
-        assertEquals("bergamot tasting note specialty coffee" to "basic", tavilyQuery(1))
-        assertNull(AiJson.parseObject(http.requests[1].body!!)!!["chunks_per_source"])
-        service.ask(note, AiProvider.GEMINI_TAVILY, "m")
-        assertEquals("bergamot tasting note specialty coffee" to "advanced", tavilyQuery(4))
+        val main = "bergamot tasting note specialty coffee"
+        val blog = Triple("커피 원두 베르가못 노트 후기", "basic", """["blog.naver.com","tistory.com","brunch.co.kr","cafe.naver.com"]""")
+        val expected = mapOf(
+            (SearchDepth.BASIC to false) to listOf(Triple(main, "basic", null)),
+            (SearchDepth.PRECISE to false) to listOf(Triple(main, "advanced", null)),
+            (SearchDepth.PRECISE_BASIC to false) to listOf(Triple(main, "basic", null), Triple(main, "advanced", null)),
+            (SearchDepth.BASIC to true) to listOf(Triple(main, "basic", null), blog),
+            (SearchDepth.PRECISE to true) to listOf(Triple(main, "advanced", null), blog),
+            (SearchDepth.PRECISE_BASIC to true) to listOf(Triple(main, "basic", null), Triple(main, "advanced", null), blog),
+        )
+        for ((setting, searches) in expected) {
+            val from = http.requests.size
+            val a = service.ask(note, AiProvider.GEMINI_TAVILY, "m", depth = setting.first, people = setting.second)
+            assertEquals(searches, tavilyRequests(from), setting.toString())
+            // every query sent is shown under the answer, once
+            assertEquals(searches.map { it.first }.distinct(), a.queries, setting.toString())
+            // the question asks for people's impressions only with 사람들 의견
+            val user = AiJson.parseObject(http.requests.last().body!!)!!["contents"]!!.jsonArray[0].jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content
+            assertEquals(setting.second, NoteHelperPrompts.PEOPLE_NOTE in user, setting.toString())
+        }
+    }
+
+    @Test fun geminiTavily_pagesInOrder_andAFailedBlogSearchOnlyAddsANote() = runTest {
+        keys(AiKeySlot.GEMINI, AiKeySlot.TAVILY)
+        http.on("generativelanguage", bodyPart = AiFixtures.QUERY_STEP) { AiFixtures.geminiQueries(query) }
+            .on("api.tavily.com", bodyPart = "include_domains") { AiFixtures.TAVILY_BLOGS }
+            .on("api.tavily.com", bodyPart = "\"advanced\"") { AiFixtures.TAVILY_SEARCH }
+            .on("api.tavily.com", bodyPart = "\"basic\"") { AiFixtures.TAVILY_BASIC }
+            .on("generativelanguage") { AiFixtures.geminiPlain("- 한 블로그는 \"쫀쫀한 구조감\"이라고 적었다(개인 의견).[7]") }
+        val a = service.ask(note, AiProvider.GEMINI_TAVILY, "m", depth = SearchDepth.PRECISE_BASIC, people = true)
+        // advanced first, then basic's new pages, then the blogs
+        assertEquals(
+            listOf("sca.coffee", "example-roaster.com", "blog.naver.com", "roaster-a.example", "roaster-b.example", "m.blog.naver.com", "coffeelog.tistory.com"),
+            a.sources.map { it.domain },
+        )
+        assertEquals(SourceKind.PERSONAL, a.sources[6].kind)
+        assertEquals(QuoteStatus.FOUND, a.paragraphs.single().quotes.single().status)
+        assertTrue(a.notes.isEmpty())
+        val user = AiJson.parseObject(http.requests.last().body!!)!!["contents"]!!.jsonArray[0].jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content
+        assertTrue(user.contains("[7] 홈카페 원두 기록 — coffeelog.tistory.com"))
+        assertTrue(user.contains(NoteHelperPrompts.PEOPLE_NOTE))
+
+        // the blogs fail: an answer from the main pages, with a note
+        val blogsDown = FakeAiHttp().on("generativelanguage", bodyPart = AiFixtures.QUERY_STEP) { AiFixtures.geminiQueries(query) }
+            .on("api.tavily.com", status = 500, bodyPart = "include_domains") { "{}" }
+            .on("api.tavily.com") { AiFixtures.TAVILY_SEARCH }
+            .on("generativelanguage") { AiFixtures.geminiPlain(AiFixtures.TAVILY_ANSWER) }
+        val b = NoteHelperService(blogsDown, secrets).ask(note, AiProvider.GEMINI_TAVILY, "m", people = true)
+        assertEquals(3, b.sources.size)
+        assertEquals(listOf(AiTexts.BLOGS_FAILED), b.notes)
+        // nothing for the people line to come from: Gemini is not asked for it; the Korean query was still sent
+        val asked = AiJson.parseObject(blogsDown.requests.last().body!!)!!["contents"]!!.jsonArray[0].jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content
+        assertFalse(asked.contains(NoteHelperPrompts.PEOPLE_NOTE))
+        assertEquals(4, blogsDown.requests.size)
+        assertEquals(2, b.queries.size)
+        // only the main search failing fails the question, with its error (the blogs do not stand in)
+        val mainDown = FakeAiHttp().on("generativelanguage", bodyPart = AiFixtures.QUERY_STEP) { AiFixtures.geminiQueries(query) }
+            .on("api.tavily.com", bodyPart = "include_domains") { AiFixtures.TAVILY_BLOGS }
+            .on("api.tavily.com", status = 432) { AiFixtures.TAVILY_432 }
+        assertEquals(AiErrorKind.QUOTA, fails { NoteHelperService(mainDown, secrets).ask(note, AiProvider.GEMINI_TAVILY, "m", people = true) }.kind)
     }
 
     @Test fun geminiTavily_aFailedSearch_isReported_andGeminiIsNotAsked() = runTest {
@@ -259,6 +320,13 @@ class NoteHelperServiceTest {
         dao.rows.value = dao.rows.value + (AiPrefs.KEY_SEARCH_DEPTH to "PRECISE_AND_PEOPLE")
         assertEquals(SearchDepth.PRECISE, prefs.load().searchDepth)
         assertEquals(SearchDepth.PRECISE, SearchDepth.of(null))
+        // 사람들 의견: on by default, off only when saved off
+        assertTrue(s.people)
+        prefs.setPeople(false)
+        assertEquals(false, prefs.load().people)
+        assertEquals("false", dao.rows.value[AiPrefs.KEY_PEOPLE])
+        dao.rows.value = dao.rows.value + (AiPrefs.KEY_PEOPLE to "maybe")
+        assertTrue(prefs.load().people)
         assertTrue(dao.rows.value.keys.all { SettingsRepository.isDeviceKey(it) && it.startsWith("device.ai.") }, dao.rows.value.keys.toString())
         prefs.setConsent(AiProvider.OPENAI, false)
         assertTrue(prefs.load().consents.isEmpty())
@@ -271,6 +339,11 @@ class NoteHelperServiceTest {
         assertTrue(b.startsWith("맛 묘사로 노트 찾기. 마신 사람의 묘사: \"잘 익은 자두 같아요\"\n"))
         assertTrue(b.contains("플레이버 휠 용어: Black Tea, Floral, Chamomile"))
         assertTrue(b.contains("앱의 한국어 노트 분류: 베리류, 감귤류"))
+        // 사람들 의견: mode A after the Flavor Wheel line, mode B before the term lists
+        assertEquals(a + "\n" + NoteHelperPrompts.PEOPLE_NOTE, NoteHelperPrompts.question(note, people = true))
+        val bp = NoteHelperPrompts.question(NoteQuestion(NoteMode.DESCRIBE, "잘 익은 자두 같아요"), people = true)
+        assertEquals(b.replace("(출처가 있을 때만)\n", "(출처가 있을 때만)\n" + NoteHelperPrompts.PEOPLE_DESCRIBE + "\n"), bp)
+        assertEquals("베르가못", NoteHelperPrompts.koreanName("베르가못 (bergamot)"))
         assertEquals("bergamot", NoteHelperPrompts.searchName("베르가못 (bergamot)"))
         assertEquals("자스민", NoteHelperPrompts.searchName("자스민"))
         assertEquals("흑설탕", NoteHelperPrompts.searchName("흑설탕 (갈색 설탕)"))

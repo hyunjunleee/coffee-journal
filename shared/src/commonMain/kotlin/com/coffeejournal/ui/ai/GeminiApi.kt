@@ -38,7 +38,7 @@ object GeminiApi {
         AiHttpRequest(url(model), headers(key), body(system, user, search, maxOutputTokens))
 
     /**
-     * The query step (GEMINI_TAVILY): no tools, temperature 0, a short JSON answer {"queries": [...]} held to a schema
+     * The query step (GEMINI_TAVILY): no tools, temperature 0, a JSON answer {"queries": [...]} held to a schema
      * (structured output without tools works on the free tier).
      */
     fun queryBody(system: String, user: String): String = buildJsonObject {
@@ -51,7 +51,8 @@ object GeminiApi {
         }
         putJsonObject("generationConfig") {
             put("temperature", 0)
-            put("maxOutputTokens", 200)
+            // room for a model that thinks before it answers
+            put("maxOutputTokens", 1024)
             put("responseMimeType", "application/json")
             putJsonObject("responseSchema") {
                 put("type", "OBJECT")

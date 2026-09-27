@@ -30,7 +30,7 @@ enum class AiProvider(
         "Gemini 무료 + Tavily",
         "무료로 쓸 수 있어요. Gemini 키와 Tavily 키가 둘 다 필요해요. Gemini가 질문을 영어 검색어로 바꾸면 Tavily가 웹에서 찾고, " +
             "찾은 글만 Gemini에 넘겨 답하게 해요. 답에 인용된 표현이 그 글에 정말 있는지 앱이 확인해요. " +
-            "질문 한 번에 Tavily 2크레딧(정밀) 또는 1크레딧(기본)을 써요(무료 월 1,000크레딧).",
+            "질문 한 번에 Tavily를 설정에 따라 1–4크레딧 써요(무료 월 1,000크레딧).",
         listOf(AiKeySlot.GEMINI, AiKeySlot.TAVILY),
         "gemini-3.5-flash-lite",
         listOf("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite"),
@@ -84,16 +84,22 @@ enum class AiProvider(
 }
 
 /**
- * 설정 › AI 노트 도우미 › 검색 (Gemini 무료 + Tavily only): how deep Tavily searches the one query. The list is open
- * for a third option.
+ * 설정 › AI 노트 도우미 › 검색 (Gemini 무료 + Tavily only): the Tavily searches of the one query, in the order they are
+ * sent. 정밀+기본 searches basic first: Tavily answers a basic search of a query it already searched at advanced with the
+ * cached advanced result (measured identical to the character), so the other order would pay twice for one result.
  */
-enum class SearchDepth(val label: String, val tavily: String, val credits: Int) {
-    /** advanced: pages about that very flavor, with longer passages around the term to quote. The default. */
-    PRECISE("정밀", "advanced", 2),
+enum class SearchDepth(val label: String, val depths: List<String>) {
+    /** basic: faster, 1 credit. */
+    BASIC("기본", listOf("basic")),
 
-    /** basic: faster, half the credits. */
-    BASIC("기본", "basic", 1),
+    /** advanced: pages about that very flavor, with longer passages around the term to quote; 2 credits. The default. */
+    PRECISE("정밀", listOf("advanced")),
+
+    /** The same query at both depths: more distinct sites per answer; 3 credits. */
+    PRECISE_BASIC("정밀+기본", listOf("basic", "advanced")),
     ;
+
+    val credits: Int get() = depths.sumOf { if (it == "advanced") 2 else 1 }
 
     companion object {
         val DEFAULT = PRECISE

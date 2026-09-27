@@ -8,6 +8,7 @@ import com.coffeejournal.ui.ai.AiKeySlot
 import com.coffeejournal.ui.ai.AiPrefs
 import com.coffeejournal.ui.ai.AiProvider
 import com.coffeejournal.ui.ai.NoteHelperService
+import com.coffeejournal.ui.ai.SearchDepth
 import com.coffeejournal.ui.ai.SecretStore
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.JsonPrimitive
@@ -52,21 +53,27 @@ object AiSetup {
 
     fun key(slot: AiKeySlot, value: String = "test-${slot.name.lowercase()}-a1b2") { secrets.values[NoteHelperService.secretName(slot)] = value }
 
-    /** [p] chosen with its keys saved and, when [consented], its notice already confirmed. */
-    fun ready(p: AiProvider, consented: Boolean = true, model: String? = null) = runBlocking {
+    /**
+     * [p] chosen with its keys saved and, when [consented], its notice already confirmed; for Gemini 무료 + Tavily the
+     * search settings stay at their defaults (정밀 + 사람들 의견) unless [depth] or [people] say otherwise.
+     */
+    fun ready(p: AiProvider, consented: Boolean = true, model: String? = null, depth: SearchDepth? = null, people: Boolean? = null) = runBlocking {
         val prefs = koin.get<AiPrefs>()
         prefs.setProvider(p)
         if (model != null) prefs.setModel(p, model)
         if (consented) prefs.setConsent(p, true)
+        if (depth != null) prefs.setSearchDepth(depth)
+        if (people != null) prefs.setPeople(people)
         p.keys.forEach { key(it) }
     }
 
     /**
-     * Gemini's query, Tavily's pages for it and Gemini's answer from the pages: mode A by default, or mode B with
-     * [AiReplies.DESCRIBE_ANSWER] and [AiReplies.DESCRIBE_QUERIES].
+     * Gemini's query, Tavily's pages for it (and the blog pages for the Korean blog search) and Gemini's answer from
+     * the pages: mode A by default, or mode B with [AiReplies.DESCRIBE_ANSWER] and [AiReplies.DESCRIBE_QUERIES].
      */
     fun tavilyAnswers(geminiText: String = AiReplies.NOTE_ANSWER, queries: String = AiReplies.NOTE_QUERIES) {
         http.on("generativelanguage", bodyPart = AiReplies.QUERY_STEP) { AiReplies.gemini(queries) }
+            .on("api.tavily.com", bodyPart = AiReplies.BLOG_SEARCH) { AiReplies.TAVILY_BLOGS }
             .on("api.tavily.com") { AiReplies.TAVILY }
             .on("generativelanguage") { AiReplies.gemini(geminiText) }
     }
@@ -89,6 +96,18 @@ object AiReplies {
     ], "response_time": 1.2}
     """
 
+    /** The Korean blog search (사람들 의견): the only search limited to some sites. */
+    const val BLOG_SEARCH = "include_domains"
+    const val TAVILY_BLOGS = """
+    {"query": "q", "results": [
+      {"url": "https://coffeelog.tistory.com/88", "title": "예가체프 원두 후기",
+       "content": "첫 모금에 자스민 향이 은은하게 올라와서 꽃차를 마시는 느낌이었다.", "score": 0.7,
+       "raw_content": "예가체프 원두 후기\n첫 모금에 자스민 향이 은은하게 올라와서 꽃차를 마시는 느낌이었다."},
+      {"url": "https://brunch.co.kr/@homecafe/12", "title": "집에서 내린 내추럴 원두",
+       "content": "잘 익은 자두처럼 달다가 끝에 쌉쌀함이 남았다.", "score": 0.6, "raw_content": null}
+    ], "response_time": 0.9}
+    """
+
     /** Only the query step's request asks for JSON. */
     const val QUERY_STEP = "responseMimeType"
     const val NOTE_QUERIES = """{"queries": ["jasmine tasting note specialty coffee"]}"""
@@ -97,18 +116,21 @@ object AiReplies {
     const val NOTE_SENTENCE_1 = "한 줄 뜻: SCA는 자스민을 \"a sweet floral aroma\"라고 설명한다."
     const val NOTE_SENTENCE_3 = "한 로스터리는 \"honey sweetness\"도 적었다."
     const val UNCITED = "비슷한 표현은 찾지 못했어요."
+    const val PEOPLE_SENTENCE = "사람들의 느낌: 한 홈카페 블로그는 \"꽃차를 마시는 느낌\"이라고 적었다(개인 의견)."
     const val NOTE_ANSWER =
         "- $NOTE_SENTENCE_1[1]\n" +
             "- 한 로스터리는 예가체프에 \"Jasmine, Bergamot, Black Tea\"라고 적었다 [2].\n" +
             "- $NOTE_SENTENCE_3[2]\n" +
             "- 한 블로그는 \"꽃차 같은 향\"이라고 적었다(개인 의견).[3]\n" +
+            "- $PEOPLE_SENTENCE[4]\n" +
             "- $UNCITED"
 
     const val DESCRIBE_ANSWER =
         "- Plum: 한 로스터리는 \"Plum, dark chocolate\"이라고 적었다.[2]\n" +
             "- Dark Chocolate: 같은 페이지에 나온다.[2]\n" +
             "- 자두처럼 달고 끝이 쌉쌀한 맛은 다크 초콜릿에 가깝다고 적혀 있다.[2]\n" +
-            "- Jasmine: SCA는 \"a sweet floral aroma\"라고 설명한다.[1]"
+            "- Jasmine: SCA는 \"a sweet floral aroma\"라고 설명한다.[1]\n" +
+            "- 비슷하게 느낀 사람들의 말: 한 브런치 글은 \"잘 익은 자두처럼 달다가\"라고 적었다(개인 의견).[5]"
 
     fun gemini(text: String) = """{"candidates": [{"content": {"role": "model", "parts": [{"text": ${q(text)}}]}, "finishReason": "STOP"}]}"""
 

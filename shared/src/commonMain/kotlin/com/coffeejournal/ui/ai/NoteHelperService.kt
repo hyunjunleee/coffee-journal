@@ -20,8 +20,9 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
     suspend fun missingKeys(provider: AiProvider): List<AiKeySlot> = provider.keys - keys(provider.keys).keys
 
     /**
-     * [queries] and [depth]: GEMINI_TAVILY only, a search the user corrected on the answer screen ("검색어 고치기",
-     * replacing the query step) and how deep Tavily searches (설정 › 검색). The other services choose their own searches.
+     * [queries], [depth] and [people]: GEMINI_TAVILY only, the main search the user corrected on the answer screen
+     * ("검색어 고치기", replacing the query step), how Tavily searches it (설정 › 검색) and the extra Korean-blog search
+     * (설정 › 사람들 의견). The other services choose their own searches.
      */
     suspend fun ask(
         question: NoteQuestion,
@@ -29,12 +30,13 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
         model: String,
         queries: List<String>? = null,
         depth: SearchDepth = SearchDepth.DEFAULT,
+        people: Boolean = false,
     ): GroundedAnswer {
         if (!http.supported || !secrets.supported) throw AiFailure(AiErrors.unsupported)
         val keys = keys(provider.keys)
         val missing = provider.keys - keys.keys
         if (missing.isNotEmpty()) throw AiFailure(AiErrors.missingKeys(missing))
-        val answer = answerer(provider, depth).answer(question, model, keys, queries?.takeIf { it.isNotEmpty() })
+        val answer = answerer(provider, depth, people).answer(question, model, keys, queries?.takeIf { it.isNotEmpty() })
         // an answer with no sentence tied to a source is never shown
         if (answer.sources.isEmpty() || answer.citedRuns == 0) throw AiFailure(AiErrors.noSources())
         return answer
@@ -77,8 +79,8 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
         }
     }
 
-    private fun answerer(p: AiProvider, depth: SearchDepth): NoteAnswerer = when (p) {
-        AiProvider.GEMINI_TAVILY -> GeminiTavilyAnswerer(depth)
+    private fun answerer(p: AiProvider, depth: SearchDepth, people: Boolean): NoteAnswerer = when (p) {
+        AiProvider.GEMINI_TAVILY -> GeminiTavilyAnswerer(depth, people)
         AiProvider.GEMINI_SEARCH -> GeminiSearchAnswerer()
         AiProvider.OPENAI -> OpenAiAnswerer()
         AiProvider.CLAUDE -> ClaudeAnswerer()
@@ -90,25 +92,39 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
     }
 
     /**
-     * Gemini writes one English query, Tavily searches it once at [depth], Gemini (no tools) answers from the pages with
-     * [n] marks, and the app checks the quotes. A corrected query ([queries]) skips the first step.
+     * Gemini writes one English query; Tavily searches it at [depth] and, with [people], searches Korean blogs once more
+     * in Korean; Gemini (no tools) answers from the pages with [n] marks, and the app checks the quotes. A corrected
+     * query ([queries]) skips the first step. A failed blog search leaves the answer without people's impressions; the
+     * question fails only when every main search does (with the first one's error).
      */
-    private inner class GeminiTavilyAnswerer(private val depth: SearchDepth) : NoteAnswerer {
+    private inner class GeminiTavilyAnswerer(private val depth: SearchDepth, private val people: Boolean) : NoteAnswerer {
         override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer {
             val geminiKey = keys.getValue(AiKeySlot.GEMINI)
-            val searches = (queries ?: writeQueries(q, model, geminiKey)).take(SearchQueries.MAX)
-            val found = exchange(AiService.TAVILY, TavilyApi.request(keys.getValue(AiKeySlot.TAVILY), searches.first(), depth)) {
-                AiErrors.tavily(it.status, it.body)
+            val main = (queries ?: writeQueries(q, model, geminiKey)).first()
+            val plan = TavilyPlan.searches(main, q, depth, people)
+            val found = mutableListOf<Pair<TavilySearch, List<TavilyResult>>>()
+            var firstError: AiError? = null
+            var blogsFailed = false
+            for (search in plan) {
+                try {
+                    val body = exchange(AiService.TAVILY, TavilyApi.request(keys.getValue(AiKeySlot.TAVILY), search)) { AiErrors.tavily(it.status, it.body) }
+                    found += search to (TavilyApi.parse(body) ?: throw AiFailure(AiErrors.unreadable(AiService.TAVILY)))
+                } catch (e: AiFailure) {
+                    if (search.people) blogsFailed = true else if (firstError == null) firstError = e.error
+                }
             }
-            val results = TavilyApi.parse(found) ?: throw AiFailure(AiErrors.unreadable(AiService.TAVILY))
+            if (found.none { !it.first.people }) throw AiFailure(firstError ?: AiErrors.noSources())
+            val results = TavilyPlan.order(found)
             if (results.isEmpty()) throw AiFailure(AiErrors.noSources("Tavily: 0 results"))
-            val user = NoteHelperPrompts.withSources(NoteHelperPrompts.question(q), results)
+            // without the blog pages there is nothing for the people line to come from, and the note says it is left out
+            val user = NoteHelperPrompts.withSources(NoteHelperPrompts.question(q, people && !blogsFailed), results)
             val body = exchange(AiService.GEMINI, GeminiApi.request(geminiKey, model, NoteHelperPrompts.SOURCES_SYSTEM, user, search = false)) {
                 AiErrors.gemini(it.status, it.body, model, search = false)
             }
             val reply = GeminiApi.parse(body) ?: throw AiFailure(AiErrors.unreadable(AiService.GEMINI))
             GeminiApi.blocked(reply)?.let { throw AiFailure(AiErrors.blocked(it)) }
-            return SourcedAnswer.answer(reply.text, results, model, GeminiApi.truncationNotes(reply.finishReason), searches)
+            val notes = GeminiApi.truncationNotes(reply.finishReason) + if (blogsFailed) listOf(AiTexts.BLOGS_FAILED) else emptyList()
+            return SourcedAnswer.answer(reply.text, results, model, notes, plan.map { it.query }.distinct())
         }
     }
 

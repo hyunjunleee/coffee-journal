@@ -13,7 +13,11 @@ data class AiSettings(
     val consents: Set<AiProvider> = emptySet(),
     /** How deep Tavily searches (Gemini 무료 + Tavily). */
     val searchDepth: SearchDepth = SearchDepth.DEFAULT,
+    /** 사람들 의견 (Gemini 무료 + Tavily): one more search on Korean blogs, answered as people's impressions. */
+    val people: Boolean = true,
 ) {
+    /** Tavily credits of one question with these settings. */
+    val tavilyCredits: Int get() = searchDepth.credits + if (people) 1 else 0
     fun model(p: AiProvider = provider): String = models[p]?.trim()?.takeIf { it.isNotEmpty() } ?: p.defaultModel
     fun typedModel(p: AiProvider = provider): String = models[p] ?: ""
 }
@@ -24,20 +28,22 @@ data class AiSettings(
  */
 class AiPrefs(private val settings: SettingsRepository) {
     fun observe(): Flow<AiSettings> {
-        val flows: List<Flow<String?>> = listOf(settings.observe(KEY_PROVIDER), settings.observe(KEY_SEARCH_DEPTH)) +
+        val flows: List<Flow<String?>> = listOf(settings.observe(KEY_PROVIDER), settings.observe(KEY_SEARCH_DEPTH), settings.observe(KEY_PEOPLE)) +
             AiProvider.entries.map { settings.observe(modelKey(it)) } +
             AiProvider.entries.map { settings.observe(consentKey(it)) }
         return combine(flows) { values -> decode(values.toList()) }
     }
 
     suspend fun load(): AiSettings = decode(
-        listOf(settings.get(KEY_PROVIDER), settings.get(KEY_SEARCH_DEPTH)) + AiProvider.entries.map { settings.get(modelKey(it)) } +
+        listOf(settings.get(KEY_PROVIDER), settings.get(KEY_SEARCH_DEPTH), settings.get(KEY_PEOPLE)) + AiProvider.entries.map { settings.get(modelKey(it)) } +
             AiProvider.entries.map { settings.get(consentKey(it)) },
     )
 
     suspend fun setProvider(p: AiProvider) = settings.put(KEY_PROVIDER, p.name)
 
     suspend fun setSearchDepth(depth: SearchDepth) = settings.put(KEY_SEARCH_DEPTH, depth.name)
+
+    suspend fun setPeople(on: Boolean) = settings.put(KEY_PEOPLE, on.toString())
 
     suspend fun setModel(p: AiProvider, model: String) = settings.put(modelKey(p), model)
 
@@ -48,15 +54,19 @@ class AiPrefs(private val settings: SettingsRepository) {
     companion object {
         const val KEY_PROVIDER = SettingsRepository.DEVICE_PREFIX + "ai.provider"
         const val KEY_SEARCH_DEPTH = SettingsRepository.DEVICE_PREFIX + "ai.searchDepth"
+        const val KEY_PEOPLE = SettingsRepository.DEVICE_PREFIX + "ai.people"
         fun modelKey(p: AiProvider) = SettingsRepository.DEVICE_PREFIX + "ai.model." + p.name
         fun consentKey(p: AiProvider) = SettingsRepository.DEVICE_PREFIX + "ai.consent." + p.name
 
-        /** [values]: the provider, the search depth, then one model and one consent per [AiProvider] entry (in entry order). */
+        /**
+         * [values]: the provider, the search depth, 사람들 의견, then one model and one consent per [AiProvider] entry (in
+         * entry order). 사람들 의견 is on unless saved as "false".
+         */
         private fun decode(values: List<String?>): AiSettings {
             val n = AiProvider.entries.size
-            val models = AiProvider.entries.mapIndexedNotNull { i, p -> values[2 + i]?.let { p to it } }.toMap()
-            val consents = AiProvider.entries.filterIndexed { i, _ -> values[2 + n + i] == "true" }.toSet()
-            return AiSettings(AiProvider.of(values[0]) ?: AiProvider.DEFAULT, models, consents, SearchDepth.of(values[1]))
+            val models = AiProvider.entries.mapIndexedNotNull { i, p -> values[3 + i]?.let { p to it } }.toMap()
+            val consents = AiProvider.entries.filterIndexed { i, _ -> values[3 + n + i] == "true" }.toSet()
+            return AiSettings(AiProvider.of(values[0]) ?: AiProvider.DEFAULT, models, consents, SearchDepth.of(values[1]), values[2] != "false")
         }
     }
 }

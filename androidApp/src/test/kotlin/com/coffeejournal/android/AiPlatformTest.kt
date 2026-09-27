@@ -10,6 +10,7 @@ import com.coffeejournal.ui.ai.AndroidSecretStore
 import com.coffeejournal.ui.ai.NoteHelperPrompts
 import com.coffeejournal.ui.ai.NoteMode
 import com.coffeejournal.ui.ai.NoteQuestion
+import com.coffeejournal.ui.ai.TavilyPlan
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -42,25 +43,50 @@ class AiPlatformTest {
         assertEquals(evalFile("query_prompt_ko.txt").readText().trimEnd('\n'), NoteHelperPrompts.QUERY_SYSTEM)
     }
 
-    /** eval.py question(): its string literals, with {case} and the joined term lists filled in, equal the app's question. */
+    /**
+     * eval.py question(): its string literals, with {case} and the joined term lists filled in, equal the app's question,
+     * without and with the people line; its PEOPLE_NOTE and PEOPLE_DESCRIBE are the app's word for word.
+     */
     @Test
     fun questionTemplates_areEvalPysQuestion() {
         val py = evalFile("eval.py").readText()
-        val body = py.substringAfter("def question(mode, case, terms, subs):").substringBefore("\ndef ")
+        val literal = Regex("""f?(['"])((?:\\.|(?!\1)[^\\\n])*)\1""")
+        fun unescape(s: String) = s.replace("\\n", "\n").replace("\\\"", "\"").replace("\\'", "'")
+        fun constant(name: String): String {
+            val block = py.substringAfter("\n$name = (", "").substringBefore(")\n")
+            assertTrue("$name in eval.py", block.isNotEmpty())
+            return literal.findAll(block).joinToString("") { unescape(it.groupValues[2]) }
+        }
+        val people = mapOf("PEOPLE_NOTE" to constant("PEOPLE_NOTE"), "PEOPLE_DESCRIBE" to constant("PEOPLE_DESCRIBE"))
+        assertEquals(NoteHelperPrompts.PEOPLE_NOTE, people["PEOPLE_NOTE"])
+        assertEquals(NoteHelperPrompts.PEOPLE_DESCRIBE, people["PEOPLE_DESCRIBE"])
+        // the blog search's sites are eval.py's CROWD_KO
+        val crowdKo = py.substringAfter("\nCROWD_KO = (").substringBefore(")\n")
+        assertEquals(TavilyPlan.BLOGS, Regex("\"([^\"]+)\"").findAll(crowdKo).map { it.groupValues[1] }.toList())
+
+        val body = py.substringAfter("def question(mode, case, terms, subs, people=False):").substringBefore("\ndef ")
         val returns = body.split("return (").drop(1).map { it.substringBeforeLast(")") }
         assertEquals(2, returns.size)
-        val literal = Regex("""f?(['"])((?:\\.|(?!\1)[^\\\n])*)\1""")
         val terms = NoteHelperPrompts.wheelTerms
         val subs = NoteHelperPrompts.noteCategories
-        fun render(block: String, case: String): String = literal.findAll(block).joinToString("") { m ->
-            m.groupValues[2]
-                .replace("{case}", case)
-                .replace("{', '.join(terms)}", terms.joinToString(", "))
-                .replace("{', '.join(subs)}", subs.joinToString(", "))
-                .replace("\\n", "\n").replace("\\\"", "\"").replace("\\'", "'")
+        val ifPeople = Regex("""\(([^()]*?)\s+if people else ""\)""")
+        val piece = Regex(literal.pattern + "|PEOPLE_NOTE|PEOPLE_DESCRIBE")
+        fun render(block: String, case: String, withPeople: Boolean): String =
+            piece.findAll(ifPeople.replace(block) { if (withPeople) it.groupValues[1] else "" }).joinToString("") { m ->
+                people[m.value] ?: unescape(
+                    m.groupValues[2]
+                        .replace("{case}", case)
+                        .replace("{', '.join(terms)}", terms.joinToString(", "))
+                        .replace("{', '.join(subs)}", subs.joinToString(", ")),
+                )
+            }
+        for (withPeople in listOf(false, true)) {
+            val note = NoteQuestion(NoteMode.NOTE, "베르가못 (bergamot)")
+            val describe = NoteQuestion(NoteMode.DESCRIBE, "잘 익은 자두 같아요")
+            assertEquals(render(returns[0], note.query, withPeople), NoteHelperPrompts.question(note, withPeople))
+            assertEquals(render(returns[1], describe.query, withPeople), NoteHelperPrompts.question(describe, withPeople))
         }
-        assertEquals(render(returns[0], "베르가못 (bergamot)"), NoteHelperPrompts.question(NoteQuestion(NoteMode.NOTE, "베르가못 (bergamot)")))
-        assertEquals(render(returns[1], "잘 익은 자두 같아요"), NoteHelperPrompts.question(NoteQuestion(NoteMode.DESCRIBE, "잘 익은 자두 같아요")))
+        assertTrue(NoteHelperPrompts.question(NoteQuestion(NoteMode.NOTE, "x"), people = true).endsWith("\n" + NoteHelperPrompts.PEOPLE_NOTE))
 
         // the lists eval.py reads out of the Kotlin sources (wheel_terms) are the app's
         val root = File("..")

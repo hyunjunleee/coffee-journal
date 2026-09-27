@@ -1,31 +1,41 @@
 package com.coffeejournal.ui.ai
 
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 
 /** A Tavily search result: [content] is its chunks (≤ 500 characters each, joined by " [...] "), [rawContent] the page text. */
 data class TavilyResult(val title: String, val url: String, val content: String, val rawContent: String? = null, val score: Double? = null) {
     val domain: String get() = SourceKinds.domainOf(url)
 }
 
+/** One Tavily search of a question: [depth] "basic" (1 credit) or "advanced" (2); [domains] limits it to those sites. */
+data class TavilySearch(val query: String, val depth: String, val domains: List<String> = emptyList()) {
+    val people: Boolean get() = domains.isNotEmpty()
+}
+
 /**
- * Tavily /search (Bearer key): one search per question at the depth chosen in 설정 (정밀 = advanced, 2 credits; 기본 =
- * basic, 1 credit; a second query added a source but no more cited content in the evaluation), and one basic search
- * with one result for the key check (1 credit).
+ * Tavily /search (Bearer key): the searches of one question ([TavilyPlan]), and one basic search with one result for
+ * the key check (1 credit). Every search asks for 5 results with 3 passages each, as the evaluation measured them
+ * (Tavily accepts chunks_per_source on basic too).
  */
 object TavilyApi {
     const val URL = "https://api.tavily.com/search"
 
+    /** At most this many pages go to Gemini (three searches of five). */
+    const val MAX_SOURCES = 15
+
     fun headers(key: String) = mapOf("Authorization" to "Bearer $key", "Content-Type" to "application/json")
 
-    fun searchBody(query: String, depth: SearchDepth = SearchDepth.DEFAULT): String = buildJsonObject {
-        put("query", query)
-        put("search_depth", depth.tavily)
+    fun searchBody(search: TavilySearch): String = buildJsonObject {
+        put("query", search.query)
+        put("search_depth", search.depth)
         put("max_results", 5)
-        // passages around the term per page: advanced only
-        if (depth == SearchDepth.PRECISE) put("chunks_per_source", 3)
+        put("chunks_per_source", 3)
         put("include_raw_content", "text")
         put("include_answer", false)
+        if (search.domains.isNotEmpty()) putJsonArray("include_domains") { search.domains.forEach { add(it) } }
     }.toString()
 
     fun checkBody(): String = buildJsonObject {
@@ -34,8 +44,14 @@ object TavilyApi {
         put("max_results", 1)
     }.toString()
 
-    fun request(key: String, query: String, depth: SearchDepth = SearchDepth.DEFAULT) = AiHttpRequest(URL, headers(key), searchBody(query, depth))
+    fun request(key: String, search: TavilySearch) = AiHttpRequest(URL, headers(key), searchBody(search))
     fun checkRequest(key: String) = AiHttpRequest(URL, headers(key), checkBody())
+
+    /** The searches' results in the given order, each page once (trailing slash and case aside), at most [cap]. */
+    fun merge(searches: List<List<TavilyResult>>, cap: Int = MAX_SOURCES): List<TavilyResult> {
+        val seen = HashSet<String>()
+        return searches.flatten().filter { seen.add(it.url.trimEnd('/').lowercase()) }.take(cap)
+    }
 
     /** Null when [body] is not a search reply; results without a URL are left out. */
     fun parse(body: String): List<TavilyResult>? {
@@ -123,3 +139,33 @@ object SearchQueries {
     }
 }
 
+/**
+ * What Tavily is asked for one question (Gemini 무료 + Tavily), from 설정 › 검색 and 사람들 의견 (evaluation runs
+ * #14-#16, plan 12.3): the main query at the chosen depth(s), then with 사람들 의견 one basic search limited to Korean
+ * blogs, in Korean.
+ */
+object TavilyPlan {
+    /** Where home-café posts are: Korean blogs and a café community. */
+    val BLOGS = listOf("blog.naver.com", "tistory.com", "brunch.co.kr", "cafe.naver.com")
+
+    fun searches(main: String, q: NoteQuestion, depth: SearchDepth, people: Boolean): List<TavilySearch> =
+        depth.depths.map { TavilySearch(main, it) } + if (people) listOf(TavilySearch(koreanQuery(q), "basic", BLOGS)) else emptyList()
+
+    /** The blog search's words (eval.py korean_query): the note's Korean name, or the description, as posts word it. */
+    fun koreanQuery(q: NoteQuestion): String = when (q.mode) {
+        NoteMode.NOTE -> "커피 원두 ${NoteHelperPrompts.koreanName(q.query)} 노트 후기"
+        NoteMode.DESCRIBE -> "커피 원두 후기 ${q.query.trim()}"
+    }
+
+    /** Questions a month on Tavily's free 1,000 credits, rounded down to tens. */
+    fun questionsPerMonth(credits: Int): Int = 1000 / credits.coerceAtLeast(1) / 10 * 10
+
+    /**
+     * The pages in the order Gemini gets them: advanced results first, then basic's new pages, then the blogs; each
+     * page once, at most [TavilyApi.MAX_SOURCES].
+     */
+    fun order(found: List<Pair<TavilySearch, List<TavilyResult>>>): List<TavilyResult> {
+        val main = found.filter { !it.first.people }.sortedBy { if (it.first.depth == "advanced") 0 else 1 }
+        return TavilyApi.merge((main + found.filter { it.first.people }).map { it.second })
+    }
+}

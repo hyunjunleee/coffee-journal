@@ -97,7 +97,7 @@ fun AiSettingsSection(modifier: Modifier = Modifier) {
         Spacer(Modifier.height(12.dp))
         ModelField(p, s, onChange = { vm.setModel(p, it) })
 
-        // only Tavily's search has a depth to choose
+        // only Tavily's searches are the app's to choose
         if (p == AiProvider.GEMINI_TAVILY) {
             Spacer(Modifier.height(12.dp))
             FieldLabel(AiTexts.SEARCH_DEPTH)
@@ -109,6 +109,17 @@ fun AiSettingsSection(modifier: Modifier = Modifier) {
                 modifier = Modifier.testTag("search-depth"),
             )
             HintText(AiTexts.SEARCH_DEPTH_HINT)
+            Spacer(Modifier.height(12.dp))
+            FieldLabel(AiTexts.PEOPLE)
+            Seg(
+                options = listOf(AiTexts.PEOPLE_ON, AiTexts.PEOPLE_OFF),
+                value = if (s.people) AiTexts.PEOPLE_ON else AiTexts.PEOPLE_OFF,
+                onChange = { label -> vm.setPeople(label == AiTexts.PEOPLE_ON) },
+                allowClear = false,
+                modifier = Modifier.testTag("people"),
+            )
+            HintText(AiTexts.PEOPLE_HINT)
+            Text(AiTexts.credits(s.tavilyCredits), style = AppType.small.copy(color = Ink.text), modifier = Modifier.padding(top = 6.dp).testTag("tavily-credits"))
         }
     }
 

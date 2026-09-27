@@ -43,15 +43,17 @@ data class AnswerSource(val number: Int, val title: String, val url: String, val
     val kind: SourceKind get() = SourceKinds.of(domain)
 }
 
-/** Institution / personal-page badges for the source list (same lists as tools/ai-eval/eval.py). */
+/** Institution / personal badges for the source list (the lists of tools/ai-eval/eval.py). */
 object SourceKinds {
     val INSTITUTIONS = listOf(
         "sca.coffee", "worldcoffeeresearch.org", "coffeeinstitute.org", "allianceforcoffeeexcellence.org",
         "cupofexcellence.org", "ico.org", "ncausa.org",
     )
+    /** Personal posts and communities (a subdomain counts too: m.blog.naver.com, someone.tistory.com). */
     val PERSONAL = listOf(
         "blog.naver.com", "cafe.naver.com", "tistory.com", "brunch.co.kr", "velog.io", "medium.com", "reddit.com",
         "quora.com", "instagram.com", "youtube.com", "facebook.com", "x.com", "twitter.com",
+        "coffeegeek.com", "home-barista.com", "coffeeforums.co.uk",
     )
 
     fun of(domain: String): SourceKind {

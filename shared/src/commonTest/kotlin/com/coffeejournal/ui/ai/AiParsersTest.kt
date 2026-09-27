@@ -86,7 +86,7 @@ class AiParsersTest {
         assertNull(b["tools"])
         assertEquals(NoteHelperPrompts.QUERY_SYSTEM, b["system_instruction"]!!.jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content)
         assertEquals(
-            """{"temperature":0,"maxOutputTokens":200,"responseMimeType":"application/json",""" +
+            """{"temperature":0,"maxOutputTokens":1024,"responseMimeType":"application/json",""" +
                 """"responseSchema":{"type":"OBJECT","properties":{"queries":{"type":"ARRAY","items":{"type":"STRING"}}},"required":["queries"]}}""",
             b["generationConfig"].toString(),
         )
@@ -131,8 +131,8 @@ class AiParsersTest {
 
     // ───────────── Tavily ─────────────
 
-    @Test fun tavily_request_advancedFiveResultsThreeChunksRawText_andTheOneCreditCheck() {
-        val r = TavilyApi.request("tvly-secret", "\"bergamot\" coffee flavor note meaning tasting notes")
+    @Test fun tavily_request_fiveResultsThreeChunksRawText_atEitherDepth_andTheOneCreditCheck() {
+        val r = TavilyApi.request("tvly-secret", TavilySearch("\"bergamot\" coffee flavor note meaning tasting notes", "advanced"))
         assertEquals("https://api.tavily.com/search", r.url)
         assertEquals("Bearer tvly-secret", r.headers["Authorization"])
         val b = obj(r.body)
@@ -144,13 +144,57 @@ class AiParsersTest {
         val c = obj(TavilyApi.checkRequest("k").body)
         assertEquals("basic", c["search_depth"]!!.jsonPrimitive.content)
         assertEquals("1", c["max_results"]!!.jsonPrimitive.content)
-        // 설정 › 검색 › 기본: basic (1 credit), no passages per page (advanced only)
-        val basic = obj(TavilyApi.request("k", "q", SearchDepth.BASIC).body)
+        assertNull(b["include_domains"])
+        // basic asks for the same (as the evaluation measured it; Tavily accepts chunks on basic too)
+        val basic = obj(TavilyApi.request("k", TavilySearch("q", "basic")).body)
         assertEquals("basic", basic["search_depth"]!!.jsonPrimitive.content)
         assertEquals("5", basic["max_results"]!!.jsonPrimitive.content)
-        assertNull(basic["chunks_per_source"])
+        assertEquals("3", basic["chunks_per_source"]!!.jsonPrimitive.content)
         assertEquals("text", basic["include_raw_content"]!!.jsonPrimitive.content)
-        assertEquals(listOf(2, 1), SearchDepth.entries.map { it.credits })
+        // the Korean-blog search is limited to the blogs
+        val blogs = obj(TavilyApi.request("k", TavilySearch("커피 원두 베르가못 노트 후기", "basic", TavilyPlan.BLOGS)).body)
+        assertEquals("""["blog.naver.com","tistory.com","brunch.co.kr","cafe.naver.com"]""", blogs["include_domains"].toString())
+        assertEquals(listOf(1, 2, 3), SearchDepth.entries.map { it.credits })
+        assertEquals(listOf("기본", "정밀", "정밀+기본"), SearchDepth.entries.map { it.label })
+    }
+
+    @Test fun tavilyPlan_searchesPerSetting_basicBeforeAdvanced_blogsLast_inKorean() {
+        val note = NoteQuestion(NoteMode.NOTE, "베르가못 (bergamot)")
+        fun plan(depth: SearchDepth, people: Boolean) = TavilyPlan.searches("bergamot tasting note specialty coffee", note, depth, people)
+            .map { Triple(it.query, it.depth, it.people) }
+        val main = "bergamot tasting note specialty coffee"
+        val blog = Triple("커피 원두 베르가못 노트 후기", "basic", true)
+        assertEquals(listOf(Triple(main, "basic", false)), plan(SearchDepth.BASIC, false))
+        assertEquals(listOf(Triple(main, "advanced", false)), plan(SearchDepth.PRECISE, false))
+        // the same query at basic first: an advanced search first would make the basic one return its cached result
+        assertEquals(listOf(Triple(main, "basic", false), Triple(main, "advanced", false)), plan(SearchDepth.PRECISE_BASIC, false))
+        assertEquals(listOf(Triple(main, "basic", false), blog), plan(SearchDepth.BASIC, true))
+        assertEquals(listOf(Triple(main, "advanced", false), blog), plan(SearchDepth.PRECISE, true))
+        assertEquals(listOf(Triple(main, "basic", false), Triple(main, "advanced", false), blog), plan(SearchDepth.PRECISE_BASIC, true))
+        // eval.py korean_query: the Korean part of the label, or the description as it is
+        assertEquals("커피 원두 자스민 노트 후기", TavilyPlan.koreanQuery(NoteQuestion(NoteMode.NOTE, " 자스민 ")))
+        assertEquals("커피 원두 후기 잘 익은 자두 같아요", TavilyPlan.koreanQuery(NoteQuestion(NoteMode.DESCRIBE, " 잘 익은 자두 같아요 ")))
+        // credits: 기본 1, 정밀 2, 정밀+기본 3, +1 with 사람들 의견; questions a month rounded down to tens
+        assertEquals(listOf(1000, 500, 330, 250), (1..4).map(TavilyPlan::questionsPerMonth))
+        assertEquals(3, AiSettings().tavilyCredits, "the defaults: 정밀 + 사람들 의견")
+        assertEquals(4, AiSettings(searchDepth = SearchDepth.PRECISE_BASIC).tavilyCredits)
+        assertEquals(1, AiSettings(searchDepth = SearchDepth.BASIC, people = false).tavilyCredits)
+        assertEquals("질문 한 번에 약 3크레딧 · 무료 1,000크레딧이면 한 달 약 330번", AiTexts.credits(3))
+        assertEquals("질문 한 번에 약 1크레딧 · 무료 1,000크레딧이면 한 달 약 1,000번", AiTexts.credits(1))
+    }
+
+    @Test fun tavilyPlan_order_advancedFirst_thenBasicsNewPages_thenBlogs_eachOnce_atMostFifteen() {
+        val adv = TavilyApi.parse(AiFixtures.TAVILY_SEARCH)!!
+        val basic = TavilyApi.parse(AiFixtures.TAVILY_BASIC)!!
+        val blogs = TavilyApi.parse(AiFixtures.TAVILY_BLOGS)!!
+        val found = listOf(TavilySearch("q", "basic") to basic, TavilySearch("q", "advanced") to adv, TavilySearch("k", "basic", TavilyPlan.BLOGS) to blogs)
+        val ordered = TavilyPlan.order(found)
+        assertEquals(
+            listOf("sca.coffee", "example-roaster.com", "blog.naver.com", "roaster-a.example", "roaster-b.example", "m.blog.naver.com", "coffeelog.tistory.com"),
+            ordered.map { it.domain },
+        )
+        val many = (1..20).map { TavilyResult("t$it", "https://site$it.example/p", "c") }
+        assertEquals(15, TavilyPlan.order(listOf(TavilySearch("q", "advanced") to many)).size)
     }
 
     @Test fun tavily_results() {

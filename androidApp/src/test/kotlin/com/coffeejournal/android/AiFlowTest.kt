@@ -178,27 +178,45 @@ class AiFlowTest : CoverageFlowBase() {
     }
 
     @Test
-    fun searchDepth_onlyForTavily_keptOnThisPhone_andUsedForTheNextQuestion() {
+    fun searchSettings_depthAndPeople_onlyForTavily_withTheirCredits_keptOnThisPhone_andUsedForTheNextQuestion() {
         launchApp()
         openSettings()
         val depth = { label: String -> button(label) and hasAnyAncestor(hasTestTag("search-depth")) }
-        // Gemini 무료 + Tavily: 정밀 by default, with what each costs
+        val people = { label: String -> button(label) and hasAnyAncestor(hasTestTag("people")) }
+        val credits = { n: Int -> hasTestTag("tavily-credits") and hasText(AiTexts.credits(n)) }
+        // Gemini 무료 + Tavily: 정밀 and 사람들 의견 켬 by default, 3 credits a question
         waitFor(depth("정밀"))
-        assertTrue(isSelected(depth("정밀")))
-        assertTrue(has(hasText(AiTexts.SEARCH_DEPTH_HINT)))
+        assertEquals(listOf("기본", "정밀", "정밀+기본"), SearchDepth.entries.map { it.label })
+        SearchDepth.entries.forEach { assertTrue(it.label, has(depth(it.label))) }
+        assertTrue(isSelected(depth("정밀")) && isSelected(people(AiTexts.PEOPLE_ON)))
+        assertTrue(has(hasText(AiTexts.SEARCH_DEPTH_HINT)) && has(hasText(AiTexts.PEOPLE_HINT)))
+        assertTrue(has(credits(3)))
+        assertTrue(has(hasText("질문 한 번에 약 3크레딧 · 무료 1,000크레딧이면 한 달 약 330번")))
+
+        // each choice is saved at once, and the line follows it
+        tap(depth("정밀+기본"))
+        waitFor(credits(4))
+        waitUntil("depth saved") { runBlocking { prefs.load() }.searchDepth == SearchDepth.PRECISE_BASIC }
+        tap(people(AiTexts.PEOPLE_OFF))
+        waitFor(credits(3))
+        waitUntil("people saved") { !runBlocking { prefs.load() }.people }
         tap(depth("기본"))
-        waitUntil("saved") { runBlocking { prefs.load() }.searchDepth == SearchDepth.BASIC }
-        assertTrue(isSelected(depth("기본")))
+        waitFor(credits(1) and hasText("한 달 약 1,000번", substring = true))
+        assertTrue(isSelected(depth("기본")) && isSelected(people(AiTexts.PEOPLE_OFF)))
+
         // the other options search on their own: no choice there
         tap(button(AiProvider.OPENAI.label))
         waitFor(field(AiKeySlot.OPENAI.placeholder))
-        assertFalse(has(hasTestTag("search-depth")))
+        assertFalse(has(hasTestTag("search-depth")) || has(hasTestTag("people")) || has(hasTestTag("tavily-credits")))
         tap(button(AiProvider.GEMINI_TAVILY.label))
         waitFor(depth("기본"))
-        assertTrue(isSelected(depth("기본")))
-        assertFalse(runBlocking { koinGet<BackupService>().export().json }.contains("searchDepth"))
+        assertTrue(isSelected(depth("기본")) && isSelected(people(AiTexts.PEOPLE_OFF)))
+        // this phone's settings only
+        runBlocking { koinGet<BackupService>().export().json }.let { json ->
+            assertFalse(json.contains("searchDepth") || json.contains("device.ai.people"))
+        }
 
-        // the next question searches at basic depth
+        // the next question: one basic search of the English query, no blog search, no people line
         AiSetup.ready(AiProvider.GEMINI_TAVILY)
         AiSetup.tavilyAnswers(AiReplies.DESCRIBE_ANSWER, AiReplies.DESCRIBE_QUERIES)
         back()
@@ -207,8 +225,42 @@ class AiFlowTest : CoverageFlowBase() {
         typeInto(AiTexts.DESCRIBE_PLACEHOLDER, "잘 익은 자두 같아요")
         tap(button(AiTexts.DESCRIBE_SEND))
         waitFor(hasTestTag("note-candidates"))
-        assertTrue("\"search_depth\":\"basic\"" in requestBody(1))
-        assertFalse("chunks_per_source" in requestBody(1))
+        assertEquals(3, http.requests.size)
+        assertTrue("\"search_depth\":\"basic\",\"max_results\":5,\"chunks_per_source\":3" in requestBody(1))
+        assertFalse(AiReplies.BLOG_SEARCH in requestBody(1))
+        assertFalse("사람들의 말" in requestBody(2))
+        assertTrue(has(hasTestTag("answer-queries") and hasText("검색어: ripe plum bitter finish tasting notes specialty coffee")))
+
+        // 정밀+기본 with 사람들 의견: basic then advanced for the same query, then the Korean blog search
+        runBlocking { prefs.setSearchDepth(SearchDepth.PRECISE_BASIC); prefs.setPeople(true) }
+        tap(button(AiTexts.ASK_AGAIN))
+        waitUntil("asked again") { http.requests.size == 8 }
+        waitFor(hasTestTag("answer-queries") and hasText("검색어: ripe plum bitter finish tasting notes specialty coffee · 커피 원두 후기 잘 익은 자두 같아요"))
+        assertTrue(AiReplies.QUERY_STEP in requestBody(3))
+        assertTrue("\"query\":\"ripe plum bitter finish tasting notes specialty coffee\",\"search_depth\":\"basic\"" in requestBody(4))
+        assertTrue("\"query\":\"ripe plum bitter finish tasting notes specialty coffee\",\"search_depth\":\"advanced\"" in requestBody(5))
+        assertTrue("\"query\":\"커피 원두 후기 잘 익은 자두 같아요\",\"search_depth\":\"basic\"" in requestBody(6))
+        assertTrue("\"include_domains\":[\"blog.naver.com\",\"tistory.com\",\"brunch.co.kr\",\"cafe.naver.com\"]" in requestBody(6))
+        assertTrue("비슷하게 느낀 사람들의 말" in requestBody(7))
+        // the blog pages come last and read as personal opinions
+        waitFor(hasTestTag("source-5") and hasText("brunch.co.kr") and hasText(AiTexts.PERSONAL))
+    }
+
+    @Test
+    fun blogSearchFails_theAnswerComesFromTheMainPages_withANote() {
+        AiSetup.ready(AiProvider.GEMINI_TAVILY)
+        http.on("generativelanguage", bodyPart = AiReplies.QUERY_STEP) { AiReplies.gemini(AiReplies.NOTE_QUERIES) }
+            .on("api.tavily.com", status = 500, bodyPart = AiReplies.BLOG_SEARCH) { "{}" }
+            .on("api.tavily.com") { AiReplies.TAVILY }
+            .on("generativelanguage") { AiReplies.gemini("- ${AiReplies.NOTE_SENTENCE_1}[1]") }
+        openHelper(Route.NoteHelper(mode = "note", query = "자스민"))
+        waitFor(hasTestTag("source-3"))
+        assertTrue(has(hasText(AiTexts.BLOGS_FAILED)))
+        assertFalse(has(hasTestTag("note-helper-error")) || has(hasTestTag("source-4")))
+        assertEquals(4, http.requests.size)
+        assertTrue(AiReplies.BLOG_SEARCH in requestBody(2))
+        assertFalse("사람들의 느낌" in requestBody(3))
+        assertTrue(has(hasTestTag("answer-queries") and hasText("검색어: jasmine tasting note specialty coffee · 커피 원두 자스민 노트 후기")))
     }
 
     // ───────────────────────── mode A from 노트 상세 ─────────────────────────
@@ -230,11 +282,14 @@ class AiFlowTest : CoverageFlowBase() {
         waitFor(hasTestTag("source-3"))
         assertTrue(runBlocking { prefs.load() }.consents.contains(AiProvider.GEMINI_TAVILY))
 
-        // Gemini writes an English query from the note, Tavily searches it once (advanced), Gemini answers
-        assertEquals(3, http.requests.size)
+        // by default: Gemini writes an English query from the note, Tavily searches it (advanced), then Korean blog
+        // posts with a Korean query (basic), and Gemini answers from both, with the people line
+        assertEquals(4, http.requests.size)
         assertTrue("향미 노트: \\\"자스민\\\"" in requestBody(0) && AiReplies.QUERY_STEP in requestBody(0))
         assertTrue("\"query\":\"jasmine tasting note specialty coffee\",\"search_depth\":\"advanced\"" in requestBody(1))
-        assertTrue(has(hasTestTag("answer-queries") and hasText("검색어: jasmine tasting note specialty coffee")))
+        assertTrue("\"query\":\"커피 원두 자스민 노트 후기\",\"search_depth\":\"basic\"" in requestBody(2) && AiReplies.BLOG_SEARCH in requestBody(2))
+        assertTrue("사람들의 느낌: 커뮤니티·개인 블로그 글에서" in requestBody(3))
+        assertTrue(has(hasTestTag("answer-queries") and hasText("검색어: jasmine tasting note specialty coffee · 커피 원두 자스민 노트 후기")))
         assertTrue(has(hasText("“자스민”")))
         assertTrue(has(hasText("Gemini 무료 + Tavily · gemini-3.5-flash-lite")))
         assertTrue(has(hasText(AiTexts.DISCLAIMER)))
@@ -247,28 +302,33 @@ class AiFlowTest : CoverageFlowBase() {
                 "한 로스터리는 예가체프에 \"Jasmine, Bergamot, Black Tea\"라고 적었다.[2]",
                 "${AiReplies.NOTE_SENTENCE_3}[2]",
                 "한 블로그는 \"꽃차 같은 향\"이라고 적었다(개인 의견).[3]",
+                "${AiReplies.PEOPLE_SENTENCE}[4]",
                 AiReplies.UNCITED,
             ),
             ps.map { it.text.removePrefix("- ") },
         )
         assertEquals(Ink.text, colorOf(ps[0], "SCA는"))
-        assertEquals(Ink.textFaint, colorOf(ps[4], AiReplies.UNCITED))
+        assertEquals(Ink.textFaint, colorOf(ps[5], AiReplies.UNCITED))
 
         // quotes checked against the cited page
-        assertEquals(3, count(hasText(AiTexts.FOUND)))
+        assertEquals(4, count(hasText(AiTexts.FOUND)))
         assertEquals(1, count(hasText(AiTexts.NOT_FOUND)))
         assertTrue(has(hasTestTag("quote-check") and hasAnyDescendant(hasText("“honey sweetness”")) and hasAnyDescendant(hasText(AiTexts.NOT_FOUND))))
 
         // sources: number, title, domain, kind
         assertTrue(has(hasTestTag("source-1") and hasText("sca.coffee") and hasText(AiTexts.INSTITUTION)))
-        assertFalse(has(hasTestTag("source-4")))
         assertTrue(has(hasTestTag("source-2") and hasText("example-roaster.com")))
         assertFalse(has(hasTestTag("source-2") and hasText(AiTexts.INSTITUTION)))
         assertTrue(has(hasTestTag("source-3") and hasText("blog.naver.com") and hasText(AiTexts.PERSONAL)))
+        // the blog search's pages come last: 개인 의견
+        assertTrue(has(hasTestTag("source-4") and hasText("coffeelog.tistory.com") and hasText(AiTexts.PERSONAL)))
+        assertTrue(has(hasTestTag("source-5") and hasText("brunch.co.kr") and hasText(AiTexts.PERSONAL)))
+        assertFalse(has(hasTestTag("source-6")))
+        assertEquals("개인 의견", AiTexts.PERSONAL)
 
         // a mark points at its source
         val marks = compose.onAllNodes(hasClickAction() and hasAnyAncestor(hasTestTag("answer-paragraph")), useUnmergedTree = true)
-        assertEquals(4, marks.fetchSemanticsNodes().size)
+        assertEquals(5, marks.fetchSemanticsNodes().size)
         marks[3].performClick()
         settle()
         waitUntil("[3] points at source 3") { isSelected(hasTestTag("source-3")) }
@@ -284,7 +344,7 @@ class AiFlowTest : CoverageFlowBase() {
         tap(button(AiTexts.ASK_FROM_NOTE))
         waitFor(hasTestTag("source-3"))
         assertFalse(has(hasTestTag("ai-consent")))
-        assertEquals(6, http.requests.size)
+        assertEquals(8, http.requests.size)
     }
 
     @Test
@@ -293,7 +353,7 @@ class AiFlowTest : CoverageFlowBase() {
         AiSetup.tavilyAnswers()
         openHelper(Route.NoteHelper(mode = "note", query = "자스민"))
         waitFor(hasTestTag("answer-queries"))
-        assertEquals(3, http.requests.size)
+        assertEquals(4, http.requests.size)
 
         // a panel on the screen (not a dialog) with the query
         tap(button(AiTexts.EDIT_QUERIES))
@@ -303,11 +363,12 @@ class AiFlowTest : CoverageFlowBase() {
         replaceIn("jasmine tasting note specialty coffee", "  jasmine  tea earl grey tasting notes specialty coffee \n")
         tap(button(AiTexts.ASK_WITH_QUERIES))
 
-        waitUntil("asked again") { http.requests.size == 5 }
-        waitFor(hasTestTag("answer-queries") and hasText("검색어: jasmine tea earl grey tasting notes specialty coffee"))
-        // no query step: Tavily with the corrected query (advanced), then Gemini
-        assertTrue("\"query\":\"jasmine tea earl grey tasting notes specialty coffee\",\"search_depth\":\"advanced\"" in requestBody(3))
-        assertFalse(AiReplies.QUERY_STEP in requestBody(4))
+        waitUntil("asked again") { http.requests.size == 7 }
+        waitFor(hasTestTag("answer-queries") and hasText("검색어: jasmine tea earl grey tasting notes specialty coffee · 커피 원두 자스민 노트 후기"))
+        // no query step: Tavily with the corrected query (advanced), the blog search as before, then Gemini
+        assertTrue("\"query\":\"jasmine tea earl grey tasting notes specialty coffee\",\"search_depth\":\"advanced\"" in requestBody(4))
+        assertTrue("\"query\":\"커피 원두 자스민 노트 후기\"" in requestBody(5))
+        assertFalse(AiReplies.QUERY_STEP in requestBody(6))
         assertFalse(has(hasTestTag("edit-queries")))
         waitFor(hasTestTag("source-3"))
     }
@@ -349,7 +410,8 @@ class AiFlowTest : CoverageFlowBase() {
         // the taste in the user's words goes to the query step; the English query goes to Tavily
         assertTrue("맛 묘사: \\\"잘 익은 자두 같고 끝이 쌉쌀해요\\\"" in requestBody(0))
         assertTrue("\"query\":\"ripe plum bitter finish tasting notes specialty coffee\"" in requestBody(1))
-        assertTrue("플레이버 휠 용어: Black Tea, Floral" in requestBody(2))
+        assertTrue("\"query\":\"커피 원두 후기 잘 익은 자두 같고 끝이 쌉쌀해요\"" in requestBody(2))
+        assertTrue("플레이버 휠 용어: Black Tea, Floral" in requestBody(3))
         // the app's own terms found in the answer, in order
         val candidates = listOf("Dark Chocolate", "자두", "다크 초콜릿", "Jasmine", "Floral")
         val chip = { t: String -> button(t) and hasAnyAncestor(hasTestTag("note-candidates")) }
@@ -403,7 +465,8 @@ class AiFlowTest : CoverageFlowBase() {
         waitFor(hasTestTag("source-3"))
         assertEquals("AQ.new-key-1111", http.requests[0].headers["x-goog-api-key"])
         assertEquals("Bearer tvly-new-2222", http.requests[1].headers["Authorization"])
-        assertEquals("AQ.new-key-1111", http.requests[2].headers["x-goog-api-key"])
+        assertEquals("Bearer tvly-new-2222", http.requests[2].headers["Authorization"])
+        assertEquals("AQ.new-key-1111", http.requests[3].headers["x-goog-api-key"])
     }
 
     @Test
@@ -435,9 +498,9 @@ class AiFlowTest : CoverageFlowBase() {
         assertTrue(has(hasText("새로 만든 키에는 더 이상 열어 주지 않는 모델이에요.", substring = true)))
         assertTrue(has(button(AiErrors.LINK_MODEL)))
         // the query step's 404 falls back to the fixed search quietly; the answer step reports it
-        assertEquals(3, http.requests.size)
+        assertEquals(4, http.requests.size)
         assertTrue("\\\"자스민\\\" coffee flavor note meaning tasting notes" in requestBody(1))
-        assertTrue(http.requests[2].url.endsWith("/gemini-2.5-flash:generateContent"))
+        assertTrue(http.requests[3].url.endsWith("/gemini-2.5-flash:generateContent"))
     }
 
     @Test
