@@ -16,6 +16,10 @@ on:
     paths: ['shared/**', 'iosApp/**', 'gradle/**', 'gradle.properties', 'build.gradle.kts', 'settings.gradle.kts', '.github/workflows/ios.yml']
   workflow_dispatch:
     inputs:
+      app:
+        description: Build the app (.ipa); turn off to run only the simulator tests
+        type: boolean
+        default: true
       tests:
         description: Also run the shared tests on an iPhone simulator, in a job of its own beside the app build (about 15 more macOS minutes)
         type: boolean
@@ -44,7 +48,7 @@ jobs:
         run: ./gradlew :shared:compileKotlinIosArm64 :shared:compileKotlinIosSimulatorArm64 :shared:checkThirdPartyNotices -Pcoffeejournal.iosKlibs=true --no-daemon
 
   app:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/v')
+    if: (github.event_name == 'workflow_dispatch' && inputs.app) || startsWith(github.ref, 'refs/tags/v')
     needs: klibs
     runs-on: macos-26
     timeout-minutes: 75

@@ -34,6 +34,10 @@ kotlin {
         val maplibreFrameworkDir = findProperty("coffeejournal.maplibreFrameworkDir") as String?
         iosSimulatorArm64().binaries.withType<org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable>().configureEach {
             if (maplibreFrameworkDir != null) linkerOpts("-F$maplibreFrameworkDir", "-rpath", maplibreFrameworkDir)
+            // maplibre-compose's scale bar refers to MapLibre's MLNScaleBar, which MapLibre.framework does not export. The
+            // app never shows a scale bar, and its release link drops that code; the test executable keeps every class
+            // (a debug link), so the one class is left to resolve at run time, which the tests never reach.
+            linkerOpts("-U", "_OBJC_CLASS_\$_MLNScaleBar")
             linkTaskProvider.configure {
                 doFirst {
                     if (maplibreFrameworkDir == null) {
