@@ -111,7 +111,7 @@
 4. **출처 목록.** 번호, 제목, 실제 도메인을 보이고 누르면 브라우저로 연다.
    - 출처 URL은 `vertexaisearch.cloud.google.com` 경유 링크일 수 있다. 제목과 함께 오는 원래 도메인을 보여준다.
    - 신뢰 출처는 도메인 뒤에 작은 표시를 붙인다: SCA(sca.coffee), WCR(worldcoffeeresearch.org), CQI, 로스터리 공식 페이지, 학술지.
-   - 블로그와 커뮤니티는 "개인 글"로 구분한다.
+   - 블로그와 커뮤니티는 "개인 의견"으로 구분한다(구현에서 배지 글자, 12.4).
 5. **(2단계) 실제 문구 확인.** 답에 "실제 문구" 인용이 있으면 그 문구가 출처 페이지에 정말 있는지 확인해 ✓를 붙인다. 방법은 둘이다.
    - (가) Gemini의 URL context 도구(무료, 요청당 URL 20개)로 해당 페이지를 읽게 해 확인한다.
    - (나) 앱이 페이지를 직접 받아 문자열을 찾는다.
@@ -243,7 +243,7 @@
 
 | 방식 | 키 | 비용 | 호출 | 기본 모델 · 추천 |
 |---|---|---|---|---|
-| Gemini 무료 + Tavily (기본) | Gemini, Tavily | 둘 다 무료 등급(Tavily 월 1,000크레딧; 질문 1번 = 검색 한 번, "정밀" advanced 2크레딧(월 약 500번) 또는 "기본" basic 1크레딧(월 약 1,000번)) | Gemini `generateContent`(검색어 쓰기, JSON) → Tavily `POST /search` 한 번 → Gemini `generateContent`(도구 없음) | `gemini-3.5-flash-lite` · 3.5-flash, 3.1-flash-lite |
+| Gemini 무료 + Tavily (기본) | Gemini, Tavily | 둘 다 무료 등급(Tavily 월 1,000크레딧; 질문 1번 = 설정에 따라 1–4크레딧: "검색" 기본 1 · 정밀 2 · 정밀+기본 3, "사람들 의견" 켬 +1. 기본값 정밀 + 사람들 의견은 3크레딧, 월 약 330번) | Gemini `generateContent`(검색어 쓰기, JSON) → Tavily `POST /search` 1–3번 → Gemini `generateContent`(도구 없음) | `gemini-3.5-flash-lite` · 3.5-flash, 3.1-flash-lite |
 | Gemini + Google 검색 | Gemini | 결제한 프로젝트. 검색은 3.x 합쳐 월 5,000회 무료, 뒤 1,000회당 $14 | `generateContent` + `google_search` | `gemini-3.5-flash` · 3.8-flash, 3.5-flash-lite |
 | GPT (OpenAI) | OpenAI | 웹 검색 1,000회당 $10 + 토큰 | Responses `web_search`, `tool_choice: required`, 위치 KR, `include: web_search_call.action.sources` | `gpt-5-nano` · gpt-5.5 |
 | Claude (Anthropic) | Anthropic | 웹 검색 1,000회당 $10 + 토큰(검색 결과도 입력 토큰) | Messages + `web_search`(Opus 5·Sonnet 5는 `web_search_20260209`, Haiku 4.5는 `web_search_20250305`), `max_uses` 3, 위치 KR, `max_tokens` 16000, thinking·temperature 없음. `claude-opus-5`만 `anthropic-beta: server-side-fallback-2026-07-01` + `fallbacks: "default"` | `claude-opus-5` · sonnet-5, haiku-4-5 |
@@ -252,11 +252,25 @@
 - 시스템 지시: Google 검색·GPT·Claude는 `tools/ai-eval/system_prompt_ko.txt`, Gemini 무료 + Tavily는 `tools/ai-eval/sources_prompt_ko.txt`(답)와 `tools/ai-eval/query_prompt_ko.txt`(검색어). 앱의 `NoteHelperPrompts`와 글자까지 같아야 하고 테스트(`AiPlatformTest`)가 확인한다. 질문 틀(모드 A·B)은 `eval.py question()`과 같다(모드 B에는 휠 영문 용어 89개와 노트 분류 43개가 들어감).
 
 ### 12.3 Gemini 무료 + Tavily 파이프라인
-1. **검색어 쓰기** (2026-09-27 추가). 긴 한국어 묘사를 그대로 검색하면 관련도가 흐려지고 영어 로스터리 페이지를 놓쳐서, 고른 Gemini 모델(도구 없음, 무료 등급)에 `QUERY_SYSTEM`(`query_prompt_ko.txt`)과 노트 이름 또는 묘사("향미 노트: …" / "맛 묘사: …")를 보내 짧은 영어 검색어 하나를 받는다(예: "ripe plum bitter finish tasting notes specialty coffee"). 향미 표현은 그대로 옮기고, 12단어쯤, 전체를 따옴표로 감싸지 않으며, "flavored"는 쓰지 않는다: 모델이 "peach flavored coffee beans"처럼 쓰거나 "hazelnut coffee tasting notes"로 찾으면 어느 깊이로 찾아도 향을 입힌 가향 커피 상품만 나왔다. 그래서 "hazelnut tasting note specialty coffee"처럼 스페셜티 커피의 테이스팅 노트를 겨냥한다. 요청은 `generationConfig`의 `responseMimeType: application/json`과 `responseSchema`({"queries": [문자열]}), temperature 0, maxOutputTokens 200(도구 없는 구조화 출력은 무료 등급에서 된다). 받은 목록의 첫 검색어만 쓰고(공백 정리, 전체를 감싼 따옴표 제거), 비어 있거나 200자를 넘으면 실패로 본다. 키가 거절된 경우(400 키 오류·401·403)만 오류로 알리고, 그 밖의 실패(오류 상태, 연결 없음, JSON이 아님, 빈 목록)는 조용히 전의 틀로 검색한다: 모드 A `"<영문 이름 또는 노트 이름>" coffee flavor note meaning tasting notes`(라벨 괄호 안에 영문이 있으면 그것), 모드 B `coffee tasting notes <묘사>`(300자에서 자름). 모델·한도 문제는 답 단계가 알린다.
-2. **Tavily 검색 한 번**, 깊이는 설정 › AI 노트 도우미 › "검색"(이 방식일 때만 보임, `device.ai.searchDepth`, 백업 제외, 모르는 값은 기본값으로 읽음): "정밀"(기본값) = advanced(2크레딧: 결과 5개, 페이지당 조각 3개, `include_raw_content: "text"`; 그 향미를 다루는 페이지와 인용할 수 있는 긴 조각), "기본" = basic(1크레딧: 결과 5개, 조각 없음; 더 빠르고 절반). 무료 월 1,000크레딧이면 정밀 약 500번, 기본 약 1,000번. 검색이 실패하면 그 오류를 알린다. 셋째 선택지("정밀 + 사람들 의견": advanced 본 검색 + 커뮤니티 도메인만 찾는 검색과 "개인 의견" 요약)는 평가 중이라 만들지 않았고, `SearchDepth`는 그 자리를 남겨 두었다.
-   - 결정 근거(평가 #14, 새 사례 6개 × 방식 9개, Tavily 캐시가 깊이를 넘나들지 않게 basic부터): advanced 한 번은 문장 56개 중 46개가 출처와 연결되고 인용 52개 중 51개가 원문에 있었으며 12크레딧; advanced + basic은 39/48, 51/51, 18크레딧; advanced 두 번은 37/48, 41/43, 24크레딧; basic 한 번은 28/36, 36/36, 6크레딧. advanced는 그 향미를 다루는 페이지(예: unpacking.coffee/flavors/…)를 그 용어 주변 조각과 함께 찾았고, 둘째 검색은 여섯째 출처만 더했을 뿐 인용되는 내용을 늘리지 않았다. 검색어 쓰기 없이 고정 틀로 찾으면 훨씬 나빴다(긴 한국어 묘사는 문장을 그대로 찾아 0/1, 0/2).
-   - Tavily는 검색어마다 결과를 캐시한다. advanced로 찾은 검색어를 basic으로 다시 찾으면 advanced 결과가 오고, 반복해도 크레딧은 든다.
-3. **Gemini(도구 없음)**에 질문과 출처 묶음 `[n] <제목> — <도메인>\n<URL>\n<content>`을 보낸다(토큰을 줄이려고 raw_content가 아니라 content). 지시: 주어진 출처만으로 답하고, 출처 n을 쓴 항목·문장 끝마다 [n], 향·맛 표현은 출처 그대로 큰따옴표로(잘린 조각은 온전한 부분만), 뜻풀이가 없으면 출처의 묘사 문장으로 요약할 수 있고 그것도 없으면 "찾지 못했어요".
+1. **검색어 쓰기** (2026-09-27 추가). 긴 한국어 묘사를 그대로 검색하면 관련도가 흐려지고 영어 로스터리 페이지를 놓쳐서, 고른 Gemini 모델(도구 없음, 무료 등급)에 `QUERY_SYSTEM`(`query_prompt_ko.txt`)과 노트 이름 또는 묘사("향미 노트: …" / "맛 묘사: …")를 보내 짧은 영어 검색어 하나를 받는다(예: "ripe plum bitter finish tasting notes specialty coffee"). 향미 표현은 그대로 옮기고, 12단어쯤, 전체를 따옴표로 감싸지 않으며, "flavored"는 쓰지 않는다: 모델이 "peach flavored coffee beans"처럼 쓰거나 "hazelnut coffee tasting notes"로 찾으면 어느 깊이로 찾아도 향을 입힌 가향 커피 상품만 나왔다. 그래서 "hazelnut tasting note specialty coffee"처럼 스페셜티 커피의 테이스팅 노트를 겨냥한다. 요청은 `generationConfig`의 `responseMimeType: application/json`과 `responseSchema`({"queries": [문자열]}), temperature 0, maxOutputTokens 1024(도구 없는 구조화 출력은 무료 등급에서 된다). 처음에는 200이었다: 평가 #13–#16에서 `gemini-3.5-flash-lite`는 200으로도 늘 검색어를 돌려줬지만, 먼저 생각하는 모델은 답을 쓰기 전에 바닥날 수 있어 평가 도구와 함께 1024로 올렸다. 받은 목록의 첫 검색어만 쓰고(공백 정리, 전체를 감싼 따옴표 제거), 비어 있거나 200자를 넘으면 실패로 본다. 키가 거절된 경우(400 키 오류·401·403)만 오류로 알리고, 그 밖의 실패(오류 상태, 연결 없음, JSON이 아님, 빈 목록)는 조용히 전의 틀로 검색한다: 모드 A `"<영문 이름 또는 노트 이름>" coffee flavor note meaning tasting notes`(라벨 괄호 안에 영문이 있으면 그것), 모드 B `coffee tasting notes <묘사>`(300자에서 자름). 모델·한도 문제는 답 단계가 알린다.
+2. **Tavily 검색**. 설정 › AI 노트 도우미의 두 선택(이 방식일 때만 보임, 이 휴대폰에만 저장, 백업 제외)이 정한다.
+   - **"검색"** (`device.ai.searchDepth`, 모르는 값은 기본값으로 읽음): "기본" = basic(검색어) 1크레딧, "정밀"(기본값) = advanced(검색어) 2크레딧, "정밀+기본" = 같은 검색어를 basic으로 먼저, 이어서 advanced로 찾는 3크레딧. 힌트: "정밀+기본은 같은 검색어를 두 방식으로 찾아 더 여러 사이트를 봐요."
+   - **"사람들 의견"** 켬(기본값)/끔 (`device.ai.people`): 켜면 basic 검색을 한 번 더 한다(+1크레딧). `include_domains: ["blog.naver.com", "tistory.com", "brunch.co.kr", "cafe.naver.com"]`, 검색어는 한국어로 평가 도구의 `korean_query()`와 같다: 모드 A "커피 원두 {한국어 이름} 노트 후기"(라벨의 괄호 앞 부분, 예: "베르가못 (bergamot)" → "커피 원두 베르가못 노트 후기"), 모드 B "커피 원두 후기 {묘사}".
+   - 설정 아래 한 줄이 고른 조합을 계산해 보인다: "질문 한 번에 약 N크레딧 · 무료 1,000크레딧이면 한 달 약 M번"(M = 1000 / N을 십 단위로 내림: 1 → 1,000번, 2 → 500번, 3 → 330번, 4 → 250번). 다른 곳의 크레딧 문구(방식 설명, 키 받는 방법, 동의 창, 432 안내)는 "설정에 따라 1–4크레딧".
+   - 모든 검색: 결과 5개, `chunks_per_source` 3(basic에도; 평가 도구가 늘 보냈고 Tavily가 basic에서도 받아서, 잰 것과 같게 둔다), `include_raw_content: "text"`, `include_answer: false`. 검색은 차례로 보낸다(정밀+기본은 캐시 때문에 순서가 중요하고, 블로그 검색을 본 검색과 동시에 보내는 것은 선택 사항이라 요청 순서가 정해진 쪽을 택했다).
+   - Gemini에 넘기는 순서: advanced 결과 먼저, 다음 basic 결과 중 새 URL(끝의 `/`와 대소문자를 무시하고 같은 URL은 한 번), 마지막에 블로그 결과. 모두 합쳐 최대 15개.
+   - 본 검색이 실패하면 그 오류를 알린다(정밀+기본은 둘 중 하나라도 결과가 오면 답한다). 블로그 검색만 실패하면 질문을 실패로 만들지 않고 본 결과만으로 답하며, 질문 글에서 사람들 줄을 빼고 답 위에 "블로그 후기 검색이 되지 않아 사람들의 느낌 없이 답했어요."를 보인다.
+   - 답 아래 "검색어:" 줄은 실제로 보낸 검색어를 모두 보인다(한국어 검색어 포함). "검색어 고치기"는 본(영어) 검색어만 고치고, 다시 물으면 설정대로 다시 찾는다(블로그 검색어는 질문에서 다시 만든다).
+   - **결정 근거**(평가 #15·#16, 처음 묻는 사례, 답은 `gemini-3.5-flash-lite`):
+     - advanced 한 번: 답마다 서로 다른 사이트 5.0 / 4.6개. 사람들 줄이 개인 출처를 인용한 경우 15번 중 2번.
+     - 같은 검색어를 basic으로, 이어서 advanced로: 답마다 사이트 8.4개, 원문 확인된 인용 54개(advanced 한 번은 50개), 사람들 줄 7번 중 3번.
+     - advanced + 한국 블로그로 제한한 basic 한 번: 3크레딧, 약 5초, 사람들 줄이 개인 출처를 인용한 경우 15번 중 9번. 실제 홈카페 표현이 나왔다(예: tistory의 "잘 말린 건포도를 먹는 듯한 쫀쫀한 구조감", "달달한향 속에서 블루베리가 앞선 과일향기가 한가득이다").
+     - 영어 커뮤니티(reddit·커피 포럼)만 advanced로 찾기: 비슷했지만(8번 중 5번) 4크레딧에 16–23초라 고르지 않았다.
+     - 세 검색 모두(4크레딧): advanced + 블로그보다 낫지 않았다.
+     - 그래서 기본값은 정밀 + 사람들 의견(3크레딧)이고, 사이트를 더 보고 싶으면 정밀+기본을 고른다.
+   - 전의 결정(평가 #14, 새 사례 6개 × 방식 9개): advanced 한 번은 문장 56개 중 46개가 출처와 연결되고 인용 52개 중 51개가 원문에 있었으며 12크레딧; advanced + basic은 39/48, 51/51, 18크레딧; advanced 두 번은 37/48, 41/43, 24크레딧; basic 한 번은 28/36, 36/36, 6크레딧. advanced는 그 향미를 다루는 페이지(예: unpacking.coffee/flavors/…)를 그 용어 주변 조각과 함께 찾았다. 이때 둘째 검색이 효과가 없어 보인 것은 출처를 모두 합쳐 6개로 자른 평가 상한과 거의 같은 말인 두 번째 검색어 때문이었고, #15에서 상한을 올리자(검색당 5개) 같은 검색어의 basic + advanced가 사이트 수를 늘렸다. 검색어 쓰기 없이 고정 틀로 찾으면 훨씬 나빴다(긴 한국어 묘사는 문장을 그대로 찾아 0/1, 0/2).
+   - **Tavily 캐시**: Tavily는 검색어마다 결과를 캐시한다. advanced로 이미 찾은 검색어를 basic으로 찾으면 캐시된 advanced 결과가 글자까지 똑같이 오고, 크레딧은 그대로 든다. 그래서 정밀+기본은 basic을 먼저 보내 두 결과가 달라지게 한다.
+3. **Gemini(도구 없음)**에 질문과 출처 묶음 `[n] <제목> — <도메인>\n<URL>\n<content>`을 보낸다(토큰을 줄이려고 raw_content가 아니라 content). 사람들 의견을 켜면 질문 틀에 한 줄이 더 붙는다(평가 도구의 `PEOPLE_NOTE`·`PEOPLE_DESCRIBE`와 글자까지 같음, `AiPlatformTest`가 확인): 모드 A는 Flavor Wheel 줄 뒤에 "- 사람들의 느낌: 커뮤니티·개인 블로그 글에서 사람들이 이 노트를 어떻게 느끼고 표현하는지 (개인 의견이라고 밝히고 문장마다 [n]을 붙인다. 그런 출처가 있을 때만)", 모드 B는 "- 후보를 구별하는 방법(출처가 있을 때만)" 뒤, 용어 목록 앞에 "- 비슷하게 느낀 사람들의 말: 커뮤니티·개인 글에서 비슷한 맛을 뭐라고 부르는지 (같은 괄호)". 지시: 주어진 출처만으로 답하고, 출처 n을 쓴 항목·문장 끝마다 [n], 향·맛 표현은 출처 그대로 큰따옴표로(잘린 조각은 온전한 부분만), 뜻풀이가 없으면 출처의 묘사 문장으로 요약할 수 있고 그것도 없으면 "찾지 못했어요".
 4. **앱이 확인한다.** [n] 표시를 걷어 내 문장 끝 번호로 바꾸고(없는 번호는 버림), 번호가 붙은 문장의 큰따옴표 표현을 그 출처의 raw_content(없으면 content)에서 찾는다. 정규화(NFC, 소문자, 공백 하나로, 곧은 따옴표)한 부분 문자열이면 "✓ 원문 확인", 아니면 "원문에서 찾지 못함". 잘린 조각("… red c")도 원문의 일부면 찾은 것으로 친다. 번호 없는 문장은 회색으로 남기고 지우지 않는다. 번호가 붙은 문장이 없으면 답 대신 "출처를 찾지 못했어요".
 - 따옴표: 답 모델이 노트 이름 자체를 따옴표로 감싸("시나몬 (cinnamon)") 인용 확인에 걸리는 일이 있어, 두 답 지시(`system_prompt_ko.txt`·`sources_prompt_ko.txt`)의 인용 규칙에 "노트 이름이나 검색어는 따옴표로 감싸지 않는다"를 더했다.
 - 평가(코디네이터 세션, 무료 키, `gemini-3.5-flash-lite`, Tavily 대신 실제 페이지, 4건): 인용 11개 모두 인용한 출처에 그대로 있었고, 없는 번호를 붙인 경우는 없었으며, 답 한 번에 약 1초. 잘린 조각을 그대로 인용한 사례("Lychee, white peach, red c")가 있어 지시에 "온전한 단어와 구절로만"을 더했다.
@@ -266,11 +280,11 @@
 - **GPT**: `url_citation`의 end_index가 든 문장 끝에 번호를 붙이고, 모델이 글 속에 쓴 마크다운 링크 `([도메인](URL))`은 번호로 대신하므로 걷어 낸다. 출처는 처음 인용된 순서, `utm_source=openai`만 다른 주소는 하나로 친다.
 - **Claude**: 텍스트 블록을 순서대로 이어 붙이고, 인용이 있는 블록의 끝에 번호를 붙인다. 출처는 인용된 URL(처음 인용 순서) 다음에 나머지 검색 결과. 인용 블록 안의 큰따옴표 표현이 그 인용의 `cited_text`(원문 그대로 최대 150자)에 있으면 "✓ 원문 확인"을 붙이고, 없어도 "못 찾음"은 표시하지 않는다(150자에 없다고 원문에 없는 것은 아님). `stop_reason`은 내용보다 먼저 본다: `refusal` → "요청이 거절됐어요", `pause_turn` → 받은 내용을 그대로 assistant 메시지로 붙여 다시 요청(최대 3번), `max_tokens` → 받은 만큼과 "답이 길어 끝이 잘렸어요". 검색 결과는 목록 또는 오류 객체이고, 모르는 블록(thinking, 동적 필터링의 코드 실행과 `caller`가 붙은 블록)은 건너뛴다.
 - 넷 모두 답 아래에 "검색어: q1 · q2"(고정폭, 흐리게)를 보인다. Gemini 무료 + Tavily는 앱이 보낸 검색어, Google 검색은 `groundingMetadata.webSearchQueries`, GPT는 `web_search_call` 중 `action.type`이 search인 것의 `action.query`, Claude는 이름이 web_search인 `server_tool_use`의 `input.query`(동적 필터링이 코드 실행에서 부른 것 포함). Gemini 무료 + Tavily만 "검색어 고치기"로 화면 안 입력칸(대화상자가 아님: Robolectric에서 대화상자 속 입력칸은 Compose가 idle이 되지 않음)에서 검색어를 고쳐 "이 검색어로 다시 묻기"를 할 수 있고, 이때는 검색어 쓰기 단계를 건너뛴다. 나머지는 읽기만 한다.
-- 넷 모두: 출처 목록은 번호·제목·도메인에 기관(sca.coffee, worldcoffeeresearch.org 등 7곳) / 개인 글(blog.naver.com, tistory.com, reddit.com 등 13곳) 표시. 번호가 붙은 문장이 하나도 없으면 답을 보이지 않는다.
+- 넷 모두: 출처 목록은 번호·제목·도메인에 기관(sca.coffee, worldcoffeeresearch.org 등 7곳) / 개인 의견(blog.naver.com, cafe.naver.com, tistory.com, brunch.co.kr, reddit.com, coffeegeek.com 등 16곳; 하위 도메인 포함, 예: m.blog.naver.com, 누구.tistory.com) 배지. 배지 글자는 처음에 "개인 글"이었고, 사람들 의견과 맞춰 "개인 의견"으로 바꿨다. 번호가 붙은 문장이 하나도 없으면 답을 보이지 않는다.
 
 ### 12.5 키 · 설정 · 네트워크
 - **키 저장**: `SecretStore`. Android는 Android Keystore에 내보낼 수 없는 AES-256/GCM 키(별칭 `coffeejournal.ai`)를 만들고, 키마다 암호문과 IV를 `noBackupFilesDir/ai-keys/<이름>.bin`에 둔다. DB·JSON 백업·클라우드 백업·기기 이전에 가지 않는다. 풀리지 않는 파일(키 삭제, 변조)은 지우고 "키 없음"으로 본다. `androidx.security-crypto`는 쓰지 않는다. iOS는 "아직 지원 안 함".
-- **설정**: 방식, 방식별 모델, 방식별 안내 확인은 `device.ai.*` 키(백업 제외). 입력 중인 키는 저장 상태 번들에 남기지 않는다. 저장된 키는 마지막 4자리("…a1b2")만 보인다.
+- **설정**: 방식, 방식별 모델, 방식별 안내 확인, Tavily의 "검색"(`device.ai.searchDepth`)과 "사람들 의견"(`device.ai.people`)은 `device.ai.*` 키(백업 제외). 입력 중인 키는 저장 상태 번들에 남기지 않는다. 저장된 키는 마지막 4자리("…a1b2")만 보인다.
 - **키 확인**: Gemini는 도구 없는 아주 짧은 요청(`maxOutputTokens` 8, 고른 방식의 모델), Tavily는 basic 검색 1개(1크레딧, 화면에 적음), OpenAI·Anthropic은 `GET /v1/models`(무료; 목록이 끝까지 왔는데 고른 모델이 없으면 "이 모델은 쓸 수 없어요"). 결과는 정상 / 키가 틀려요 / 결제가 필요해요 / 한도를 넘었어요 / 이 모델은 쓸 수 없어요 / 연결 실패.
 - **동의**: 방식마다 처음 물을 때 무엇을(질문 글만; 기록·원두·장소·사진은 안 보냄) 어디로 보내는지, Gemini 무료 등급의 학습·사람 검토 조건과 유료 방식의 과금을 보이고 확인을 받는다.
 - **HTTP**: `AiHttp`. Android는 `HttpURLConnection`(연결 15초, 읽기 120초, IO 디스패처, 4xx/5xx는 오류 스트림). 새 라이브러리 0개라 `verification-metadata.xml`과 라이브러리 목록은 그대로다. iOS는 미연결.
@@ -289,8 +303,8 @@
 
 ### 12.7 화면과 테스트
 - 진입: 노트 상세 "✦ 출처로 알아보기"(모드 A, 질문 = 노트 라벨), 기록 폼 "✦ AI에게 묻기"(모드 B). 폼의 묘사 입력은 대화상자가 아니라 노트 칸 아래 패널이다(대화상자 속 입력칸은 Robolectric에서 Compose가 idle이 되지 않았다, 구현 규약). 답 화면은 `Route.NoteHelper(mode, query, returnToForm)`, 고른 후보는 이전 목적지의 SavedStateHandle(`NoteHelperResult.KEY`)로 돌아가 중복 없이 붙는다. 키가 없으면 답 화면이 이유와 "설정에서 키 넣기 →"를 보이고, 설정은 AI 절로 스크롤되어 열리며, 돌아오면 이어서 묻는다.
-- 공용 단위 테스트(`shared/src/commonTest/.../ui/ai`, 가짜 JSON은 모두 synthetic으로 표시): 네 서비스의 요청 형식과 응답 해석, 검색어 쓰기의 요청·JSON 검사(첫 검색어만)·틀로 돌아가기, advanced 검색 한 번과 실패 처리, 서비스별 검색어 읽기, Gemini 세그먼트의 글자/UTF-8 바이트 위치(한국어), [n] 해석, 인용 대조 정규화(NFD 한글·따옴표·공백·잘린 조각), 모드 B 용어 찾기, 서비스·상태별 오류, pause_turn 재요청·거절·출처 없음, 키 확인, 설정 저장.
-- 흐름 테스트(`AiFlowTest`, 가짜 HTTP·메모리 키 저장소): 설정 절(방식, 키 저장·가림·확인 정상/401, 안내 펼침과 링크, 모델 칩, 지우기 확인, 백업 제외), 노트 상세 → 동의 → 답(검색어 쓰기와 검색, 번호, 회색 문장, ✓·✗, 기관·개인 글, [n] → 출처, 링크 열기, 동의는 한 번), 검색어 고쳐 다시 묻기, 동의 거절, 폼 → 후보 → 노트에 추가, 키 없음 → 설정 → 답, 무료 프로젝트 Google 검색 429, 모델 404, Claude. `AiPlatformTest`: 프롬프트 파일 세 개·질문 틀 동기화, Keystore 파일 형식(소프트웨어 키). 스크린샷 70–74.
+- 공용 단위 테스트(`shared/src/commonTest/.../ui/ai`, 가짜 JSON은 모두 synthetic으로 표시): 네 서비스의 요청 형식과 응답 해석, 검색어 쓰기의 요청·JSON 검사(첫 검색어만)·틀로 돌아가기, 검색 설정 여섯 조합마다 보내는 검색(순서·깊이·검색어·본문: 결과 5개, 조각 3개, 블로그 도메인)과 크레딧·월 횟수, Gemini에 넘기는 출처 순서(advanced → basic의 새 URL → 블로그, 최대 15개), 블로그 검색 실패 시 본 결과와 안내(본 검색 실패는 오류), 사람들 줄이 있고 없는 질문 글, 설정 저장(모르는 값은 기본값), 서비스별 검색어 읽기, Gemini 세그먼트의 글자/UTF-8 바이트 위치(한국어), [n] 해석, 인용 대조 정규화(NFD 한글·따옴표·공백·잘린 조각), 모드 B 용어 찾기, 서비스·상태별 오류, pause_turn 재요청·거절·출처 없음, 키 확인.
+- 흐름 테스트(`AiFlowTest`, 가짜 HTTP·메모리 키 저장소): 설정 절(방식, 키 저장·가림·확인 정상/401, 안내 펼침과 링크, 모델 칩, 지우기 확인, 백업 제외), 검색 설정(세 깊이와 사람들 의견, 크레딧 줄이 선택을 따라 바뀜, 다른 방식에서는 숨김, 백업 제외, 다음 질문의 검색: 기본만 / 정밀+기본 + 블로그), 노트 상세 → 동의 → 답(기본값으로 검색어 쓰기, advanced 검색, 한국어 블로그 검색, 사람들 줄, 번호, 회색 문장, ✓·✗, 기관·개인 의견, 블로그 출처가 끝에, [n] → 출처, 링크 열기, 동의는 한 번), 블로그 검색 실패 → 본 결과로 답과 안내, 검색어 고쳐 다시 묻기(블로그 검색은 그대로), 동의 거절, 폼 → 후보 → 노트에 추가, 키 없음 → 설정 → 답, 무료 프로젝트 Google 검색 429, 모델 404, Claude. `AiPlatformTest`: 프롬프트 파일 세 개·질문 틀(사람들 줄 있음/없음)·`PEOPLE_NOTE`·`PEOPLE_DESCRIBE`·블로그 도메인(`CROWD_KO`) 동기화, Keystore 파일 형식(소프트웨어 키). 스크린샷 70–74.
 
 ### 12.8 확인한 것 · 못 한 것
 - 확인: 요청·응답 형식과 오류 코드는 2026-09-26 공식 문서 기준(코디네이터 세션에서 확인)이고, Gemini의 404·429 문구는 새 무료 키로 잰 값이다. Gemini 무료 + Tavily 파이프라인은 12.3의 평가로 확인했다. Anthropic 약관·개인정보 링크는 curl로 200을 확인했다.
