@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
     inputs:
       tests:
-        description: Also run the shared tests on an iPhone simulator (about 10 more macOS minutes)
+        description: Also run the shared tests on an iPhone simulator, in a job of its own beside the app build (about 15 more macOS minutes)
         type: boolean
         default: false
 
@@ -87,22 +87,6 @@ jobs:
           name: verification
           path: verification/
 
-      # The test executable links MapLibre as the app does, from the release the Swift package in iosApp/project.yml
-      # pins: its URL and checksum are read from that package's Package.swift.
-      - name: Shared tests on an iPhone simulator
-        if: inputs.tests
-        run: |
-          v=$(sed -n 's/^ *exactVersion: *//p' iosApp/project.yml)
-          pkg=$(curl -fsSL "https://raw.githubusercontent.com/maplibre/maplibre-gl-native-distribution/$v/Package.swift")
-          url=$(echo "$pkg" | sed -n 's/.*url: *"\([^"]*\.zip\)".*/\1/p')
-          sum=$(echo "$pkg" | sed -n 's/.*checksum: *"\([0-9a-f]*\)".*/\1/p')
-          mkdir -p build/maplibre
-          curl -fsSL -o build/maplibre/MapLibre.zip "$url"
-          echo "$sum  build/maplibre/MapLibre.zip" | shasum -a 256 -c
-          unzip -q build/maplibre/MapLibre.zip -d build/maplibre
-          ./gradlew :shared:iosSimulatorArm64Test -Pcoffeejournal.enableIos=true --no-daemon \
-            -Pcoffeejournal.maplibreFrameworkDir="$PWD/build/maplibre/MapLibre.xcframework/ios-arm64_x86_64-simulator"
-
       - name: Generate the Xcode project
         run: |
           command -v xcodegen > /dev/null || HOMEBREW_NO_AUTO_UPDATE=1 brew install xcodegen
@@ -149,6 +133,48 @@ jobs:
           name: coffee-journal-ipa
           path: dist/*.ipa
           if-no-files-found: error
+
+  # The shared tests (commonTest and iosTest) on an iPhone simulator, beside the app build: a failure here does not hold
+  # back the .ipa.
+  tests:
+    if: github.event_name == 'workflow_dispatch' && inputs.tests
+    needs: klibs
+    runs-on: macos-26
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v5
+      - name: More memory for Kotlin/Native
+        run: |
+          mkdir -p "${GRADLE_USER_HOME:-$HOME/.gradle}"
+          echo "org.gradle.jvmargs=-Xmx5g -XX:MaxMetaspaceSize=1g -Dfile.encoding=UTF-8" >> "${GRADLE_USER_HOME:-$HOME/.gradle}/gradle.properties"
+
+      # The test executable links MapLibre as the app does, from the release the Swift package in iosApp/project.yml
+      # pins: its URL and checksum are read from that package's Package.swift.
+      - name: Shared tests on an iPhone simulator
+        run: |
+          v=$(sed -n 's/^ *exactVersion: *//p' iosApp/project.yml)
+          pkg=$(curl -fsSL "https://raw.githubusercontent.com/maplibre/maplibre-gl-native-distribution/$v/Package.swift")
+          url=$(echo "$pkg" | sed -n 's/.*url: *"\([^"]*\.zip\)".*/\1/p')
+          sum=$(echo "$pkg" | sed -n 's/.*checksum: *"\([0-9a-f]*\)".*/\1/p')
+          mkdir -p build/maplibre
+          curl -fsSL -o build/maplibre/MapLibre.zip "$url"
+          echo "$sum  build/maplibre/MapLibre.zip" | shasum -a 256 -c
+          unzip -q build/maplibre/MapLibre.zip -d build/maplibre
+          ./gradlew :shared:iosSimulatorArm64Test -Pcoffeejournal.enableIos=true --no-daemon \
+            -Pcoffeejournal.maplibreFrameworkDir="$PWD/build/maplibre/MapLibre.xcframework/ios-arm64_x86_64-simulator"
+
+      - name: Keep the test reports
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ios-test-reports
+          path: shared/build/reports/tests/
+          if-no-files-found: ignore
 
   collect:
     needs: app
