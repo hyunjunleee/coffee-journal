@@ -22,6 +22,7 @@
   - 이 키는 개발용이라 앱(APK)에는 넣지 않습니다. 앱에서는 사용자가 자기 키를 직접 입력합니다.
   - 저장소 Secret `TAVILY_API_KEY_DEBUG`(개발용 무료 Tavily 키)도 있으면 실제 "Gemini 무료 + Tavily" 파이프라인(`--tavily`: 검색어 만들기 → Tavily → Gemini → 인용 확인)을 돌리고, 없으면 미리 고른 페이지로 대신합니다(`--sources`). 푸시 한 번에 노트 6개·묘사 4개, Tavily 약 30크레딧(월 1,000 무료).
   - 검색 설정 비교: `--tavily --plans basic,adv+basic,…`는 같은 질문을 플랜마다 답하게 하고, `--retrieval --depths ultra-fast,fast,basic,advanced,basic`은 답 없이 Tavily 결과만 깊이별로 나란히 놓습니다. Tavily는 전에 검색한 같은 검색어를 캐시에서 돌려줄 수 있어서(advanced 뒤의 basic이 advanced 결과를 그대로 받음), 공정하게 비교하려면 검색한 적 없는 질문(`--notes 7-10`처럼 범위로 고름)을 낮은 깊이부터 검색합니다. 크레딧은 Tavily가 응답에 적어 준 값(`include_usage`)으로 셉니다.
+  - 사람들 의견 실험: `--people`은 답에 "사람들의 느낌" 항목을 더하고, `adv+crowd`(커뮤니티만 검색하는 basic 한 번 더), `adv+crowdadv`(같은 검색을 advanced로), `adv+crowd-ko`(한국어 블로그)가 커뮤니티 출처를 따로 찾아 줍니다(Tavily `include_domains`). 두 검색이면 출처를 검색마다 5개, 모두 10개까지 넘깁니다.
   - 보고서는 실행 페이지 요약과 7일짜리 아티팩트로 남습니다. 저장소에는 커밋하지 않습니다.
 - 로컬 실행은 `GEMINI_API_KEY=… python3 tools/ai-eval/eval.py --notes 3 --describes 2`입니다. 파이썬 표준 라이브러리만 씁니다.
 - 자체 점검(키 불필요)은 `python3 tools/ai-eval/eval.py --selftest`입니다.

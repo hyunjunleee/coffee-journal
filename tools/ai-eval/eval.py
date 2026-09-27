@@ -33,7 +33,11 @@ REFERENCE = ROOT / "shared/src/commonMain/kotlin/com/coffeejournal/domain/refere
 INSTITUTIONS = ("sca.coffee", "worldcoffeeresearch.org", "coffeeinstitute.org", "allianceforcoffeeexcellence.org",
                 "cupofexcellence.org", "ico.org", "ncausa.org")
 PERSONAL = ("blog.naver.com", "cafe.naver.com", "tistory.com", "brunch.co.kr", "velog.io", "medium.com", "reddit.com",
-            "quora.com", "instagram.com", "youtube.com", "facebook.com", "x.com", "twitter.com", "home.coffeegeek.com")
+            "quora.com", "instagram.com", "youtube.com", "facebook.com", "x.com", "twitter.com", "home.coffeegeek.com",
+            "coffeegeek.com", "home-barista.com", "coffeeforums.co.uk")
+# the community-only searches of the "people's impressions" plans (Tavily include_domains)
+CROWD = ("reddit.com", "home-barista.com", "coffeegeek.com", "coffeeforums.co.uk", "quora.com")
+CROWD_KO = ("blog.naver.com", "tistory.com", "brunch.co.kr", "cafe.naver.com")
 
 
 def wheel_terms():
@@ -45,19 +49,24 @@ def wheel_terms():
     return terms, subs
 
 
-def question(mode, case, terms, subs):
+PEOPLE_NOTE = "- 사람들의 느낌: 커뮤니티·개인 블로그 글에서 사람들이 이 노트를 어떻게 느끼고 표현하는지(개인 의견이라고 밝히고, 그런 출처가 있을 때만)"
+PEOPLE_DESCRIBE = "- 비슷하게 느낀 사람들의 말: 커뮤니티·개인 글에서 비슷한 맛을 뭐라고 부르는지(개인 의견이라고 밝히고, 그런 출처가 있을 때만)"
+
+
+def question(mode, case, terms, subs, people=False):
+    """The app's question (NoteHelperPrompts.question); people=True adds the experimental people's-impressions section."""
     if mode == "note":
         return (f'노트 설명. 향미 노트: "{case}"\n'
                 "형식:\n"
                 "- 한 줄 뜻: 커피에서 이 노트가 가리키는 향·맛\n"
                 "- 실제 쓰임 2~4개: 인용 + 어떤 원두·가공·로스팅에서 나왔는지\n"
                 "- 비슷한 표현·헷갈리는 표현\n"
-                "- Coffee Taster's Flavor Wheel에서의 위치(찾은 경우에만)")
+                "- Coffee Taster's Flavor Wheel에서의 위치(찾은 경우에만)" + ("\n" + PEOPLE_NOTE if people else ""))
     return (f'맛 묘사로 노트 찾기. 마신 사람의 묘사: "{case}"\n'
             "아래 목록 안에서 어울리는 용어 3~5개를 고르고, 각각 그렇게 부르는 근거를 실제 문서의 인용으로 보여줘.\n"
             "형식:\n"
             "- 용어: 근거(인용과 출처)\n"
-            "- 후보를 구별하는 방법(출처가 있을 때만)\n"
+            "- 후보를 구별하는 방법(출처가 있을 때만)\n" + (PEOPLE_DESCRIBE + "\n" if people else "") +
             f"플레이버 휠 용어: {', '.join(terms)}\n"
             f"앱의 한국어 노트 분류: {', '.join(subs)}")
 
@@ -530,11 +539,13 @@ def pick(items, spec):
     return items[: int(spec)]
 
 
-def tavily_search(key, query, depth):
+def tavily_search(key, query, depth, domains=None):
+    body = {"query": query, "search_depth": depth, "max_results": 5, "chunks_per_source": 3,
+            "include_raw_content": "text", "include_answer": False, "include_usage": True}
+    if domains:
+        body["include_domains"] = list(domains)
     req = urllib.request.Request(TAVILY_URL, method="POST", headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-                                 data=json.dumps({"query": query, "search_depth": depth, "max_results": 5, "chunks_per_source": 3,
-                                                  "include_raw_content": "text", "include_answer": False,
-                                                  "include_usage": True}).encode("utf-8"))
+                                 data=json.dumps(body).encode("utf-8"))
     try:
         with urllib.request.urlopen(req, timeout=60) as r:
             return r.status, json.loads(r.read().decode("utf-8"))
@@ -552,8 +563,36 @@ PLANS = {
     "basic": ["basic"],                   # first query only: 1 credit
     "fast": ["fast"],                     # first query only: 1 credit
     "ufast": ["ultra-fast"],              # first query only: 1 credit
+    # people's impressions: the main search plus one restricted to communities (the first query + " discussion", or a
+    # Korean query on Korean blogs); a different query text keeps Tavily's cache from mixing the two
+    "adv+crowd": ["advanced", "basic@crowd"],         # 3 credits
+    "adv+crowdadv": ["advanced", "advanced@crowd"],   # 4 credits
+    "adv+crowd-ko": ["advanced", "basic@crowd-ko"],   # 3 credits
 }
 CREDITS = {"advanced": 2, "basic": 1, "fast": 1, "ultra-fast": 1}
+
+
+def korean_query(mode, case):
+    """The Korean-blog search of adv+crowd-ko: the note's Korean name or the description, as home-café posts word it."""
+    if mode == "note":
+        m = re.match(r"^(.*?)\s*[(（]([^()（）]+)[)）]\s*$", case.strip())
+        return f"커피 원두 {(m.group(1) if m else case).strip()} 노트 후기"
+    return f"커피 원두 후기 {case.strip()}"
+
+
+def plan_searches(plan_name, queries, mode, case):
+    """(query, depth, domains, label) for each search of the plan: plain steps take the written queries in order."""
+    out, i = [], 0
+    for step in PLANS[plan_name]:
+        depth, _, target = step.partition("@")
+        if target == "crowd":
+            out.append((queries[0] + " discussion", depth, CROWD, "crowd"))
+        elif target == "crowd-ko":
+            out.append((korean_query(mode, case), depth, CROWD_KO, "crowd-ko"))
+        elif i < len(queries):
+            out.append((queries[i], depth, None, "main"))
+            i += 1
+    return out
 
 
 def charged(resp, depth):
@@ -630,6 +669,18 @@ def run_retrieval(args):
                                              ["", "## Snippets side by side", ""] + side) + "\n", encoding="utf-8")
 
 
+def people_line(text, personal_ids):
+    """The people's-impressions line of an answer: "cited" when it cites a personal source, "empty" when it found none,
+    "other" when it cites only other sources, "-" when the answer has no such line."""
+    for line in text.splitlines():
+        if line.lstrip("-* ").startswith(("사람들의 느낌", "비슷하게 느낀 사람들의 말")):
+            refs = {int(x) for x in re.findall(r"\[(\d+)\]", line)}
+            if refs & personal_ids:
+                return "cited"
+            return "empty" if not refs else "other"
+    return "-"
+
+
 def run_tavily(args):
     gkey = os.environ.get("GEMINI_API_KEY", "").strip()
     tkey = os.environ.get("TAVILY_API_KEY", "").strip()
@@ -642,11 +693,12 @@ def run_tavily(args):
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
     plans = [x.strip() for x in args.plans.split(",") if x.strip()]
-    lines = [f"# Gemini free + Tavily: {args.model}", "",
-             "| # | plan | mode | question | queries | sources | institution | cited sentences | bad [n] | quotes verified | credits | s |",
-             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
+    lines = [f"# Gemini free + Tavily: {args.model}" + (" (with the people's impressions section)" if args.people else ""), "",
+             "| # | plan | mode | question | queries | sources | domains | personal | institution | cited sentences | bad [n] | quotes verified | people line | credits | s |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     answers, credits = [], 0
-    totals = {pl: {"q": 0, "v": 0, "cited": 0, "sent": 0, "src": 0, "inst": 0, "cred": 0, "n": 0} for pl in plans}
+    totals = {pl: {"q": 0, "v": 0, "cited": 0, "sent": 0, "src": 0, "inst": 0, "cred": 0, "n": 0, "dom": 0, "pers": 0, "people": 0}
+              for pl in plans}
     written = {}
     for n, (mode, case, plan_name) in enumerate([(m, c, pl) for (m, c) in plan for pl in plans], 1):
         if case not in written:
@@ -655,32 +707,31 @@ def run_tavily(args):
         queries, how, qsecs = written[case]
         if plan_name.startswith("tmpl-"):
             queries, how, qsecs = [template_query(mode, case)], "template", 0.0
-        depths = PLANS[plan_name.removeprefix("tmpl-")]
-        queries = queries[: len(depths)]
+        searches = plan_searches(plan_name.removeprefix("tmpl-"), queries, mode, case)
+        queries = [q for q, _, _, _ in searches]
         sources, seen, errors, t0 = [], set(), [], time.monotonic()
-        for i, q in enumerate(queries):
-            depth = depths[i]
-            status, resp = tavily_search(tkey, q, depth)
+        for q, depth, domains, label in searches:
+            status, resp = tavily_search(tkey, q, depth, domains)
             if status != 200:
                 errors.append(f"Tavily {status}: {resp}")
                 continue
             cred = charged(resp, depth)
             credits += cred
             totals[plan_name]["cred"] += cred
-            for r in resp.get("results", []):
-                if r.get("url") in seen or len(sources) >= 6:
+            for r in resp.get("results", [])[: args.per_search]:
+                if r.get("url") in seen or len(sources) >= args.max_sources:
                     continue
                 seen.add(r.get("url"))
-                sources.append({"title": r.get("title") or r.get("url"), "url": r.get("url"),
+                sources.append({"title": r.get("title") or r.get("url"), "url": r.get("url"), "from": label,
                                 "domain": urllib.parse.urlparse(r.get("url") or "").hostname or "",
                                 "content": r.get("content") or "", "raw": r.get("raw_content") or r.get("content") or ""})
         if not sources:
-            lines.append(f"| {n} | {plan_name} | {mode} | {case} | {' · '.join(queries)} | 0 | 0 | - | - | - | {credits} | - |")
+            lines.append(f"| {n} | {plan_name} | {mode} | {case} | {' · '.join(queries)} | 0 | 0 | 0 | 0 | - | - | - | - | {credits} | - |")
             answers += [f"### {n}. {case}", "", "no sources: " + "; ".join(errors), ""]
             continue
         block = "\n\n".join(f"[{i}] {s['title']} — {s['domain']}\n{s['url']}\n{s['content']}" for i, s in enumerate(sources, 1))
         body = {"system_instruction": {"parts": [{"text": system}]},
-                "contents": [{"role": "user", "parts": [{"text": question(mode, case, terms, subs) + "\n\n출처\n" + block}]}],
+                "contents": [{"role": "user", "parts": [{"text": question(mode, case, terms, subs, args.people) + "\n\n출처\n" + block}]}],
                 "generationConfig": {"temperature": 0.2}}
         status, resp, secs = call(args.model, gkey, body)
         total = qsecs + (time.monotonic() - t0)
@@ -688,25 +739,31 @@ def run_tavily(args):
             text = "".join(p.get("text", "") for p in ((resp.get("candidates") or [{}])[0].get("content") or {}).get("parts", []))
             chk = check_cited(text, sources)
             inst = sum(1 for s_ in sources if kind_of(s_["domain"].removeprefix("www.")) == "institution")
+            pers_ids = {i for i, s_ in enumerate(sources, 1) if kind_of(s_["domain"].removeprefix("www.")) == "personal"}
+            doms = len({s_["domain"].removeprefix("www.") for s_ in sources})
+            people = people_line(text, pers_ids)
             t = totals[plan_name]
             t["q"] += chk["quotes"]; t["v"] += chk["verified"]; t["cited"] += chk["cited"]; t["sent"] += chk["sentences"]
-            t["src"] += len(sources); t["inst"] += inst; t["n"] += 1
-            lines.append(f"| {n} | {plan_name} | {mode} | {case} | {' · '.join(queries)} ({how}) | {len(sources)} | {inst} | {chk['cited']}/{chk['sentences']} | "
-                         f"{chk['bad_refs']} | {chk['verified']}/{chk['quotes']} | {credits} | {total:.1f} |")
+            t["src"] += len(sources); t["inst"] += inst; t["n"] += 1; t["dom"] += doms; t["pers"] += len(pers_ids)
+            t["people"] += people == "cited"
+            lines.append(f"| {n} | {plan_name} | {mode} | {case} | {' · '.join(queries)} ({how}) | {len(sources)} | {doms} | {len(pers_ids)} | {inst} | "
+                         f"{chk['cited']}/{chk['sentences']} | {chk['bad_refs']} | {chk['verified']}/{chk['quotes']} | {people} | {credits} | {total:.1f} |")
             answers += [f"### {n}. [{plan_name}] {mode}: {case}", "", "검색어: " + " · ".join(queries), "", text, ""]
             answers += [f"- {'✓' if ok else '✗'} \"{q}\" → {refs}" for q, refs, ok in chk["quote_detail"]]
-            answers += [""] + [f"[{i}] {s['title']} ({s['domain']}) {s['url']}" for i, s in enumerate(sources, 1)] + [""]
+            answers += [""] + [f"[{i}] {s['title']} ({s['domain']}{', ' + s['from'] if s['from'] != 'main' else ''}) {s['url']}"
+                               for i, s in enumerate(sources, 1)] + [""]
         else:
             err = resp.get("error", {}).get("message", "") if isinstance(resp, dict) else str(resp)
-            lines.append(f"| {n} | {plan_name} | {mode} | {case} | {' · '.join(queries)} | {len(sources)} | - | HTTP {status} | - | - | {credits} | - |")
+            lines.append(f"| {n} | {plan_name} | {mode} | {case} | {' · '.join(queries)} | {len(sources)} | - | - | - | HTTP {status} | - | - | - | {credits} | - |")
             answers += [f"### {n}. {case}", "", f"Gemini HTTP {status}: {err[:300]}", ""]
         print(lines[-1], flush=True)
         time.sleep(args.delay)
-    summary = ["", "| plan | answers | sources/answer | institution sources | cited sentences | quotes verified | credits |",
-               "|---|---|---|---|---|---|---|"]
+    summary = ["", "| plan | answers | sources/answer | domains/answer | personal sources/answer | institution sources | cited sentences | "
+               "quotes verified | people line cited | credits |", "|---|---|---|---|---|---|---|---|---|---|"]
     for pl, t in totals.items():
         n_ = max(t["n"], 1)
-        summary.append(f"| {pl} | {t['n']} | {t['src'] / n_:.1f} | {t['inst']} | {t['cited']}/{t['sent']} | {t['v']}/{t['q']} | {t['cred']} |")
+        summary.append(f"| {pl} | {t['n']} | {t['src'] / n_:.1f} | {t['dom'] / n_:.1f} | {t['pers'] / n_:.1f} | {t['inst']} | {t['cited']}/{t['sent']} | "
+                       f"{t['v']}/{t['q']} | {t['people'] if args.people else '-'} | {t['cred']} |")
     (out / "report.md").write_text("\n".join(lines[:2] + summary + [""] + lines[2:] + ["", f"Tavily credits used: {credits}", "", "## Answers", ""] + answers) + "\n", encoding="utf-8")
 
 
@@ -721,7 +778,10 @@ def main():
     p.add_argument("--probe", default="", help="comma-separated models: one short question each, without and with search")
     p.add_argument("--sources", action="store_true", help="the Gemini free + Tavily pipeline with fetched pages (cases_sources.json)")
     p.add_argument("--tavily", action="store_true", help="the real Gemini free + Tavily pipeline (needs TAVILY_API_KEY)")
-    p.add_argument("--plans", default="adv+basic", help="comma-separated plans: adv+adv, adv+basic, basic+basic, adv, basic, fast, ufast; prefix tmpl- to skip the query step")
+    p.add_argument("--plans", default="adv+basic", help="comma-separated plans: adv+adv, adv+basic, basic+basic, adv, basic, fast, ufast, adv+crowd, adv+crowdadv, adv+crowd-ko; prefix tmpl- to skip the query step")
+    p.add_argument("--per-search", type=int, default=5, help="sources kept from each search")
+    p.add_argument("--max-sources", type=int, default=10, help="sources given to the answer at most")
+    p.add_argument("--people", action="store_true", help="ask for the people's impressions section (experiment)")
     p.add_argument("--retrieval", action="store_true", help="Tavily only: compare search depths for the written queries")
     p.add_argument("--depths", default="advanced,basic,fast", help="depths for --retrieval (basic, advanced, fast, ultra-fast; a repeat searches again)")
     args = p.parse_args()

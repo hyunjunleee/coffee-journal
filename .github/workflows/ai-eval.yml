@@ -35,7 +35,12 @@ on:
           tavily mode: Tavily plans to compare, credits per question: adv+adv 4, adv+basic 3, basic+basic 2, adv 2,
           basic 1, fast 1, ufast 1; a "tmpl-" prefix searches the template query instead of the model's (no query
           step). Tavily may serve a query searched before from its cache, so list the plans from the lowest depth up.
+          People's impressions: adv+crowd 3, adv+crowdadv 4 (a community-only second search), adv+crowd-ko 3 (Korean blogs).
         default: adv+basic
+      people:
+        description: "tavily mode: also ask for the people's impressions section (community opinions, experiment)"
+        type: boolean
+        default: false
       depths:
         description: >-
           retrieval mode: Tavily depths to compare, lowest first (advanced = 2 credits a query, basic, fast and
@@ -78,6 +83,7 @@ jobs:
           MODEL: ${{ inputs.model || 'gemini-3.5-flash-lite' }}
           PLANS: ${{ inputs.plans || 'adv+basic' }}
           DEPTHS: ${{ inputs.depths || 'ultra-fast,fast,basic,advanced,basic' }}
+          PEOPLE: ${{ inputs.people && '--people' || '' }}
           # a push asks fewer (Tavily: about 3 credits a question out of 1,000 a month)
           NOTES: ${{ inputs.notes || '6' }}
           DESCRIBES: ${{ inputs.describes || '4' }}
@@ -91,7 +97,7 @@ jobs:
           fi
           echo "mode: $MODE"
           if [ "$MODE" = "tavily" ]; then
-            python3 tools/ai-eval/eval.py --tavily --plans "$PLANS" --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
+            python3 tools/ai-eval/eval.py --tavily --plans "$PLANS" $PEOPLE --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
           elif [ "$MODE" = "retrieval" ]; then
             python3 tools/ai-eval/eval.py --retrieval --depths "$DEPTHS" --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
           elif [ "$MODE" = "sources" ]; then
