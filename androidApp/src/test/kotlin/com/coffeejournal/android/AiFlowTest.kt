@@ -25,13 +25,17 @@ import com.coffeejournal.ui.ai.AiKeySlot
 import com.coffeejournal.ui.ai.AiPrefs
 import com.coffeejournal.ui.ai.AiProvider
 import com.coffeejournal.ui.ai.AiTexts
+import com.coffeejournal.ui.ai.AskStage
 import com.coffeejournal.ui.ai.NoteHelperService
 import com.coffeejournal.ui.ai.SearchDepth
+import com.coffeejournal.ui.ai.StageStatus
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.nav.appGraph
 import com.coffeejournal.ui.platform.installUrlOpener
 import com.coffeejournal.ui.theme.CoffeeJournalTheme
+import com.coffeejournal.ui.theme.Display
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.Motion
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -371,6 +375,54 @@ class AiFlowTest : CoverageFlowBase() {
         assertFalse(AiReplies.QUERY_STEP in requestBody(6))
         assertFalse(has(hasTestTag("edit-queries")))
         waitFor(hasTestTag("source-3"))
+    }
+
+    /** What TalkBack reads after the step's name, i.e. how the step is shown. */
+    private fun stage(stage: AskStage): String? =
+        node(hasTestTag("ask-stage-${stage.name}")).fetchSemanticsNode().config.getOrNull(SemanticsProperties.StateDescription)
+
+    private fun waitStage(stage: AskStage, status: StageStatus) = waitUntil("${stage.name} $status") { stage(stage) == AiTexts.stageState(status) }
+
+    @Test
+    fun asking_showsEachStepAsItHappens_aCorrectedQuerySkipsTheFirst_otherServicesOneStep_stillDotsWithoutMotion() {
+        AiSetup.ready(AiProvider.GEMINI_TAVILY)
+        var search = http.hold("api.tavily.com")
+        AiSetup.tavilyAnswers()
+        openHelper(Route.NoteHelper(mode = "note", query = "자스민"))
+        // the query is written; Tavily is still searching
+        waitStage(AskStage.SEARCH, StageStatus.CURRENT)
+        assertEquals(AiTexts.stageState(StageStatus.DONE), stage(AskStage.QUERY))
+        assertEquals(AiTexts.stageState(StageStatus.LATER), stage(AskStage.ANSWER))
+        assertTrue(has(hasText("✓ ${AiTexts.STAGE_QUERY}")))
+        // the moving dots (a test clock runs no infinite animation: all three stay), on the line and on the step
+        assertTrue(has(hasText(AiTexts.ASKING + ".\u00A0.\u00A0.")))
+        assertTrue(has(hasText(AiTexts.STAGE_SEARCH + ".\u00A0.\u00A0.")))
+        search.complete(Unit)
+        waitFor(hasTestTag("answer-queries"))
+        assertFalse(has(hasTestTag("ask-stages")))
+
+        // "이 검색어로 다시 묻기": no query step, shown struck out
+        search = http.hold("api.tavily.com")
+        tap(button(AiTexts.EDIT_QUERIES))
+        tap(button(AiTexts.ASK_WITH_QUERIES))
+        waitStage(AskStage.SEARCH, StageStatus.CURRENT)
+        assertEquals(AiTexts.stageState(StageStatus.SKIPPED), stage(AskStage.QUERY))
+        assertEquals(AiTexts.stageState(StageStatus.LATER), stage(AskStage.ANSWER))
+        search.complete(Unit)
+        waitFor(hasTestTag("answer-queries"))
+        assertEquals(7, http.requests.size)
+
+        // GPT searches and answers in one request: one step; with screen motion off, a still "…"
+        Display.current = Display.current.copy(motion = Motion.OFF)
+        AiSetup.ready(AiProvider.OPENAI)
+        val gpt = http.hold("api.openai.com")
+        tap(button(AiTexts.ASK_AGAIN))
+        waitStage(AskStage.SEARCH_AND_ANSWER, StageStatus.CURRENT)
+        assertTrue(has(hasText(AiTexts.STAGE_SEARCH_AND_ANSWER + "…")))
+        assertTrue(has(hasText(AiTexts.ASKING + "…")))
+        assertFalse(has(hasTestTag("ask-stage-QUERY")))
+        assertFalse(has(hasText("›")))
+        gpt.complete(Unit)
     }
 
     @Test

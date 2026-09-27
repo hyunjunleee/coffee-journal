@@ -29,11 +29,11 @@ class BrewTimerEngineTest {
         assertEquals(TimerStatus.RUNNING, r.s.status)
         r.at(9.6); r.s = E.endPour(r.s, r.mono)
         assertEquals(0, r.s.gramsFor)
-        r.s = E.setGrams(r.s, "50", r.mono)
+        r.s = E.setGrams(r.s, "50")
         r.at(12.0); r.s = E.note(r.s, E.BLOOM, r.mono, r.wall) // names the wait after the pour
         r.at(40.0); r.s = E.startPour(r.s, r.mono, r.wall)
         r.at(50.4); r.s = E.note(r.s, E.SWIRL, r.mono, r.wall) // during the pour: goes on the pour
-        r.at(70.0); r.s = E.endPour(r.s, r.mono); r.s = E.setGrams(r.s, "190", r.mono)
+        r.at(70.0); r.s = E.endPour(r.s, r.mono); r.s = E.setGrams(r.s, "190")
         r.at(80.0); r.s = E.note(r.s, E.DRAWDOWN, r.mono, r.wall) // the wait after the pour has no name yet → named
         r.at(150.9); r.s = E.finish(r.s, r.mono)
         assertEquals(150_900L, r.s.endMs)
@@ -58,11 +58,11 @@ class BrewTimerEngineTest {
     @Test fun unnamedWaitsAreDefaultedAndEmptyOnesDropped() {
         val r = Run()
         r.s = E.startPour(r.s, r.mono, r.wall)
-        r.at(10.0); r.s = E.endPour(r.s, r.mono); r.s = E.setGrams(r.s, "40", r.mono)
+        r.at(10.0); r.s = E.endPour(r.s, r.mono); r.s = E.setGrams(r.s, "40")
         r.at(10.5); r.s = E.startPour(r.s, r.mono, r.wall) // the wait lasted no whole second
-        r.at(30.0); r.s = E.endPour(r.s, r.mono); r.s = E.setGrams(r.s, "100", r.mono)
+        r.at(30.0); r.s = E.endPour(r.s, r.mono); r.s = E.setGrams(r.s, "100")
         r.at(45.0); r.s = E.startPour(r.s, r.mono, r.wall)
-        r.at(60.0); r.s = E.endPour(r.s, r.mono); r.s = E.setGrams(r.s, "100", r.mono)
+        r.at(60.0); r.s = E.endPour(r.s, r.mono); r.s = E.setGrams(r.s, "100")
         r.at(95.0); r.s = E.finish(r.s, r.mono)
         assertEquals(
             listOf(
@@ -90,16 +90,18 @@ class BrewTimerEngineTest {
         assertEquals(15_000L, r.s.rows.single().startMs)
     }
 
-    @Test fun finishingWhilePouringAsksForTheGramsFirst() {
+    @Test fun finishingWhilePouring_finishesAtOnce_withTheEstimate_stillEditable() {
         val r = Run()
         r.s = E.startPour(r.s, r.mono, r.wall)
         r.at(20.0); r.s = E.finish(r.s, r.mono)
-        assertNull(r.s.endMs)
-        assertTrue(r.s.finishing)
-        assertEquals(0, r.s.gramsFor)
-        r.at(25.0); r.s = E.setGrams(r.s, "250", r.mono)
-        assertEquals(25_000L, r.s.endMs, "finishes when the grams are in")
-        assertEquals(listOf(RecipeStep("0:00", "250", "20", "1차 푸어"), RecipeStep("0:20", "", "5", "드로우다운")), E.toSteps(r.s.rows, r.s.endMs!!))
+        assertEquals(20_000L, r.s.endMs, "no wait for the grams")
+        assertEquals(TimerStatus.PAUSED, r.s.status)
+        assertEquals(0, r.s.gramsFor, "the panel stays on the pour")
+        assertEquals(listOf(RecipeStep("0:00", "120", "20", "1차 푸어")), E.toSteps(r.s.rows, r.s.endMs!!))
+        assertFalse(E.canKeepPouring(r.s), "the brew is over")
+        r.at(25.0); r.s = E.setGrams(r.s, "250")
+        assertEquals(20_000L, r.s.endMs)
+        assertEquals(listOf(RecipeStep("0:00", "250", "20", "1차 푸어")), E.toSteps(r.s.rows, r.s.endMs!!))
         // after the finish the controls do nothing until 이어서 추출
         assertEquals(r.s, E.startPour(r.s, r.mono, r.wall))
         val resumed = E.resume(r.s)
@@ -111,20 +113,95 @@ class BrewTimerEngineTest {
         val r = Run()
         r.s = E.startPour(r.s, r.mono, r.wall)
         r.at(5.0); r.s = E.endPour(r.s, r.mono)
-        assertEquals(r.s, E.setGrams(r.s, "", r.mono))
-        assertEquals(r.s, E.setGrams(r.s, "0", r.mono))
-        assertEquals(r.s, E.setGrams(r.s, "NaN", r.mono))
-        assertEquals("45.5", E.setGrams(r.s, "45.50", r.mono).rows[0].grams)
+        assertEquals(r.s, E.setGrams(r.s, "0"))
+        assertEquals(r.s, E.setGrams(r.s, "NaN"))
+        val typed = E.setGrams(r.s, "45.50")
+        assertEquals(TimerRow(0, pour = true, grams = "45.5"), typed.rows[0])
+        // an emptied field: the estimate again
+        assertEquals(r.s, E.setGrams(typed, ""))
+        assertEquals(TimerRow(0, pour = true, grams = "30", estimated = true), r.s.rows[0])
     }
 
     @Test fun keepPouringUndoesAnEarlyPourEnd() {
         val r = Run()
         r.s = E.startPour(r.s, r.mono, r.wall)
         r.at(5.0); r.s = E.endPour(r.s, r.mono)
+        assertTrue(E.canKeepPouring(r.s))
         val back = E.cancelEndPour(r.s)
         assertTrue(back.pouring)
         assertNull(back.gramsFor)
-        assertEquals(1, back.rows.size)
+        assertEquals(listOf(TimerRow(0, pour = true)), back.rows, "no estimate while it is poured")
+        // it ends again later: estimated from the whole pour
+        r.at(11.0); r.s = E.endPour(back, r.mono)
+        assertEquals("70", r.s.rows[0].grams)
+        // not once something was noted after the pour, or the next pour began
+        assertFalse(E.canKeepPouring(E.note(r.s, E.BLOOM, r.mono, r.wall)))
+        assertEquals(r.s.copy(gramsFor = null), E.cancelEndPour(r.s.copy(gramsFor = null)))
+    }
+
+    @Test fun estimate_sixGramsASecond_toTheNearestTen_atLeastTen() {
+        assertEquals(50, E.gramsFromDuration(9_000), "54 g")
+        assertEquals(60, E.gramsFromDuration(9_600), "57.6 g")
+        assertEquals(50, E.gramsFromDuration(7_500), "45 g: halves up")
+        assertEquals(40, E.gramsFromDuration(7_400), "44.4 g")
+        assertEquals(150, E.gramsFromDuration(25_000))
+        assertEquals(10, E.gramsFromDuration(1_000), "6 g")
+        assertEquals(10, E.gramsFromDuration(800), "4.8 g rounds to 0: at least 10")
+        assertEquals(10, E.gramsFromDuration(0))
+        assertEquals(10, E.gramsFromDuration(-500))
+    }
+
+    @Test fun estimate_theRecipesGramsForThePourComeFirst() {
+        val r = Run()
+        r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(20.0); r.s = E.endPour(r.s, r.mono, yourHome)
+        assertEquals(TimerRow(0, pour = true, grams = "50", estimated = true), r.s.rows[0], "the recipe's 1st pour, not 120 g")
+        r.at(40.0); r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(45.0); r.s = E.endPour(r.s, r.mono, yourHome)
+        assertEquals("190", r.s.rows[2].grams)
+        // the recipe has two pours: the third is estimated from its time
+        r.at(50.0); r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(58.0); r.s = E.endPour(r.s, r.mono, yourHome)
+        assertEquals("50", r.s.rows[4].grams, "48 g")
+        // no recipe: from the time
+        assertEquals("120", E.estimateGrams(null, r.s.rows, 0, 20_000))
+        assertEquals("50", E.estimateGrams(RecipeRef("소수점", listOf(RecipeStep("0:00", "50.0", "30", ""))), r.s.rows, 0, 20_000))
+    }
+
+    @Test fun nextPour_startsWithoutConfirmingTheGrams_estimatesGoToTheStepLog() {
+        val r = Run()
+        r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(9.0); r.s = E.endPour(r.s, r.mono)
+        assertEquals(0, r.s.gramsFor)
+        // straight into the next pour: the panel closes, the estimate stays
+        r.at(12.0); r.s = E.startPour(r.s, r.mono, r.wall)
+        assertTrue(r.s.pouring)
+        assertNull(r.s.gramsFor)
+        assertEquals(TimerRow(0, pour = true, grams = "50", estimated = true), r.s.rows[0])
+        assertEquals(r.s, E.editGrams(r.s, 2), "not the pour still going")
+        assertEquals(r.s, E.editGrams(r.s, 1), "not a wait")
+        r.at(28.0); r.s = E.endPour(r.s, r.mono)
+        assertEquals(TimerRow(12_000, pour = true, grams = "100", estimated = true), r.s.rows[2])
+        // the first pour fixed from the log, the second one's estimate accepted
+        r.s = E.editGrams(r.s, 0)
+        assertEquals(0, r.s.gramsFor)
+        r.s = E.confirmGrams(E.setGrams(r.s, "45"))
+        assertNull(r.s.gramsFor)
+        r.s = E.confirmGrams(E.editGrams(r.s, 2))
+        assertEquals(listOf(TimerRow(0, pour = true, grams = "45"), TimerRow(12_000, pour = true, grams = "100")), r.s.rows.filter { it.pour })
+        r.at(60.0); r.s = E.finish(r.s, r.mono)
+        assertEquals(
+            listOf(RecipeStep("0:00", "45", "9", "1차 푸어"), RecipeStep("0:09", "", "3", "대기"), RecipeStep("0:12", "100", "16", "2차 푸어"), RecipeStep("0:28", "", "32", "드로우다운")),
+            E.toSteps(r.s.rows, r.s.endMs!!),
+        )
+
+        // an estimate left as it is goes to the step log as its plain number
+        val left = Run()
+        left.s = E.startPour(left.s, left.mono, left.wall)
+        left.at(10.0); left.s = E.endPour(left.s, left.mono)
+        left.at(30.0); left.s = E.finish(left.s, left.mono)
+        assertTrue(left.s.rows[0].estimated)
+        assertEquals(listOf(0 to RecipeStep("0:00", "60", "10", "1차 푸어"), 1 to RecipeStep("0:10", "", "20", "드로우다운")), E.stepRows(left.s.rows, left.s.endMs!!))
     }
 
     @Test fun restoredTimerCountsTheTimeTheProcessWasGone() {

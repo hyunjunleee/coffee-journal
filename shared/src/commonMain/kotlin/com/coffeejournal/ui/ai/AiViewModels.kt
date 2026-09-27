@@ -106,7 +106,8 @@ sealed interface NoteHelperUi {
     data class NeedsKey(val provider: AiProvider, val missing: List<AiKeySlot>) : NoteHelperUi
     data class NeedsConsent(val provider: AiProvider) : NoteHelperUi
     data class Declined(val provider: AiProvider) : NoteHelperUi
-    data class Asking(val provider: AiProvider, val model: String) : NoteHelperUi
+    /** The question is out; [progress] follows the service's steps ([NoteHelperService.ask]'s onStage). */
+    data class Asking(val provider: AiProvider, val model: String, val progress: AskProgress) : NoteHelperUi
     data class Answered(val answer: GroundedAnswer, val candidates: List<String>) : NoteHelperUi
     data class Failed(val provider: AiProvider, val model: String, val error: AiError) : NoteHelperUi
 }
@@ -177,9 +178,12 @@ class NoteHelperViewModel(
     private suspend fun ask(s: AiSettings, queries: List<String>? = null) {
         val p = s.provider
         val model = s.model(p)
-        _state.value = NoteHelperUi.Asking(p, model)
+        _state.value = NoteHelperUi.Asking(p, model, AskProgress.start(p, corrected = queries != null))
+        val onStage = { stage: AskStage ->
+            _state.update { if (it is NoteHelperUi.Asking) it.copy(progress = it.progress.copy(current = stage)) else it }
+        }
         _state.value = try {
-            val answer = service.ask(NoteQuestion(args.mode, args.query), p, model, queries, s.searchDepth, s.people)
+            val answer = service.ask(NoteQuestion(args.mode, args.query), p, model, queries, s.searchDepth, s.people, onStage)
             val candidates = if (args.mode == NoteMode.DESCRIBE) NoteTerms.find(answer.plainText) else emptyList()
             NoteHelperUi.Answered(answer, candidates)
         } catch (e: AiFailure) {

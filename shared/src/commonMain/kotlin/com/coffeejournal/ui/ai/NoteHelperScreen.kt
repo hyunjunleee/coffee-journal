@@ -1,7 +1,13 @@
 package com.coffeejournal.ui.ai
 
-import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -24,6 +30,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,13 +45,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.BaselineShift
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
@@ -60,12 +71,14 @@ import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Badge
 import com.coffeejournal.ui.theme.Chip
 import com.coffeejournal.ui.theme.Dimens
+import com.coffeejournal.ui.theme.Display
 import com.coffeejournal.ui.theme.EmptyNote
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.MinTouchTarget
+import com.coffeejournal.ui.theme.Motion
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
 import com.coffeejournal.ui.theme.SectionLabel
@@ -112,10 +125,7 @@ fun NoteHelperScreen(nav: NavHostController, route: Route.NoteHelper) {
                     Text(AiTexts.DECLINED, style = AppType.bodyMuted)
                     GhostButton(AiTexts.ASK_AGAIN, small = true, onClick = vm::start, modifier = Modifier.padding(top = 12.dp))
                 }
-                is NoteHelperUi.Asking -> {
-                    Text(AiTexts.ASKING, style = AppType.body)
-                    Text("${s.provider.route} · ${s.model}", style = AppType.monoSmall, modifier = Modifier.padding(top = 4.dp))
-                }
+                is NoteHelperUi.Asking -> Asking(s)
                 is NoteHelperUi.Failed -> Failure(s, openSettings, onAskAgain = vm::start)
                 is NoteHelperUi.Answered -> Answer(
                     s, args, picked, onToggle = vm::toggle, onAdd = { deliver(picked) }, onAskAgain = vm::start, onAskWith = vm::askWith,
@@ -126,6 +136,84 @@ fun NoteHelperScreen(nav: NavHostController, route: Route.NoteHelper) {
     }
 
     (state as? NoteHelperUi.NeedsConsent)?.let { s -> ConsentDialog(s.provider, onAnswer = vm::consent) }
+}
+
+/**
+ * While the question is out: "출처를 찾아 답을 쓰고 있어요" with moving dots, the steps of the chosen service (the one
+ * under way in ink with the same dots, finished ones ✓, later ones faint, a skipped one struck out), then the route and
+ * the model.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun Asking(s: NoteHelperUi.Asking) {
+    val dots = rememberMovingDots()
+    DotsText(AiTexts.ASKING, AppType.body, dots, Modifier.testTag("asking"))
+    FlowRow(
+        Modifier.fillMaxWidth().padding(top = 6.dp).testTag("ask-stages"),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        s.progress.stages.forEachIndexed { i, stage ->
+            if (i > 0) Text("›", style = AppType.small.copy(color = Ink.textFaint))
+            StageLabel(stage, s.progress.status(stage), dots)
+        }
+    }
+    Text("${s.provider.route} · ${s.model}", style = AppType.monoSmall, modifier = Modifier.padding(top = 4.dp))
+}
+
+@Composable
+private fun StageLabel(stage: AskStage, status: StageStatus, dots: State<Int>?) {
+    val modifier = Modifier.testTag("ask-stage-${stage.name}").semantics { stateDescription = AiTexts.stageState(status) }
+    when (status) {
+        StageStatus.CURRENT -> DotsText(stage.label, AppType.small.copy(color = Ink.text, fontWeight = FontWeight.SemiBold), dots, modifier)
+        StageStatus.DONE -> Text("✓ ${stage.label}", style = AppType.small, modifier = modifier)
+        StageStatus.LATER -> Text(stage.label, style = AppType.small.copy(color = Ink.textFaint), modifier = modifier)
+        StageStatus.SKIPPED -> Text(stage.label, style = AppType.small.copy(color = Ink.textFaint, textDecoration = TextDecoration.LineThrough), modifier = modifier)
+    }
+}
+
+/** One dot more every step, 0 → 1 → 2 → 3, then again. */
+private const val DOT_STEP_MS = 480
+
+/** Three dots with no-break spaces between them, so they never wrap apart. */
+private const val DOTS = ".\u00A0.\u00A0."
+
+/**
+ * How many dots show now, from one infinite transition that recomposes only when the count changes; null when the user
+ * turned screen motion off (설정 › 화면 › 화면 전환 끔), for a still "…". It starts at three dots, the frame a test clock
+ * that runs no infinite animation keeps, so screenshots are stable.
+ */
+@Composable
+private fun rememberMovingDots(): State<Int>? {
+    if (Display.current.motion == Motion.OFF) return null
+    val phase = rememberInfiniteTransition(label = "asking").animateFloat(
+        initialValue = 3f,
+        targetValue = 7f,
+        animationSpec = infiniteRepeatable(tween(DOT_STEP_MS * 4, easing = LinearEasing), RepeatMode.Restart),
+        label = "dots",
+    )
+    return remember(phase) { derivedStateOf { phase.value.toInt() % 4 } }
+}
+
+@Composable
+private fun DotsText(text: String, style: TextStyle, dots: State<Int>?, modifier: Modifier = Modifier) {
+    val shown = dots?.value
+    Text(remember(text, shown) { withDots(text, shown) }, style = style, modifier = modifier)
+}
+
+/**
+ * [text] and three dots of which [shown] are visible; the others are drawn transparent, so the text keeps the width of
+ * all three and nothing beside or below it moves. Null: the still "…".
+ */
+internal fun withDots(text: String, shown: Int?): AnnotatedString = buildAnnotatedString {
+    append(text)
+    if (shown == null) {
+        append("…")
+        return@buildAnnotatedString
+    }
+    val visible = if (shown <= 0) 0 else 2 * shown.coerceAtMost(3) - 1
+    append(DOTS.substring(0, visible))
+    withStyle(SpanStyle(color = Color.Transparent)) { append(DOTS.substring(visible)) }
 }
 
 @Composable

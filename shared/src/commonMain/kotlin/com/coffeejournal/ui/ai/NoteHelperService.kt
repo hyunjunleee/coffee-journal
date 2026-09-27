@@ -2,6 +2,54 @@ package com.coffeejournal.ui.ai
 
 import kotlinx.serialization.json.JsonElement
 
+/**
+ * A step of answering a question, reported by [NoteHelperService.ask] as it begins, so the answer screen can show where
+ * the question is. Gemini 무료 + Tavily has three; the other services search and answer in one request the app cannot
+ * see into, so they have one honest step ([SEARCH_AND_ANSWER]).
+ */
+enum class AskStage(val label: String) {
+    /** Gemini turns the note or the described taste into an English search query. */
+    QUERY(AiTexts.STAGE_QUERY),
+
+    /** Tavily searches it (and Korean blogs once more with 사람들 의견). */
+    SEARCH(AiTexts.STAGE_SEARCH),
+
+    /** Gemini answers from the pages found. */
+    ANSWER(AiTexts.STAGE_ANSWER),
+
+    /** Gemini + Google 검색, GPT, Claude: one request that searches and answers. */
+    SEARCH_AND_ANSWER(AiTexts.STAGE_SEARCH_AND_ANSWER),
+}
+
+enum class StageStatus { DONE, CURRENT, LATER, SKIPPED }
+
+/**
+ * Where a question is: its [stages] in order and the [current] one; [skipped] ones are shown struck out (a query the
+ * user corrected skips [AskStage.QUERY]).
+ */
+data class AskProgress(val stages: List<AskStage>, val current: AskStage, val skipped: Set<AskStage> = emptySet()) {
+    fun status(stage: AskStage): StageStatus = when {
+        stage in skipped -> StageStatus.SKIPPED
+        stage == current -> StageStatus.CURRENT
+        stages.indexOf(stage) < stages.indexOf(current) -> StageStatus.DONE
+        else -> StageStatus.LATER
+    }
+
+    /** The steps [NoteHelperService.ask] reports, in order. */
+    val reported: List<AskStage> get() = stages - skipped
+
+    companion object {
+        /** A question to [p] about to be sent; [corrected]: with the user's own query ("이 검색어로 다시 묻기"). */
+        fun start(p: AiProvider, corrected: Boolean = false): AskProgress = when (p) {
+            AiProvider.GEMINI_TAVILY -> {
+                val all = listOf(AskStage.QUERY, AskStage.SEARCH, AskStage.ANSWER)
+                if (corrected) AskProgress(all, AskStage.SEARCH, skipped = setOf(AskStage.QUERY)) else AskProgress(all, AskStage.QUERY)
+            }
+            else -> AskProgress(listOf(AskStage.SEARCH_AND_ANSWER), AskStage.SEARCH_AND_ANSWER)
+        }
+    }
+}
+
 /** The result of 키 확인: [error] null means the key works. */
 data class KeyCheck(val slot: AiKeySlot, val error: AiError?) {
     val ok: Boolean get() = error == null
@@ -22,7 +70,8 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
     /**
      * [queries], [depth] and [people]: GEMINI_TAVILY only, the main search the user corrected on the answer screen
      * ("검색어 고치기", replacing the query step), how Tavily searches it (설정 › 검색) and the extra Korean-blog search
-     * (설정 › 사람들 의견). The other services choose their own searches.
+     * (설정 › 사람들 의견). The other services choose their own searches. [onStage] hears each [AskStage] as it begins
+     * ([AskProgress.reported] of the question, in order).
      */
     suspend fun ask(
         question: NoteQuestion,
@@ -31,12 +80,13 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
         queries: List<String>? = null,
         depth: SearchDepth = SearchDepth.DEFAULT,
         people: Boolean = false,
+        onStage: (AskStage) -> Unit = {},
     ): GroundedAnswer {
         if (!http.supported || !secrets.supported) throw AiFailure(AiErrors.unsupported)
         val keys = keys(provider.keys)
         val missing = provider.keys - keys.keys
         if (missing.isNotEmpty()) throw AiFailure(AiErrors.missingKeys(missing))
-        val answer = answerer(provider, depth, people).answer(question, model, keys, queries?.takeIf { it.isNotEmpty() })
+        val answer = answerer(provider, depth, people).answer(question, model, keys, queries?.takeIf { it.isNotEmpty() }, onStage)
         // an answer with no sentence tied to a source is never shown
         if (answer.sources.isEmpty() || answer.citedRuns == 0) throw AiFailure(AiErrors.noSources())
         return answer
@@ -88,7 +138,7 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
 
     /** One way of answering from web sources. */
     private fun interface NoteAnswerer {
-        suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer
+        suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?, onStage: (AskStage) -> Unit): GroundedAnswer
     }
 
     /**
@@ -98,10 +148,11 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
      * question fails only when every main search does (with the first one's error).
      */
     private inner class GeminiTavilyAnswerer(private val depth: SearchDepth, private val people: Boolean) : NoteAnswerer {
-        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer {
+        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?, onStage: (AskStage) -> Unit): GroundedAnswer {
             val geminiKey = keys.getValue(AiKeySlot.GEMINI)
-            val main = (queries ?: writeQueries(q, model, geminiKey)).first()
+            val main = (queries ?: run { onStage(AskStage.QUERY); writeQueries(q, model, geminiKey) }).first()
             val plan = TavilyPlan.searches(main, q, depth, people)
+            onStage(AskStage.SEARCH)
             val found = mutableListOf<Pair<TavilySearch, List<TavilyResult>>>()
             var firstError: AiError? = null
             var blogsFailed = false
@@ -118,6 +169,7 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
             if (results.isEmpty()) throw AiFailure(AiErrors.noSources("Tavily: 0 results"))
             // without the blog pages there is nothing for the people line to come from, and the note says it is left out
             val user = NoteHelperPrompts.withSources(NoteHelperPrompts.question(q, people && !blogsFailed), results)
+            onStage(AskStage.ANSWER)
             val body = exchange(AiService.GEMINI, GeminiApi.request(geminiKey, model, NoteHelperPrompts.SOURCES_SYSTEM, user, search = false)) {
                 AiErrors.gemini(it.status, it.body, model, search = false)
             }
@@ -149,7 +201,8 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
     }
 
     private inner class GeminiSearchAnswerer : NoteAnswerer {
-        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer {
+        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?, onStage: (AskStage) -> Unit): GroundedAnswer {
+            onStage(AskStage.SEARCH_AND_ANSWER)
             val request = GeminiApi.request(keys.getValue(AiKeySlot.GEMINI), model, NoteHelperPrompts.SEARCH_SYSTEM, NoteHelperPrompts.question(q), search = true)
             val body = exchange(AiService.GEMINI, request) { AiErrors.gemini(it.status, it.body, model, search = true) }
             val reply = GeminiApi.parse(body) ?: throw AiFailure(AiErrors.unreadable(AiService.GEMINI))
@@ -159,7 +212,8 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
     }
 
     private inner class OpenAiAnswerer : NoteAnswerer {
-        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer {
+        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?, onStage: (AskStage) -> Unit): GroundedAnswer {
+            onStage(AskStage.SEARCH_AND_ANSWER)
             val body = exchange(AiService.OPENAI, OpenAiApi.request(keys.getValue(AiKeySlot.OPENAI), model, NoteHelperPrompts.question(q))) {
                 AiErrors.openAi(it.status, it.body)
             }
@@ -172,7 +226,9 @@ class NoteHelperService(private val http: AiHttp, private val secrets: SecretSto
 
     /** Claude with web search; a paused turn (pause_turn) is resumed by sending the content back, up to 3 times. */
     private inner class ClaudeAnswerer : NoteAnswerer {
-        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?): GroundedAnswer {
+        override suspend fun answer(q: NoteQuestion, model: String, keys: Map<AiKeySlot, String>, queries: List<String>?, onStage: (AskStage) -> Unit): GroundedAnswer {
+            // a resumed pause_turn is the same step
+            onStage(AskStage.SEARCH_AND_ANSWER)
             val key = keys.getValue(AiKeySlot.CLAUDE)
             val question = NoteHelperPrompts.question(q)
             val content = mutableListOf<JsonElement>()

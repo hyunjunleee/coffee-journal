@@ -1,5 +1,7 @@
 package com.coffeejournal.ui.ai
 
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
 import com.coffeejournal.data.repo.SettingsRepository
 import com.coffeejournal.ui.notify.MemorySettingsDao
 import kotlinx.coroutines.flow.first
@@ -186,6 +188,74 @@ class NoteHelperServiceTest {
         keys(AiKeySlot.OPENAI)
         http.on("api.openai.com/v1/responses") { AiFixtures.openAi() }
         assertEquals(listOf("bergamot coffee tasting note", "yirgacheffe bergamot jasmine roaster"), service.ask(note, AiProvider.OPENAI, "gpt-5-nano", listOf("ignored")).queries)
+    }
+
+    @Test fun stages_reportedInOrder_geminiTavilyWithAndWithoutTheQueryStep_othersOneStep() = runTest {
+        keys(AiKeySlot.GEMINI, AiKeySlot.TAVILY, AiKeySlot.OPENAI, AiKeySlot.CLAUDE)
+        // each stage is heard before its first request goes out
+        val heard = mutableListOf<Pair<AskStage, Int>>()
+        val onStage = { stage: AskStage -> heard += stage to http.requests.size; Unit }
+        tavilyPipeline()
+        service.ask(note, AiProvider.GEMINI_TAVILY, "m", people = true, onStage = onStage)
+        assertEquals(listOf(AskStage.QUERY to 0, AskStage.SEARCH to 1, AskStage.ANSWER to 3), heard)
+        assertEquals(AskProgress.start(AiProvider.GEMINI_TAVILY).reported, heard.map { it.first })
+
+        // a corrected query: no query step
+        heard.clear()
+        val from = http.requests.size
+        service.ask(note, AiProvider.GEMINI_TAVILY, "m", queries = listOf("earl grey tasting notes"), onStage = onStage)
+        assertEquals(listOf(AskStage.SEARCH to from, AskStage.ANSWER to from + 1), heard)
+        val corrected = AskProgress.start(AiProvider.GEMINI_TAVILY, corrected = true)
+        assertEquals(corrected.reported, heard.map { it.first })
+        assertEquals(StageStatus.SKIPPED, corrected.status(AskStage.QUERY))
+
+        // one request that searches and answers: one step, also for Claude's resumed pause_turn
+        val oneRequest = FakeAiHttp().on("generativelanguage") { AiFixtures.geminiGrounded() }
+            .on("api.openai.com/v1/responses") { AiFixtures.openAi() }
+            .sequence(
+                "api.anthropic.com/v1/messages",
+                200 to AiFixtures.claude(AiFixtures.CLAUDE_PAUSED_CONTENT, stopReason = "pause_turn"),
+                200 to AiFixtures.claude(AiFixtures.CLAUDE_RESUMED_CONTENT),
+            )
+        val others = NoteHelperService(oneRequest, secrets)
+        for (p in listOf(AiProvider.GEMINI_SEARCH, AiProvider.OPENAI, AiProvider.CLAUDE)) {
+            val stages = mutableListOf<AskStage>()
+            others.ask(note, p, "m", onStage = { stages += it })
+            assertEquals(listOf(AskStage.SEARCH_AND_ANSWER), stages, p.name)
+            assertEquals(AskProgress.start(p).reported, stages, p.name)
+        }
+        assertEquals(4, oneRequest.requests.size, "Claude paused once")
+
+        // nothing is heard when nothing is sent (a missing key)
+        secrets.delete(NoteHelperService.secretName(AiKeySlot.OPENAI))
+        val none = mutableListOf<AskStage>()
+        fails { others.ask(note, AiProvider.OPENAI, "m", onStage = { none += it }) }
+        assertTrue(none.isEmpty())
+    }
+
+    @Test fun askProgress_statusOfEachStep() {
+        val start = AskProgress.start(AiProvider.GEMINI_TAVILY)
+        assertEquals(listOf(AskStage.QUERY, AskStage.SEARCH, AskStage.ANSWER), start.stages)
+        assertEquals(listOf(StageStatus.CURRENT, StageStatus.LATER, StageStatus.LATER), start.stages.map(start::status))
+        val searching = start.copy(current = AskStage.SEARCH)
+        assertEquals(listOf(StageStatus.DONE, StageStatus.CURRENT, StageStatus.LATER), searching.stages.map(searching::status))
+        val corrected = AskProgress.start(AiProvider.GEMINI_TAVILY, corrected = true).copy(current = AskStage.ANSWER)
+        assertEquals(listOf(StageStatus.SKIPPED, StageStatus.DONE, StageStatus.CURRENT), corrected.stages.map(corrected::status))
+        for (p in listOf(AiProvider.GEMINI_SEARCH, AiProvider.OPENAI, AiProvider.CLAUDE)) {
+            assertEquals(AskProgress(listOf(AskStage.SEARCH_AND_ANSWER), AskStage.SEARCH_AND_ANSWER), AskProgress.start(p, corrected = true))
+        }
+    }
+
+    @Test fun movingDots_keepTheWidthOfThree_orAStillEllipsis() {
+        val hidden = { a: AnnotatedString -> a.spanStyles.filter { it.item.color == Color.Transparent }.sumOf { it.end - it.start } }
+        for (n in 0..3) {
+            val a = withDots(AiTexts.ASKING, n)
+            // the same text every step (TalkBack does not re-read it, the line does not reflow): only its colors change
+            assertEquals(AiTexts.ASKING + ".\u00A0.\u00A0.", a.text, "$n")
+            assertEquals(a.text.length - AiTexts.ASKING.length - (if (n == 0) 0 else 2 * n - 1), hidden(a), "$n")
+        }
+        assertEquals(0, hidden(withDots("검색", 3)))
+        assertEquals("출처를 찾아 답을 쓰고 있어요…", withDots(AiTexts.ASKING, null).text)
     }
 
     @Test fun geminiTavily_noResultsOrNoMarks_isNoSources() = runTest {

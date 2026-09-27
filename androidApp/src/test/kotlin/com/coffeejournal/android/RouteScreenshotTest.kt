@@ -246,7 +246,10 @@ class RouteScreenshotTest {
         settle()
     }
 
-    /** The brew timer with the 유어홈 recipe, mid-way: the first pour just ended and its grams are asked. */
+    /**
+     * The brew timer with the 유어홈 recipe, mid-way: the first pour just ended; its grams panel holds the recipe's 50 g
+     * as the estimate, and the next pour can already start.
+     */
     @Test fun brewTimer() {
         val clock = FakeBrewClock()
         loadKoinModules(module { single<BrewClock> { clock } })
@@ -363,6 +366,15 @@ class RouteScreenshotTest {
         AiSetup.ready(AiProvider.GEMINI_SEARCH)
         AiSetup.http.on("generativelanguage", status = 429) { AiReplies.GEMINI_429 }
         show(Route.NoteHelper(mode = "note", query = "자스민"), "73-note-helper-error.png") { waitForText(AiErrors.SEARCH_BILLING) }
+    }
+
+    /** Gemini 무료 + Tavily while Tavily searches: the query step done, the search under way with its dots, the answer to come. */
+    @Test fun noteHelper_asking() {
+        AiSetup.ready(AiProvider.GEMINI_TAVILY)
+        val search = AiSetup.http.hold("api.tavily.com")
+        AiSetup.tavilyAnswers()
+        show(Route.NoteHelper(mode = "note", query = "자스민"), "75-note-helper-asking.png") { waitForText("✓ ${AiTexts.STAGE_QUERY}") }
+        search.complete(Unit)
     }
 
     /** Claude with web search: ✓ from the cited excerpt, the uncited search result listed after the cited one. */

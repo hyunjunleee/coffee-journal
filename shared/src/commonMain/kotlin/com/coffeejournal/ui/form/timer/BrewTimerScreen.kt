@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
@@ -30,15 +31,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -61,6 +69,7 @@ import com.coffeejournal.ui.theme.HairlineCard
 import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.InputFilters
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.MinTouchTarget
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
 import com.coffeejournal.ui.theme.SectionLabel
@@ -104,20 +113,31 @@ fun BrewTimerScreen(nav: NavHostController, recipeJson: String?, formHasLog: Boo
             vm.args.recipe?.let { GuidanceCard(ui) }
             TimeDisplay(ui)
             Spacer(Modifier.height(12.dp))
+            val grams = ui.gramsPanel
             if (!ui.finished) {
                 Controls(ui, onStart = vm::start, onPause = vm::pause, onReset = { confirmReset = true })
                 Spacer(Modifier.height(12.dp))
-                val grams = ui.gramsDialog
-                if (grams != null) GramsPanel(grams, onConfirm = vm::setGrams, onKeepPouring = vm::keepPouring)
-                else PourButton(ui, onStart = vm::startPour, onEnd = vm::endPour)
+                // the next pour never waits for the last one's grams: the panel sits under the button
+                PourButton(ui, onStart = vm::startPour, onEnd = vm::endPour)
+                if (grams != null) {
+                    Spacer(Modifier.height(10.dp))
+                    GramsPanel(grams, onType = vm::setGrams, onConfirm = vm::confirmGrams, onKeepPouring = vm::keepPouring)
+                }
                 Spacer(Modifier.height(10.dp))
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     BrewTimerEngine.quickNotes.forEach { label -> QuickNoteButton(label, onClick = { vm.note(label) }, modifier = Modifier.weight(1f)) }
                 }
-                HintText("붓기 시작·끝으로 부은 구간을, 뜸·스월·드로우다운으로 그 사이 대기를 적어요. 끝나면 단계 로그로 옮겨져요.")
-                LiveRows(ui)
+                HintText(
+                    "붓기 시작·끝으로 부은 구간을, 뜸·스월·드로우다운으로 그 사이 대기를 적어요. 끝나면 단계 로그로 옮겨져요. " +
+                        "부은 물은 어림값이 먼저 들어가고, 기록에서 푸어를 누르면 고칠 수 있어요.",
+                )
+                LiveRows(ui, onEditGrams = vm::editGrams)
             } else {
-                FinishedPreview(ui, vm.args)
+                if (grams != null) {
+                    Spacer(Modifier.height(12.dp))
+                    GramsPanel(grams, onType = vm::setGrams, onConfirm = vm::confirmGrams, onKeepPouring = vm::keepPouring)
+                }
+                FinishedPreview(ui, vm.args, onEditGrams = vm::editGrams)
             }
             Spacer(Modifier.height(96.dp))
         }
@@ -175,8 +195,9 @@ private fun TimeDisplay(ui: BrewTimerUi) {
                 .semantics { contentDescription = "경과 시간 ${min}분 ${sec}초, $status" },
             minFontSize = 24.sp, textAlign = TextAlign.Center,
         )
+        val poured = (if (ui.pouredEstimated) "≈ " else "") + "${Prices.trimNumber(ui.pouredSoFar)}g"
         Text(
-            "[ $status ]" + if (ui.pouredSoFar > 0) " · 부은 물 ${Prices.trimNumber(ui.pouredSoFar)}g" else "",
+            "[ $status ]" + if (ui.pouredSoFar > 0) " · 부은 물 $poured" else "",
             style = AppType.monoSmall, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -210,15 +231,29 @@ private fun Controls(ui: BrewTimerUi, onStart: () -> Unit, onPause: () -> Unit, 
 
 @Composable
 private fun PourButton(ui: BrewTimerUi, onStart: () -> Unit, onEnd: () -> Unit) {
-    val waitingGrams = ui.gramsDialog != null
     if (ui.pouring) {
         PrimaryButton("붓기 끝", onClick = onEnd, modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp))
     } else {
         PrimaryButton(
-            "💧 붓기 시작", onClick = onStart, enabled = !waitingGrams && ui.status != TimerStatus.PAUSED,
+            "💧 붓기 시작", onClick = onStart, enabled = ui.status != TimerStatus.PAUSED,
             modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
         )
     }
+}
+
+/** A finished pour's grams as the log shows them: "≈ 60g" while they are the estimate. */
+private fun gramsLabel(row: TimerRow): String = if (row.estimated) "≈ ${row.grams}g" else "${row.grams}g"
+
+/**
+ * One row of the log (while brewing or in the preview after 추출 끝). A finished pour is a button that opens its grams
+ * in the panel ([selected] while it is there); every row has the touch height, so the rows keep one rhythm.
+ */
+@Composable
+private fun LogRow(tag: String, editable: Boolean, selected: Boolean, onClick: () -> Unit, content: @Composable RowScope.() -> Unit) {
+    val base = Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).background(if (selected) Ink.accentSoft else Color.Transparent)
+    val row = if (editable) base.clickable(role = Role.Button, onClickLabel = "물량 고치기", onClick = onClick).semantics { this.selected = selected } else base
+    Row(row.testTag(tag).padding(vertical = 5.dp), verticalAlignment = Alignment.CenterVertically, content = content)
+    Hairline()
 }
 
 /** The applied recipe: the step under way, the countdown to the next one and its target water. */
@@ -250,68 +285,89 @@ private fun GuidanceCard(ui: BrewTimerUi) {
     }
 }
 
-/** The rows so far, newest last. */
+/** The rows so far, newest last; an estimated amount is muted ("≈ 60g") until it is typed or confirmed. */
 @Composable
-private fun LiveRows(ui: BrewTimerUi) {
+private fun LiveRows(ui: BrewTimerUi, onEditGrams: (Int) -> Unit) {
     if (ui.rows.isEmpty()) return
     SectionLabel("기록")
     var pourNo = 0
     ui.rows.forEachIndexed { i, row ->
         if (row.pour) pourNo++
         val inProgress = i == ui.rows.lastIndex && ui.pouring
-        val what = when {
-            row.pour -> (listOf("${pourNo}차 푸어") + row.notes).joinToString(", ") +
-                when { inProgress -> " · 붓는 중"; row.grams.isNotBlank() -> " · ${row.grams}g"; else -> "" }
-            row.notes.isNotEmpty() -> row.notes.joinToString(", ")
-            else -> "대기"
+        val what = buildAnnotatedString {
+            when {
+                row.pour -> {
+                    append((listOf("${pourNo}차 푸어") + row.notes).joinToString(", "))
+                    when {
+                        inProgress -> append(" · 붓는 중")
+                        row.grams.isNotBlank() -> withStyle(SpanStyle(color = if (row.estimated) Ink.textMuted else Ink.text)) { append(" · ${gramsLabel(row)}") }
+                    }
+                }
+                row.notes.isNotEmpty() -> append(row.notes.joinToString(", "))
+                else -> append("대기")
+            }
         }
-        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+        LogRow("timer-row-$i", editable = row.pour && !inProgress, selected = ui.gramsPanel?.rowIndex == i, onClick = { onEditGrams(i) }) {
             Text(clock(row.startMs / 1000), style = AppType.monoValue, softWrap = false, modifier = Modifier.width(52.dp.fontScaled(1.5f)))
             Text(what, style = AppType.small.copy(color = if (row.pour) Ink.text else Ink.textMuted), modifier = Modifier.weight(1f))
         }
-        Hairline()
     }
 }
 
-/** After 추출 끝: the rows as they will land in the step log, with the summary and the diff against the recipe. */
+/**
+ * After 추출 끝: the rows as they will land in the step log, with the summary and the diff against the recipe. A pour
+ * still opens its grams; an estimate shows "≈" here and goes to the step log as its plain number.
+ */
 @Composable
-private fun FinishedPreview(ui: BrewTimerUi, args: BrewTimerArgs) {
+private fun FinishedPreview(ui: BrewTimerUi, args: BrewTimerArgs, onEditGrams: (Int) -> Unit) {
     SectionLabel("단계 로그로 옮길 내용")
     StepHeaderRow("시점", "대기(초)", "물량(g)", "메모")
-    ui.steps.forEach { s ->
-        Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+    ui.steps.forEachIndexed { k, s ->
+        val i = ui.stepRows.getOrNull(k)
+        val row = i?.let { ui.rows.getOrNull(it) }
+        val pour = row?.pour == true
+        LogRow("timer-step-$k", editable = pour, selected = i != null && ui.gramsPanel?.rowIndex == i, onClick = { i?.let(onEditGrams) }) {
             Text(s.time, style = AppType.monoValue, softWrap = false, modifier = Modifier.width(52.dp.fontScaled(1.5f)))
             Text(if (s.wait.isNotBlank()) "${s.wait}s" else "-", style = AppType.monoValue, softWrap = false, modifier = Modifier.width(60.dp.fontScaled(1.5f)))
-            Text(if (s.water.isNotBlank()) "${s.water}g" else "-", style = AppType.monoValue, softWrap = false, modifier = Modifier.width(60.dp.fontScaled(1.5f)))
+            Text(
+                if (row != null && pour && s.water.isNotBlank()) gramsLabel(row) else if (s.water.isNotBlank()) "${s.water}g" else "-",
+                style = AppType.monoValue.copy(color = if (row?.estimated == true) Ink.textMuted else Ink.text),
+                softWrap = false, modifier = Modifier.width(60.dp.fontScaled(1.5f)),
+            )
             Text(s.note, style = AppType.small, modifier = Modifier.weight(1f))
         }
-        Hairline()
     }
     StepsSummaryBox(ui.steps, "", "", args.recipe)
     if (args.formHasLog) HintText("옮기면 폼에 적혀 있던 단계 로그를 이 기록으로 바꿔요.")
 }
 
 /**
- * After 붓기 끝: the grams of that pour, asked in place of the pour button (not a dialog, so the running time and the
- * recipe countdown stay in view). The recipe's grams for this pour are filled in when there is one.
+ * The grams of one pour, under the pour button (not a dialog, so the running time and the recipe countdown stay in
+ * view). The pour already has its estimate, shown pre-filled in a lighter color (the empty field's placeholder), so
+ * nothing waits for it: the next pour can start at once, and a tap on the field types the real amount straight over the
+ * estimate, in ink. What is typed counts as it is typed; emptying the field gives the estimate back; 확인 closes the
+ * panel and, if nothing was typed, accepts the estimate.
  */
 @Composable
-private fun GramsPanel(d: BrewTimerUi.GramsDialog, onConfirm: (String) -> Unit, onKeepPouring: () -> Unit) {
-    var grams by remember(d.rowIndex) { mutableStateOf(d.suggestion ?: "") }
-    val valid = (Numbers.parse(grams) ?: 0.0) > 0
+private fun GramsPanel(p: BrewTimerUi.GramsPanel, onType: (String) -> Unit, onConfirm: () -> Unit, onKeepPouring: () -> Unit) {
+    var grams by remember(p.rowIndex) { mutableStateOf(if (p.estimated) "" else p.grams) }
+    val valid = grams.isBlank() || (Numbers.parse(grams) ?: 0.0) > 0
     HairlineCard(Modifier.testTag("grams-panel")) {
-        Text("${d.pourNumber}차 푸어 물량", style = AppType.cardTitle)
+        Text("${p.pourNumber}차 푸어 물량", style = AppType.cardTitle)
         Text("이번에 부은 물을 적어 주세요 (g).", style = AppType.bodyMuted)
         Spacer(Modifier.height(8.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             FormTextField(
-                value = grams, onValueChange = { grams = it }, placeholder = "물량g", modifier = Modifier.weight(1f),
-                keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal,
+                value = grams, onValueChange = { grams = it; onType(it) }, placeholder = p.estimate, placeholderColor = Ink.textMuted,
+                modifier = Modifier.weight(1f), keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal,
             )
-            PrimaryButton("확인", enabled = valid, onClick = { onConfirm(grams) })
+            PrimaryButton("확인", enabled = valid, onClick = onConfirm)
         }
-        d.suggestion?.let { HintText("레시피 목표 ${it}g을 미리 넣어 뒀어요.") }
-        Row(Modifier.padding(top = 6.dp)) { GhostButton("붓기 계속", small = true, onClick = onKeepPouring) }
+        HintText(
+            if (p.suggestion != null) "적지 않으면 레시피 목표 ${p.estimate}g으로 기록해요."
+            else "적지 않으면 붓는 시간으로 어림한 ${p.estimate}g(초당 ${BrewTimerEngine.POUR_GRAMS_PER_SECOND}g)으로 기록해요.",
+        )
+        if (p.canKeepPouring) Row(Modifier.padding(top = 6.dp)) { GhostButton("붓기 계속", small = true, onClick = onKeepPouring) }
     }
 }
 

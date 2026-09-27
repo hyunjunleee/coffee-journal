@@ -32,14 +32,30 @@ data class BrewTimerUi(
     val elapsedSec: Long = 0,
     val rows: List<TimerRow> = emptyList(),
     val pouring: Boolean = false,
-    /** The 붓기 끝 dialog: which pour, and the recipe's grams to offer. */
-    val gramsDialog: GramsDialog? = null,
+    /** The grams panel under the pour button (after 붓기 끝, or a pour tapped in the log). */
+    val gramsPanel: GramsPanel? = null,
     val finished: Boolean = false,
     val steps: List<RecipeStep> = emptyList(),
+    /** The row each of [steps] comes from. */
+    val stepRows: List<Int> = emptyList(),
     val guidance: BrewTimerEngine.Guidance? = null,
+    /** Every finished pour's grams, estimates included ([pouredEstimated]). */
     val pouredSoFar: Double = 0.0,
+    val pouredEstimated: Boolean = false,
 ) {
-    data class GramsDialog(val rowIndex: Int, val pourNumber: Int, val suggestion: String?)
+    /**
+     * [grams] is the pour's amount now: its [estimate] while [estimated] (the recipe's grams for it, [suggestion], or
+     * else from how long it was poured).
+     */
+    data class GramsPanel(
+        val rowIndex: Int,
+        val pourNumber: Int,
+        val grams: String,
+        val estimated: Boolean,
+        val estimate: String,
+        val suggestion: String?,
+        val canKeepPouring: Boolean,
+    )
 }
 
 sealed interface BrewTimerEvent {
@@ -105,29 +121,44 @@ class BrewTimerViewModel(
     fun pause() = act { s, m -> BrewTimerEngine.pause(s, m) }
     fun reset() = act { _, _ -> BrewTimerEngine.reset() }
     fun startPour() = act { s, m -> BrewTimerEngine.startPour(s, m, clock.wallMs()) }
-    fun endPour() = act { s, m -> BrewTimerEngine.endPour(s, m) }
-    fun setGrams(grams: String) = act { s, m -> BrewTimerEngine.setGrams(s, grams, m) }
+    fun endPour() = act { s, m -> BrewTimerEngine.endPour(s, m, args.recipe) }
+    fun setGrams(grams: String) = act { s, _ -> BrewTimerEngine.setGrams(s, grams, args.recipe) }
+    fun confirmGrams() = act { s, _ -> BrewTimerEngine.confirmGrams(s) }
+    fun editGrams(rowIndex: Int) = act { s, _ -> BrewTimerEngine.editGrams(s, rowIndex) }
     fun keepPouring() = act { s, _ -> BrewTimerEngine.cancelEndPour(s) }
     fun note(label: String) = act { s, m -> BrewTimerEngine.note(s, label, m, clock.wallMs()) }
-    fun finish() = act { s, m -> BrewTimerEngine.finish(s, m) }
+    fun finish() = act { s, m -> BrewTimerEngine.finish(s, m, args.recipe) }
     fun resumeBrewing() = act { s, _ -> BrewTimerEngine.resume(s) }
 
     private fun build(s: BrewTimerState, mono: Long): BrewTimerUi {
         val elapsed = s.endMs ?: BrewTimerEngine.elapsedMs(s, mono)
-        val dialog = s.gramsFor?.let { i ->
-            BrewTimerUi.GramsDialog(i, s.rows.take(i + 1).count { it.pour }, BrewTimerEngine.suggestedGrams(args.recipe, s.rows, i))
+        val panel = s.gramsFor?.let { i ->
+            val row = s.rows.getOrNull(i) ?: return@let null
+            val end = s.rows.getOrNull(i + 1)?.startMs ?: return@let null
+            BrewTimerUi.GramsPanel(
+                rowIndex = i,
+                pourNumber = s.rows.take(i + 1).count { it.pour },
+                grams = row.grams,
+                estimated = row.estimated,
+                estimate = BrewTimerEngine.estimateGrams(args.recipe, s.rows, i, end),
+                suggestion = BrewTimerEngine.suggestedGrams(args.recipe, s.rows, i),
+                canKeepPouring = BrewTimerEngine.canKeepPouring(s),
+            )
         }
+        val stepRows = s.endMs?.let { BrewTimerEngine.stepRows(s.rows, it) } ?: emptyList()
         return BrewTimerUi(
             status = s.status,
             elapsedSec = elapsed / 1000,
             rows = s.rows,
             pouring = s.pouring,
-            gramsDialog = dialog,
+            gramsPanel = panel,
             finished = s.endMs != null,
-            steps = s.endMs?.let { BrewTimerEngine.toSteps(s.rows, it) } ?: emptyList(),
+            steps = stepRows.map { it.second },
+            stepRows = stepRows.map { it.first },
             // guidance moves in whole seconds like the display
             guidance = args.recipe?.let { BrewTimerEngine.guidance(it, elapsed / 1000 * 1000) },
             pouredSoFar = s.rows.sumOf { Numbers.parse(it.grams) ?: 0.0 },
+            pouredEstimated = s.rows.any { it.estimated },
         )
     }
 
