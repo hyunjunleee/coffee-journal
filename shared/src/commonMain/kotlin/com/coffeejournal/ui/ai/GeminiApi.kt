@@ -1,5 +1,6 @@
 package com.coffeejournal.ui.ai
 
+import kotlinx.serialization.json.add
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -35,6 +36,37 @@ object GeminiApi {
 
     fun request(key: String, model: String, system: String?, user: String, search: Boolean, maxOutputTokens: Int? = null) =
         AiHttpRequest(url(model), headers(key), body(system, user, search, maxOutputTokens))
+
+    /**
+     * The query step (GEMINI_TAVILY): no tools, temperature 0, a short JSON answer {"queries": [...]} held to a schema
+     * (structured output without tools works on the free tier).
+     */
+    fun queryBody(system: String, user: String): String = buildJsonObject {
+        putJsonObject("system_instruction") { putJsonArray("parts") { addJsonObject { put("text", system) } } }
+        putJsonArray("contents") {
+            addJsonObject {
+                put("role", "user")
+                putJsonArray("parts") { addJsonObject { put("text", user) } }
+            }
+        }
+        putJsonObject("generationConfig") {
+            put("temperature", 0)
+            put("maxOutputTokens", 200)
+            put("responseMimeType", "application/json")
+            putJsonObject("responseSchema") {
+                put("type", "OBJECT")
+                putJsonObject("properties") {
+                    putJsonObject("queries") {
+                        put("type", "ARRAY")
+                        putJsonObject("items") { put("type", "STRING") }
+                    }
+                }
+                putJsonArray("required") { add("queries") }
+            }
+        }
+    }.toString()
+
+    fun queryRequest(key: String, model: String, system: String, user: String) = AiHttpRequest(url(model), headers(key), queryBody(system, user))
 
     data class Chunk(val uri: String, val title: String)
     data class Support(val text: String, val startIndex: Int, val endIndex: Int, val chunks: List<Int>)
@@ -92,6 +124,7 @@ object GeminiApi {
         return GroundedAnswer(
             AiProvider.GEMINI_SEARCH, model, AnswerComposer.compose(reply.text, citations, missingQuote = null), sources,
             searchSuggestionsHtml = g?.entryPointHtml, notes = truncationNotes(reply.finishReason),
+            queries = g?.queries?.map { it.trim() }?.filter { it.isNotEmpty() }?.distinct() ?: emptyList(),
         )
     }
 

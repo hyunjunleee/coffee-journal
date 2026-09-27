@@ -25,18 +25,36 @@ class NoteHelperServiceTest {
 
     private suspend fun fails(block: suspend () -> Unit): AiError = assertFailsWith<AiFailure> { block() }.error
 
-    @Test fun geminiTavily_searchesOnce_thenAsksGeminiWithTheNumberedPages() = runTest {
+    /** The query step's reply: one query, as the prompt asks; a second one would be ignored. */
+    private val query = """{"queries": ["bergamot tasting note specialty coffee", "bergamot flavor meaning"]}"""
+
+    /** The query step, one Tavily search and Gemini's answer. */
+    private fun tavilyPipeline(queries: String = query, answer: String = AiFixtures.TAVILY_ANSWER) {
+        http.on("generativelanguage", bodyPart = AiFixtures.QUERY_STEP) { AiFixtures.geminiQueries(queries) }
+            .on("api.tavily.com") { AiFixtures.TAVILY_SEARCH }
+            .on("generativelanguage") { AiFixtures.geminiPlain(answer) }
+    }
+
+    private fun tavilyQuery(i: Int): Pair<String, String> =
+        AiJson.parseObject(http.requests[i].body!!)!!.let { it["query"]!!.jsonPrimitive.content to it["search_depth"]!!.jsonPrimitive.content }
+
+    @Test fun geminiTavily_writesAQuery_searchesItOnceAdvanced_thenAnswersFromThePages() = runTest {
         keys(AiKeySlot.GEMINI, AiKeySlot.TAVILY)
-        http.on("api.tavily.com") { AiFixtures.TAVILY_SEARCH }
-            .on("generativelanguage") { AiFixtures.geminiPlain(AiFixtures.TAVILY_ANSWER) }
+        tavilyPipeline()
         val a = service.ask(note, AiProvider.GEMINI_TAVILY, "gemini-3.5-flash-lite")
-        assertEquals(2, http.requests.size)
-        val search = AiJson.parseObject(http.requests[0].body!!)!!
-        assertEquals("\"bergamot\" coffee flavor note meaning tasting notes", search["query"]!!.jsonPrimitive.content)
-        assertEquals("Bearer key-TAVILY", http.requests[0].headers["Authorization"])
-        val gemini = http.requests[1]
+        assertEquals(3, http.requests.size)
+        // 1. Gemini writes the query (no tools, JSON), from the note alone
+        val step = AiJson.parseObject(http.requests[0].body!!)!!
+        assertNull(step["tools"])
+        assertEquals(NoteHelperPrompts.QUERY_SYSTEM, step["system_instruction"]!!.jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content)
+        assertEquals("향미 노트: \"베르가못 (bergamot)\"", step["contents"]!!.jsonArray[0].jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content)
+        assertEquals("key-GEMINI", http.requests[0].headers["x-goog-api-key"])
+        // 2. one advanced search (2 credits) with the first query only
+        assertEquals("bergamot tasting note specialty coffee" to "advanced", tavilyQuery(1))
+        assertEquals("Bearer key-TAVILY", http.requests[1].headers["Authorization"])
+        // 3. Gemini answers from the pages
+        val gemini = http.requests[2]
         assertTrue(gemini.url.endsWith("/gemini-3.5-flash-lite:generateContent"))
-        assertEquals("key-GEMINI", gemini.headers["x-goog-api-key"])
         val body = AiJson.parseObject(gemini.body!!)!!
         assertNull(body["tools"], "no Google Search on the free tier")
         assertEquals(NoteHelperPrompts.SOURCES_SYSTEM, body["system_instruction"]!!.jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content)
@@ -48,14 +66,74 @@ class NoteHelperServiceTest {
         assertEquals(AiProvider.GEMINI_TAVILY, a.provider)
         assertEquals(3, a.sources.size)
         assertEquals(4, a.citedRuns)
+        assertEquals(listOf("bergamot tasting note specialty coffee"), a.queries)
+    }
+
+    @Test fun geminiTavily_queryStepFailures_fallBackToTheTemplate_butAKeyErrorShows() = runTest {
+        keys(AiKeySlot.GEMINI, AiKeySlot.TAVILY)
+        val describe = NoteQuestion(NoteMode.DESCRIBE, "잘 익은 자두 같고 " + "끝이 쌉쌀해요 ".repeat(60))
+        for ((status, reply) in listOf(500 to AiFixtures.GEMINI_503, 429 to AiFixtures.GEMINI_429_BILLING, 200 to AiFixtures.geminiPlain("plum coffee"), 200 to AiFixtures.geminiQueries("""{"queries": []}"""))) {
+            val fake = FakeAiHttp().on("generativelanguage", status = status, bodyPart = AiFixtures.QUERY_STEP) { reply }
+                .on("api.tavily.com") { AiFixtures.TAVILY_SEARCH }.on("generativelanguage") { AiFixtures.geminiPlain(AiFixtures.TAVILY_ANSWER) }
+            val s = NoteHelperService(fake, secrets)
+            val a = s.ask(note, AiProvider.GEMINI_TAVILY, "m")
+            assertEquals("\"bergamot\" coffee flavor note meaning tasting notes", a.queries.single(), "HTTP $status $reply")
+            assertEquals(3, fake.requests.size)
+            s.ask(describe, AiProvider.GEMINI_TAVILY, "m")
+            val q = AiJson.parseObject(fake.requests[4].body!!)!!["query"]!!.jsonPrimitive.content
+            assertTrue(q.startsWith("coffee tasting notes 잘 익은 자두 같고 끝이 쌉쌀해요"))
+            assertEquals(NoteHelperPrompts.FALLBACK_MAX, q.length)
+        }
+        // no connection for the query step: the template too
+        val offline = NoteHelperService(FakeAiHttp().offline("generativelanguage", bodyPart = AiFixtures.QUERY_STEP)
+            .on("api.tavily.com") { AiFixtures.TAVILY_SEARCH }.on("generativelanguage") { AiFixtures.geminiPlain(AiFixtures.TAVILY_ANSWER) }, secrets)
+        assertEquals(listOf(NoteHelperPrompts.fallbackQuery(note)), offline.ask(note, AiProvider.GEMINI_TAVILY, "m").queries)
+        // a refused key is not hidden, and nothing is searched
+        val refused = FakeAiHttp().on("generativelanguage", status = 400, bodyPart = AiFixtures.QUERY_STEP) { AiFixtures.GEMINI_400_KEY }
+        assertEquals(AiErrorKind.KEY_INVALID, fails { NoteHelperService(refused, secrets).ask(note, AiProvider.GEMINI_TAVILY, "m") }.kind)
+        assertEquals(1, refused.requests.size)
+    }
+
+    @Test fun geminiTavily_searchDepthFromSettings() = runTest {
+        keys(AiKeySlot.GEMINI, AiKeySlot.TAVILY)
+        tavilyPipeline()
+        service.ask(note, AiProvider.GEMINI_TAVILY, "m", depth = SearchDepth.BASIC)
+        assertEquals("bergamot tasting note specialty coffee" to "basic", tavilyQuery(1))
+        assertNull(AiJson.parseObject(http.requests[1].body!!)!!["chunks_per_source"])
+        service.ask(note, AiProvider.GEMINI_TAVILY, "m")
+        assertEquals("bergamot tasting note specialty coffee" to "advanced", tavilyQuery(4))
+    }
+
+    @Test fun geminiTavily_aFailedSearch_isReported_andGeminiIsNotAsked() = runTest {
+        keys(AiKeySlot.GEMINI, AiKeySlot.TAVILY)
+        http.on("generativelanguage", bodyPart = AiFixtures.QUERY_STEP) { AiFixtures.geminiQueries(query) }
+            .on("api.tavily.com", status = 432) { AiFixtures.TAVILY_432 }
+        val e = fails { service.ask(note, AiProvider.GEMINI_TAVILY, "m") }
+        assertEquals(AiErrorKind.QUOTA, e.kind)
+        assertEquals("Tavily 이번 달 크레딧을 다 썼어요.", e.message)
+        assertEquals(2, http.requests.size, "the query step and the one search")
+    }
+
+    @Test fun geminiTavily_correctedQuery_skipsTheQueryStep() = runTest {
+        keys(AiKeySlot.GEMINI, AiKeySlot.TAVILY)
+        tavilyPipeline()
+        val a = service.ask(note, AiProvider.GEMINI_TAVILY, "m", queries = listOf("earl grey tasting notes specialty coffee", "ignored second"))
+        assertEquals(2, http.requests.size)
+        assertEquals("earl grey tasting notes specialty coffee" to "advanced", tavilyQuery(0))
+        assertEquals(listOf("earl grey tasting notes specialty coffee"), a.queries)
+        // the other services choose their own searches
+        keys(AiKeySlot.OPENAI)
+        http.on("api.openai.com/v1/responses") { AiFixtures.openAi() }
+        assertEquals(listOf("bergamot coffee tasting note", "yirgacheffe bergamot jasmine roaster"), service.ask(note, AiProvider.OPENAI, "gpt-5-nano", listOf("ignored")).queries)
     }
 
     @Test fun geminiTavily_noResultsOrNoMarks_isNoSources() = runTest {
         keys(AiKeySlot.GEMINI, AiKeySlot.TAVILY)
-        http.sequence("api.tavily.com", 200 to """{"query": "q", "results": []}""", 200 to AiFixtures.TAVILY_SEARCH)
+        http.on("generativelanguage", bodyPart = AiFixtures.QUERY_STEP) { AiFixtures.geminiQueries("""{"queries": ["only one"]}""") }
+            .sequence("api.tavily.com", 200 to """{"query": "q", "results": []}""", 200 to AiFixtures.TAVILY_SEARCH)
             .on("generativelanguage") { AiFixtures.geminiPlain("출처에 없어서 찾지 못했어요.") }
         assertEquals(AiErrorKind.NO_SOURCES, fails { service.ask(note, AiProvider.GEMINI_TAVILY, "m") }.kind)
-        assertEquals(1, http.requests.size, "Gemini is not asked without pages")
+        assertEquals(2, http.requests.size, "Gemini is not asked to answer without pages")
         assertEquals(AiErrorKind.NO_SOURCES, fails { service.ask(note, AiProvider.GEMINI_TAVILY, "m") }.kind)
     }
 
@@ -172,6 +250,15 @@ class NoteHelperServiceTest {
         assertEquals("gpt-5-nano", s.model(), "blank means the default")
         assertEquals("claude-sonnet-5", s.model(AiProvider.CLAUDE))
         assertEquals(setOf(AiProvider.OPENAI), s.consents)
+        // 설정 › 검색: 정밀 by default, saved on this phone, an unknown value reads as the default
+        assertEquals(SearchDepth.PRECISE, s.searchDepth)
+        prefs.setSearchDepth(SearchDepth.BASIC)
+        assertEquals(SearchDepth.BASIC, prefs.load().searchDepth)
+        assertEquals(SearchDepth.BASIC, prefs.observe().first().searchDepth)
+        assertEquals("BASIC", dao.rows.value[AiPrefs.KEY_SEARCH_DEPTH])
+        dao.rows.value = dao.rows.value + (AiPrefs.KEY_SEARCH_DEPTH to "PRECISE_AND_PEOPLE")
+        assertEquals(SearchDepth.PRECISE, prefs.load().searchDepth)
+        assertEquals(SearchDepth.PRECISE, SearchDepth.of(null))
         assertTrue(dao.rows.value.keys.all { SettingsRepository.isDeviceKey(it) && it.startsWith("device.ai.") }, dao.rows.value.keys.toString())
         prefs.setConsent(AiProvider.OPENAI, false)
         assertTrue(prefs.load().consents.isEmpty())
@@ -187,8 +274,10 @@ class NoteHelperServiceTest {
         assertEquals("bergamot", NoteHelperPrompts.searchName("베르가못 (bergamot)"))
         assertEquals("자스민", NoteHelperPrompts.searchName("자스민"))
         assertEquals("흑설탕", NoteHelperPrompts.searchName("흑설탕 (갈색 설탕)"))
-        assertEquals("\"자스민\" coffee flavor note meaning tasting notes", NoteHelperPrompts.tavilyQuery(NoteQuestion(NoteMode.NOTE, "자스민")))
-        assertEquals("coffee tasting notes 잘 익은 자두 같아요", NoteHelperPrompts.tavilyQuery(NoteQuestion(NoteMode.DESCRIBE, " 잘 익은 자두 같아요 ")))
+        assertEquals("\"자스민\" coffee flavor note meaning tasting notes", NoteHelperPrompts.fallbackQuery(NoteQuestion(NoteMode.NOTE, "자스민")))
+        assertEquals("coffee tasting notes 잘 익은 자두 같아요", NoteHelperPrompts.fallbackQuery(NoteQuestion(NoteMode.DESCRIBE, " 잘 익은 자두 같아요 ")))
+        assertEquals("맛 묘사: \"잘 익은 자두 같아요\"", NoteHelperPrompts.queryInput(NoteQuestion(NoteMode.DESCRIBE, " 잘 익은 자두 같아요 ")))
+        assertTrue(NoteHelperPrompts.QUERY_SYSTEM.contains("{\"queries\""))
         assertTrue(NoteHelperPrompts.SOURCES_SYSTEM.contains("[n]"))
         assertTrue(NoteHelperPrompts.SEARCH_SYSTEM.startsWith("너는 스페셜티 커피의 향미 표현을 조사하는 도우미다."))
     }

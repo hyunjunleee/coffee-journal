@@ -14,6 +14,8 @@ data class GroundedAnswer(
     val searchSuggestionsHtml: String? = null,
     /** Short notes about the answer itself ("답이 길어 끝이 잘렸어요"). */
     val notes: List<String> = emptyList(),
+    /** The web searches behind the answer: those the app sent (Tavily) or those the service reports it ran. */
+    val queries: List<String> = emptyList(),
 ) {
     /** The answer's text without the [n] numbers (term matching reads this). */
     val plainText: String get() = paragraphs.joinToString("\n") { p -> p.runs.joinToString("") { it.text } }

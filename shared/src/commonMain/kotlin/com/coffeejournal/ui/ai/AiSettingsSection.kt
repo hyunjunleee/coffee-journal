@@ -96,6 +96,20 @@ fun AiSettingsSection(modifier: Modifier = Modifier) {
 
         Spacer(Modifier.height(12.dp))
         ModelField(p, s, onChange = { vm.setModel(p, it) })
+
+        // only Tavily's search has a depth to choose
+        if (p == AiProvider.GEMINI_TAVILY) {
+            Spacer(Modifier.height(12.dp))
+            FieldLabel(AiTexts.SEARCH_DEPTH)
+            Seg(
+                options = SearchDepth.entries.map { it.label },
+                value = s.searchDepth.label,
+                onChange = { label -> SearchDepth.entries.firstOrNull { it.label == label }?.let(vm::setSearchDepth) },
+                allowClear = false,
+                modifier = Modifier.testTag("search-depth"),
+            )
+            HintText(AiTexts.SEARCH_DEPTH_HINT)
+        }
     }
 
     clearing?.let { slot ->

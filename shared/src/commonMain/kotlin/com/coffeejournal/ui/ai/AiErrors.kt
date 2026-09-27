@@ -125,7 +125,7 @@ object AiErrors {
             429 -> AiError(AiErrorKind.QUOTA, s, "Tavily 요청이 너무 잦아요. 잠시 뒤 다시 해 보세요.", detail = detail)
             432 -> AiError(
                 AiErrorKind.QUOTA, s, "Tavily 이번 달 크레딧을 다 썼어요.",
-                hint = "무료 요금제는 매달 1,000크레딧이 다시 채워져요. 질문 한 번에 2크레딧을 써요.", detail = detail,
+                hint = "무료 요금제는 매달 1,000크레딧이 다시 채워져요. 질문 한 번에 2크레딧(정밀) 또는 1크레딧(기본)을 써요.", detail = detail,
             )
             433 -> AiError(AiErrorKind.QUOTA, s, "Tavily 종량제 사용 한도를 넘었어요. Tavily 대시보드에서 한도를 확인해 주세요.", detail = detail)
             in 500..599 -> busy(s, status, detail)

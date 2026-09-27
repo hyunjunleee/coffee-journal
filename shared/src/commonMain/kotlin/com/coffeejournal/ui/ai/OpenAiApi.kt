@@ -40,6 +40,12 @@ object OpenAiApi {
 
     data class Annotation(val start: Int, val end: Int, val url: String, val title: String)
 
+    /** The searches the model ran: web_search_call items whose action is a search (opening a page is not one). */
+    fun searchQueries(body: String): List<String> = AiJson.parse(body)["output"].arr
+        .filter { it["type"].str == "web_search_call" && it["action"]["type"].str == "search" }
+        .mapNotNull { it["action"]["query"].str?.trim()?.takeIf(String::isNotEmpty) }
+        .distinct()
+
     /** Null when [body] is not a response object. */
     fun parse(body: String): Pair<String, List<Annotation>>? {
         val root = AiJson.parseObject(body) ?: return null
@@ -70,7 +76,7 @@ object OpenAiApi {
      * The answer with its url_citation annotations as [n] marks at the end of the sentence each one ends in; sources
      * are numbered in the order they are first cited. An annotated inline markdown link is taken out of the text.
      */
-    fun answer(text: String, annotations: List<Annotation>, model: String, notes: List<String> = emptyList()): GroundedAnswer {
+    fun answer(text: String, annotations: List<Annotation>, model: String, notes: List<String> = emptyList(), queries: List<String> = emptyList()): GroundedAnswer {
         // character ranges to take out (the inline link, its parentheses and the space before it)
         val removed = annotations.mapNotNull { a ->
             val covered = text.substring(a.start, a.end)
@@ -108,7 +114,7 @@ object OpenAiApi {
             val at = mapIndex(a.end)
             Citation(at, at, listOf(n), Citation.Anchor.SENTENCE_END)
         }
-        return GroundedAnswer(AiProvider.OPENAI, model, AnswerComposer.compose(clean.toString(), citations, missingQuote = null), sources, notes = notes)
+        return GroundedAnswer(AiProvider.OPENAI, model, AnswerComposer.compose(clean.toString(), citations, missingQuote = null), sources, notes = notes, queries = queries)
     }
 
     /** One source per page: OpenAI adds utm_source=openai to the links. */

@@ -39,6 +39,7 @@ class AiPlatformTest {
     fun systemPrompts_areTheEvalToolsFiles() {
         assertEquals(evalFile("system_prompt_ko.txt").readText().trimEnd('\n'), NoteHelperPrompts.SEARCH_SYSTEM)
         assertEquals(evalFile("sources_prompt_ko.txt").readText().trimEnd('\n'), NoteHelperPrompts.SOURCES_SYSTEM)
+        assertEquals(evalFile("query_prompt_ko.txt").readText().trimEnd('\n'), NoteHelperPrompts.QUERY_SYSTEM)
     }
 
     /** eval.py question(): its string literals, with {case} and the joined term lists filled in, equal the app's question. */

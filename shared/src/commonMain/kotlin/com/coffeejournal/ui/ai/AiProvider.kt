@@ -22,11 +22,15 @@ enum class AiProvider(
     val defaultModel: String,
     val presets: List<String>,
 ) {
-    /** Tavily searches, Gemini (no tools) answers from the numbered pages; the app checks every quote against them. */
+    /**
+     * Gemini writes English queries, Tavily searches, Gemini (no tools) answers from the numbered pages; the app checks
+     * every quote against them.
+     */
     GEMINI_TAVILY(
         "Gemini 무료 + Tavily",
-        "무료로 쓸 수 있어요. Gemini 키와 Tavily 키가 둘 다 필요해요. Tavily가 웹에서 찾은 글만 Gemini에 넘겨 답하게 하고, " +
-            "답에 인용된 표현이 그 글에 정말 있는지 앱이 확인해요.",
+        "무료로 쓸 수 있어요. Gemini 키와 Tavily 키가 둘 다 필요해요. Gemini가 질문을 영어 검색어로 바꾸면 Tavily가 웹에서 찾고, " +
+            "찾은 글만 Gemini에 넘겨 답하게 해요. 답에 인용된 표현이 그 글에 정말 있는지 앱이 확인해요. " +
+            "질문 한 번에 Tavily 2크레딧(정밀) 또는 1크레딧(기본)을 써요(무료 월 1,000크레딧).",
         listOf(AiKeySlot.GEMINI, AiKeySlot.TAVILY),
         "gemini-3.5-flash-lite",
         listOf("gemini-3.5-flash-lite", "gemini-3.5-flash", "gemini-3.1-flash-lite"),
@@ -66,7 +70,7 @@ enum class AiProvider(
     /** The service names in the order the question travels ("Tavily → Google Gemini"). */
     val route: String
         get() = when (this) {
-            GEMINI_TAVILY -> "Tavily 검색 → Google Gemini"
+            GEMINI_TAVILY -> "Gemini 검색어 → Tavily 검색 → Google Gemini"
             GEMINI_SEARCH -> "Google Gemini (Google 검색)"
             OPENAI -> "OpenAI (웹 검색)"
             CLAUDE -> "Anthropic Claude (웹 검색)"
@@ -76,6 +80,26 @@ enum class AiProvider(
         val DEFAULT = GEMINI_TAVILY
 
         fun of(name: String?): AiProvider? = entries.firstOrNull { it.name == name }
+    }
+}
+
+/**
+ * 설정 › AI 노트 도우미 › 검색 (Gemini 무료 + Tavily only): how deep Tavily searches the one query. The list is open
+ * for a third option.
+ */
+enum class SearchDepth(val label: String, val tavily: String, val credits: Int) {
+    /** advanced: pages about that very flavor, with longer passages around the term to quote. The default. */
+    PRECISE("정밀", "advanced", 2),
+
+    /** basic: faster, half the credits. */
+    BASIC("기본", "basic", 1),
+    ;
+
+    companion object {
+        val DEFAULT = PRECISE
+
+        /** A saved value; anything unknown (or from a later version) reads as the default. */
+        fun of(name: String?): SearchDepth = entries.firstOrNull { it.name == name } ?: DEFAULT
     }
 }
 

@@ -72,8 +72,8 @@ object AiGuides {
             GuideStep("아래 \"Tavily API 키\" 칸에 붙여 넣고 저장해요."),
         ),
         listOf(
-            GuideStep("무료 요금제는 매달 1,000크레딧이에요. 여기서는 질문 한 번에 2크레딧(advanced 검색)을 써요."),
-            GuideStep("질문으로 만든 검색어가 Tavily로 가요."),
+            GuideStep("무료 요금제는 매달 1,000크레딧이에요. 질문 한 번에 \"검색\"이 정밀이면 2크레딧(advanced 검색), 기본이면 1크레딧(basic 검색)을 써서, 한 달에 약 500번 또는 1,000번 물을 수 있어요."),
+            GuideStep("Gemini가 질문으로 만든 영어 검색어 하나가 Tavily로 가요."),
         ),
     )
 
@@ -148,6 +148,14 @@ object AiTexts {
     const val FOUND = "✓ 원문 확인"
     const val NOT_FOUND = "원문에서 찾지 못함"
     const val DECLINED = "보내지 않았어요. 다시 물으면 무엇을 어디로 보내는지 한 번 더 보여드려요."
+    const val QUERIES = "검색어"
+    const val EDIT_QUERIES = "검색어 고치기"
+    const val QUERIES_HINT = "검색어 하나를 써요(영어가 잘 찾아져요). 다시 물으면 Tavily 검색을 한 번 더 해요(정밀 2크레딧, 기본 1크레딧)."
+    const val SEARCH_DEPTH = "검색"
+    const val SEARCH_DEPTH_HINT = "정밀은 그 향미를 다루는 페이지를 찾고, 인용할 수 있는 긴 글 조각을 함께 가져와요(질문 한 번에 2크레딧). " +
+        "기본은 더 빠르고 크레딧이 절반이에요(1크레딧). 무료 월 1,000크레딧이면 정밀은 약 500번, 기본은 약 1,000번 물을 수 있어요."
+    const val ASK_WITH_QUERIES = "이 검색어로 다시 묻기"
+    const val CLOSE = "닫기"
 
     const val ASK_FROM_NOTE = "✦ 출처로 알아보기"
     const val ASK_FROM_FORM = "✦ AI에게 묻기"
@@ -163,14 +171,14 @@ object AiTexts {
     fun consent(p: AiProvider): List<String> = listOf(
         "질문하면 이 휴대폰에서 바로 아래 서비스로 질문 글만 보내요. 기록·원두·장소·사진은 보내지 않아요.",
         "보내는 곳: " + when (p) {
-            AiProvider.GEMINI_TAVILY -> "Tavily(질문으로 만든 검색어) → Google Gemini API(질문과 Tavily가 찾은 글)"
+            AiProvider.GEMINI_TAVILY -> "Google Gemini API(질문 → 영어 검색어) → Tavily(검색어) → Google Gemini API(질문과 Tavily가 찾은 글)"
             AiProvider.GEMINI_SEARCH -> "Google Gemini API(Google 검색 포함)"
             AiProvider.OPENAI -> "OpenAI API(웹 검색 포함)"
             AiProvider.CLAUDE -> "Anthropic API(Claude, 웹 검색 포함)"
         },
         when (p) {
             AiProvider.GEMINI_TAVILY ->
-                "Gemini 무료 등급에서는 보낸 질문과 받은 답이 Google의 제품 개선에 쓰이고, 사람이 읽어 볼 수 있어요. Tavily 무료 크레딧은 질문 한 번에 2크레딧을 써요."
+                "Gemini 무료 등급에서는 보낸 질문과 받은 답이 Google의 제품 개선에 쓰이고, 사람이 읽어 볼 수 있어요. Tavily 무료 크레딧은 질문 한 번에 2크레딧(검색: 정밀) 또는 1크레딧(기본)을 써요."
             AiProvider.GEMINI_SEARCH -> "Google 검색은 월 5,000회 뒤 1,000회당 \$14가 결제 계정에 청구돼요. 유료 등급에서는 질문이 제품 개선에 쓰이지 않아요."
             AiProvider.OPENAI -> "웹 검색 1,000회당 \$10과 토큰 요금이 키의 계정에 청구돼요."
             AiProvider.CLAUDE -> "웹 검색 1,000회당 \$10과 토큰 요금(검색 결과 포함)이 키의 계정에 청구돼요."
