@@ -32,27 +32,23 @@ kotlin {
         // app gets from Swift Package Manager: CI passes the folder holding the simulator's MapLibre.framework
         // (.github/workflows/ios.yml, the release the Swift package pins).
         val maplibreFrameworkDir = findProperty("coffeejournal.maplibreFrameworkDir") as String?
-        // maplibre-compose's scale bar refers to MapLibre's MLNScaleBar class, which MapLibre.framework does not export.
-        // The app never shows a scale bar, and its release link drops that code; the test executable is a debug link
-        // that keeps it, and a class left unresolved stops the executable at launch. So the test executable gets a
-        // stand-in MLNScaleBar of its own, compiled here on the Mac; the tests never open the map.
-        val scaleBarStub = layout.buildDirectory.dir("ios-test-stub").get().asFile
+        // The test executable is a debug link, which keeps maplibre-compose's reference to MapLibre's unexported
+        // MLNScaleBar class: it gets the stand-in class the Debug app compiles (iosApp/iosApp/MLNScaleBarStub.m says
+        // why), compiled here on the Mac. The tests never open the map.
+        val scaleBarStubSource = rootProject.file("iosApp/iosApp/MLNScaleBarStub.m")
+        val scaleBarStub = layout.buildDirectory.file("ios-test-stub/MLNScaleBarStub.o").get().asFile
         val compileScaleBarStub = tasks.register<Exec>("compileIosTestScaleBarStub") {
-            outputs.dir(scaleBarStub)
-            doFirst {
-                scaleBarStub.mkdirs()
-                scaleBarStub.resolve("MLNScaleBar.m").writeText(
-                    "#import <UIKit/UIKit.h>\n@interface MLNScaleBar : UIView\n@end\n@implementation MLNScaleBar\n@end\n",
-                )
-            }
+            inputs.file(scaleBarStubSource)
+            outputs.file(scaleBarStub)
+            doFirst { scaleBarStub.parentFile.mkdirs() }
             commandLine(
                 "xcrun", "--sdk", "iphonesimulator", "clang", "-target", "arm64-apple-ios14.0-simulator",
-                "-c", scaleBarStub.resolve("MLNScaleBar.m").path, "-o", scaleBarStub.resolve("MLNScaleBar.o").path,
+                "-c", scaleBarStubSource.path, "-o", scaleBarStub.path,
             )
         }
         iosSimulatorArm64().binaries.withType<org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable>().configureEach {
             if (maplibreFrameworkDir != null) linkerOpts("-F$maplibreFrameworkDir", "-rpath", maplibreFrameworkDir)
-            linkerOpts(scaleBarStub.resolve("MLNScaleBar.o").path)
+            linkerOpts(scaleBarStub.path)
             linkTaskProvider.configure {
                 dependsOn(compileScaleBarStub)
                 doFirst {

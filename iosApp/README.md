@@ -96,6 +96,7 @@ iOS에서도 같다. 키는 Keychain에 이 기기 전용(iCloud 키체인·다�
 
 ## 참고
 
+- `iosApp/MLNScaleBarStub.m`(빈 `MLNScaleBar` 클래스)은 Debug 빌드와 시뮬레이터 테스트에만 들어가고 Release(.ipa)에서는 빠진다. 지우면 Debug 빌드가 링크되지 않는다(이유는 파일 주석).
 - `Info.plist`의 `CADisableMinimumFrameDurationOnPhone = true`는 지우지 않는다. 이 키가 없으면 Compose Multiplatform이 실행 직후 앱을 종료한다(`enforceStrictPlistSanityCheck` 기본값).
 - 의존성 검증: `gradle/verification-metadata.xml`은 Linux에서 기록한다.
   - Mac에서만 받는 것(Kotlin/Native의 macOS 컴파일러 등)이 빠져 있으면, CI의 `app` 작업이 빌드 전에 멈추고 빠진 항목을 `verification` 아티팩트로 남긴다.
