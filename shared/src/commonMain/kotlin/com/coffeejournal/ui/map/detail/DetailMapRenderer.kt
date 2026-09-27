@@ -80,11 +80,11 @@ class DetailMapController(val start: DetailCamera) {
 }
 
 /**
- * Draws the detail map. Android's is MapLibre Native (see `platformDetailMapRenderer`); it is looked up through Koin so
- * the flow tests, where no native renderer runs, put a fake in its place. A renderer draws [pins] over the
- * [style] (DetailMapStyle.json), starts at [DetailMapController.start], follows [DetailMapController.request]s and
- * reports camera moves, loading and failures to the controller; a tap on a pin goes to [onPinTap], elsewhere to
- * [onMapTap].
+ * Draws the detail map. Android's and iOS's are MapLibre Native, sharing [MapLibreDetailMap] (see
+ * `platformDetailMapRenderer`); it is looked up through Koin so the flow tests, where no native renderer runs, put a
+ * fake in its place. A renderer draws [pins] over the [style] (DetailMapStyle.json), starts at
+ * [DetailMapController.start], follows [DetailMapController.request]s and reports camera moves, loading and failures
+ * to the controller; a tap on a pin goes to [onPinTap], elsewhere to [onMapTap].
  */
 interface DetailMapRenderer {
     /** False where there is no map renderer: the 상세 지도 buttons stay hidden and the SGIS map is all there is. */
@@ -115,7 +115,7 @@ interface DetailMapRenderer {
     }
 }
 
-/** No renderer on this platform (iOS for now): it reports [DetailMapRenderer.UNSUPPORTED] and the screen falls back. */
+/** No renderer (a platform without one): it reports [DetailMapRenderer.UNSUPPORTED] and the screen falls back. */
 object UnavailableDetailMapRenderer : DetailMapRenderer {
     override val isSupported: Boolean = false
 
@@ -135,8 +135,11 @@ object UnavailableDetailMapRenderer : DetailMapRenderer {
     }
 }
 
-/** The platform's renderer (Android: MapLibre Native; iOS: [UnavailableDetailMapRenderer] until it is wired up). */
+/** The platform's renderer: MapLibre Native on Android and on iOS. */
 expect fun platformDetailMapRenderer(): DetailMapRenderer
+
+/** The system MapLibre names in its requests' User-Agent ("Android", "iOS"), for [DetailMapPrivacy.NOTE]. */
+internal expect val detailMapUserAgentOs: String
 
 /** Whether the 상세 지도 buttons should show (a renderer exists on this platform). */
 @Composable

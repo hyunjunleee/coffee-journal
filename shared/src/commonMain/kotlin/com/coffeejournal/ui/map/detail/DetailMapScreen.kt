@@ -66,9 +66,9 @@ import org.koin.compose.koinInject
 
 /** What the detail map sends where, for its info text and the 출처 screen. */
 object DetailMapPrivacy {
-    const val NOTE =
+    val NOTE: String =
         "상세 지도는 화면에 보이는 지역의 지도 조각(OpenStreetMap 데이터)을 OpenFreeMap(tiles.openfreemap.org)에서 받아 와요. " +
-            "요청에는 여느 인터넷 요청처럼 기기의 IP 주소와 앱·Android 버전(User-Agent)이 함께 가지만, 기록·로스터리·카페 정보는 보내지 않아요. " +
+            "요청에는 여느 인터넷 요청처럼 기기의 IP 주소와 앱·$detailMapUserAgentOs 버전(User-Agent)이 함께 가지만, 기록·로스터리·카페 정보는 보내지 않아요. " +
             "받은 지도 조각은 다시 볼 때를 위해 기기에 잠시 저장(캐시)되고, 미리 내려받지는 않아요."
 }
 
