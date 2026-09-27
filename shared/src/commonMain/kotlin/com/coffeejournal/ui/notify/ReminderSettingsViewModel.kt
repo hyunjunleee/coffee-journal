@@ -35,6 +35,11 @@ class ReminderSettingsViewModel(private val prefs: ReminderPrefs, private val pl
         ReminderSettingsUi(loaded = true, settings = s, canNotify = can, refused = no && !can)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReminderSettingsUi())
 
+    init {
+        // iOS learns the authorization asynchronously: the screen follows it when it arrives
+        viewModelScope.launch { platform.canNotifyChanges().collect { canNotify.value = it } }
+    }
+
     /** Turning reminders on has to go through the permission prompt first. */
     fun needsPermission(): Boolean = !platform.canNotify()
 
