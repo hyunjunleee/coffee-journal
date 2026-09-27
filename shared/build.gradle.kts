@@ -32,13 +32,29 @@ kotlin {
         // app gets from Swift Package Manager: CI passes the folder holding the simulator's MapLibre.framework
         // (.github/workflows/ios.yml, the release the Swift package pins).
         val maplibreFrameworkDir = findProperty("coffeejournal.maplibreFrameworkDir") as String?
+        // maplibre-compose's scale bar refers to MapLibre's MLNScaleBar class, which MapLibre.framework does not export.
+        // The app never shows a scale bar, and its release link drops that code; the test executable is a debug link
+        // that keeps it, and a class left unresolved stops the executable at launch. So the test executable gets a
+        // stand-in MLNScaleBar of its own, compiled here on the Mac; the tests never open the map.
+        val scaleBarStub = layout.buildDirectory.dir("ios-test-stub").get().asFile
+        val compileScaleBarStub = tasks.register<Exec>("compileIosTestScaleBarStub") {
+            outputs.dir(scaleBarStub)
+            doFirst {
+                scaleBarStub.mkdirs()
+                scaleBarStub.resolve("MLNScaleBar.m").writeText(
+                    "#import <UIKit/UIKit.h>\n@interface MLNScaleBar : UIView\n@end\n@implementation MLNScaleBar\n@end\n",
+                )
+            }
+            commandLine(
+                "xcrun", "--sdk", "iphonesimulator", "clang", "-target", "arm64-apple-ios14.0-simulator",
+                "-c", scaleBarStub.resolve("MLNScaleBar.m").path, "-o", scaleBarStub.resolve("MLNScaleBar.o").path,
+            )
+        }
         iosSimulatorArm64().binaries.withType<org.jetbrains.kotlin.gradle.plugin.mpp.TestExecutable>().configureEach {
             if (maplibreFrameworkDir != null) linkerOpts("-F$maplibreFrameworkDir", "-rpath", maplibreFrameworkDir)
-            // maplibre-compose's scale bar refers to MapLibre's MLNScaleBar, which MapLibre.framework does not export. The
-            // app never shows a scale bar, and its release link drops that code; the test executable keeps every class
-            // (a debug link), so the one class is left to resolve at run time, which the tests never reach.
-            linkerOpts("-U", "_OBJC_CLASS_\$_MLNScaleBar")
+            linkerOpts(scaleBarStub.resolve("MLNScaleBar.o").path)
             linkTaskProvider.configure {
+                dependsOn(compileScaleBarStub)
                 doFirst {
                     if (maplibreFrameworkDir == null) {
                         throw GradleException("The iOS tests link MapLibre: pass -Pcoffeejournal.maplibreFrameworkDir=<folder with MapLibre.framework> (see .github/workflows/ios.yml)")
