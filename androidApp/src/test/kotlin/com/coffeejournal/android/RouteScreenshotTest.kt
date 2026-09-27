@@ -246,7 +246,10 @@ class RouteScreenshotTest {
         settle()
     }
 
-    /** The brew timer with the 유어홈 recipe, mid-way: the first pour just ended and its grams are asked. */
+    /**
+     * The brew timer with the 유어홈 recipe, mid-way: the first pour just ended; its grams panel holds the recipe's 50 g
+     * as the estimate, and the next pour can already start.
+     */
     @Test fun brewTimer() {
         val clock = FakeBrewClock()
         loadKoinModules(module { single<BrewClock> { clock } })

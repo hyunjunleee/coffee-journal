@@ -7,6 +7,7 @@ import com.coffeejournal.domain.rules.Numbers
 import com.coffeejournal.domain.rules.Prices
 import com.coffeejournal.domain.rules.RecipeSteps
 import kotlinx.serialization.Serializable
+import kotlin.math.roundToInt
 import kotlin.time.TimeSource
 
 /**
@@ -27,13 +28,17 @@ object SystemBrewClock : BrewClock {
 @Serializable
 enum class TimerStatus { IDLE, RUNNING, PAUSED }
 
-/** One segment of the brew as it happened: a pour (from 붓기 시작 to 붓기 끝) or the wait after it. */
+/**
+ * One segment of the brew as it happened: a pour (from 붓기 시작 to 붓기 끝) or the wait after it. A finished pour always
+ * has [grams]: the app's estimate ([BrewTimerEngine.estimateGrams], [estimated]) until the user types or confirms them.
+ */
 @Serializable
 data class TimerRow(
     val startMs: Long,
     val pour: Boolean,
     val grams: String = "",
     val notes: List<String> = emptyList(),
+    val estimated: Boolean = false,
 )
 
 /**
@@ -52,10 +57,8 @@ data class BrewTimerState(
     val rows: List<TimerRow> = emptyList(),
     /** The last row is a pour still going (붓기 끝 not pressed yet). */
     val pouring: Boolean = false,
-    /** Index of the pour whose grams the 붓기 끝 dialog is asking for. */
+    /** Index of the pour whose grams the panel shows (the pour just ended, or one tapped in the log); nothing waits for it. */
     val gramsFor: Int? = null,
-    /** 추출 끝 was pressed while pouring: finish once the grams are in. */
-    val finishing: Boolean = false,
     /** Timer time at 추출 끝 (the end of the last row), null while brewing. */
     val endMs: Long? = null,
     /** How many recipe step changes were already announced (so a restored timer does not buzz for old ones). */
@@ -68,6 +71,12 @@ object BrewTimerEngine {
     const val SWIRL = "스월"
     const val DRAWDOWN = "드로우다운"
     val quickNotes: List<String> = listOf(BLOOM, SWIRL, DRAWDOWN)
+
+    /** A pour the recipe gives no grams for is taken to run at this rate (a kettle's steady spiral pour). */
+    const val POUR_GRAMS_PER_SECOND = 6
+
+    /** An estimate is rounded to this step (g), and no finished pour is estimated below it. */
+    const val ESTIMATE_STEP_GRAMS = 10
 
     fun elapsedMs(s: BrewTimerState, nowMono: Long): Long = when (s.status) {
         TimerStatus.RUNNING -> s.accumulatedMs + (nowMono - s.runStartMono).coerceAtLeast(0)
@@ -82,34 +91,69 @@ object BrewTimerEngine {
 
     fun reset(): BrewTimerState = BrewTimerState()
 
-    /** 붓기 시작: a new pour row now; an idle timer starts at 0:00 with it. */
+    /**
+     * 붓기 시작: a new pour row now; an idle timer starts at 0:00 with it. It never waits for the last pour's grams: that
+     * pour keeps its estimate and the grams panel closes (a tap on the pour in the log opens it again).
+     */
     fun startPour(s: BrewTimerState, mono: Long, wall: Long): BrewTimerState {
-        if (s.pouring || s.gramsFor != null || s.endMs != null) return s
+        if (s.pouring || s.endMs != null) return s
         val running = if (s.status == TimerStatus.IDLE) start(s, mono, wall) else s
-        return running.copy(rows = running.rows + TimerRow(elapsedMs(running, mono), pour = true), pouring = true)
+        return running.copy(rows = running.rows + TimerRow(elapsedMs(running, mono), pour = true), pouring = true, gramsFor = null)
     }
 
-    /** 붓기 끝: closes the pour, asks for its grams, and the wait after it begins. */
-    fun endPour(s: BrewTimerState, mono: Long): BrewTimerState {
+    /**
+     * 붓기 끝: closes the pour with its estimated grams ([estimateGrams] with the applied recipe [ref]), opens the grams
+     * panel for it, and the wait after it begins.
+     */
+    fun endPour(s: BrewTimerState, mono: Long, ref: RecipeRef? = null): BrewTimerState {
         if (!s.pouring) return s
         val at = elapsedMs(s, mono)
-        return s.copy(rows = s.rows + TimerRow(at, pour = false), pouring = false, gramsFor = s.rows.lastIndex)
+        val i = s.rows.lastIndex
+        val pour = s.rows[i].copy(grams = estimateGrams(ref, s.rows, i, at), estimated = true)
+        return s.copy(rows = s.rows.dropLast(1) + pour + TimerRow(at, pour = false), pouring = false, gramsFor = i)
     }
 
-    /** "붓기 계속" in the grams dialog: 붓기 끝 was pressed too early, so the pour goes on. */
+    /** "붓기 계속" applies: the panel is on the pour just ended, the brew goes on and nothing was noted after the pour. */
+    fun canKeepPouring(s: BrewTimerState): Boolean {
+        val last = s.rows.lastOrNull() ?: return false
+        return s.endMs == null && s.gramsFor == s.rows.lastIndex - 1 && !last.pour && last.notes.isEmpty()
+    }
+
+    /** "붓기 계속" in the grams panel: 붓기 끝 was pressed too early, so the pour goes on (and is estimated again when it ends). */
     fun cancelEndPour(s: BrewTimerState): BrewTimerState {
-        val i = s.gramsFor ?: return s
-        val last = s.rows.lastOrNull() ?: return s
-        if (i != s.rows.lastIndex - 1 || last.pour || last.notes.isNotEmpty()) return s
-        return s.copy(rows = s.rows.dropLast(1), pouring = true, gramsFor = null, finishing = false)
+        if (!canKeepPouring(s)) return s
+        val pour = s.rows[s.rows.lastIndex - 1].copy(grams = "", estimated = false)
+        return s.copy(rows = s.rows.dropLast(2) + pour, pouring = true, gramsFor = null)
     }
 
-    /** The grams of the pour the dialog asked about; a finish that waited for them completes. */
-    fun setGrams(s: BrewTimerState, grams: String, mono: Long): BrewTimerState {
+    /** A tap on a finished pour in the log: its grams in the panel. */
+    fun editGrams(s: BrewTimerState, rowIndex: Int): BrewTimerState {
+        val row = s.rows.getOrNull(rowIndex) ?: return s
+        if (!row.pour || (s.pouring && rowIndex == s.rows.lastIndex)) return s
+        return s.copy(gramsFor = rowIndex)
+    }
+
+    /**
+     * Typing in the grams panel, applied as it is typed (so starting the next pour or 추출 끝 keeps it): a positive number
+     * is the pour's grams; an emptied field gives the pour its estimate back; anything else changes nothing.
+     */
+    fun setGrams(s: BrewTimerState, grams: String, ref: RecipeRef? = null): BrewTimerState {
         val i = s.gramsFor ?: return s
-        val value = Numbers.parse(grams)?.takeIf { it > 0 }?.let { Prices.trimNumber(it) } ?: return s
-        val next = s.copy(rows = s.rows.mapIndexed { k, r -> if (k == i) r.copy(grams = value) else r }, gramsFor = null)
-        return if (s.finishing) finish(next.copy(finishing = false), mono) else next
+        val row = s.rows.getOrNull(i)?.takeIf { it.pour } ?: return s
+        val next = if (grams.isBlank()) {
+            val end = s.rows.getOrNull(i + 1)?.startMs ?: return s
+            row.copy(grams = estimateGrams(ref, s.rows, i, end), estimated = true)
+        } else {
+            val value = Numbers.parse(grams)?.takeIf { it > 0 }?.let { Prices.trimNumber(it) } ?: return s
+            row.copy(grams = value, estimated = false)
+        }
+        return s.copy(rows = s.rows.mapIndexed { k, r -> if (k == i) next else r })
+    }
+
+    /** 확인 in the grams panel: the pour's grams as they are now (typed, or the estimate accepted), and the panel closes. */
+    fun confirmGrams(s: BrewTimerState): BrewTimerState {
+        val i = s.gramsFor ?: return s
+        return s.copy(rows = s.rows.mapIndexed { k, r -> if (k == i) r.copy(estimated = false) else r }, gramsFor = null)
     }
 
     /**
@@ -131,12 +175,13 @@ object BrewTimerEngine {
         return running.copy(rows = rows)
     }
 
-    /** 추출 끝: stops the timer; a pour still going is closed first and its grams asked for. */
-    fun finish(s: BrewTimerState, mono: Long): BrewTimerState {
+    /**
+     * 추출 끝: stops the timer at once. A pour still going is closed first with its estimate, and the grams panel stays
+     * on it, so its real grams can still be typed before the rows go to the step log.
+     */
+    fun finish(s: BrewTimerState, mono: Long, ref: RecipeRef? = null): BrewTimerState {
         if (s.rows.isEmpty() || s.endMs != null) return s
-        if (s.pouring) return endPour(s, mono).copy(finishing = true)
-        if (s.gramsFor != null) return s.copy(finishing = true)
-        val paused = pause(s, mono)
+        val paused = pause(if (s.pouring) endPour(s, mono, ref) else s, mono)
         return paused.copy(endMs = paused.accumulatedMs)
     }
 
@@ -161,12 +206,19 @@ object BrewTimerEngine {
      * them as on typed rows. Pours are numbered ("2차 푸어, 스월"); an unnamed wait reads 대기, or 드로우다운 when it is
      * the last row. Times are whole seconds; an unnamed wait that lasted no whole second is dropped.
      */
-    fun toSteps(rows: List<TimerRow>, endMs: Long): List<RecipeStep> {
+    fun toSteps(rows: List<TimerRow>, endMs: Long): List<RecipeStep> = stepRows(rows, endMs).map { it.second }
+
+    /**
+     * [toSteps] with the index of the row each step comes from (a pour's step opens that pour's grams). An estimate
+     * goes in as its plain number: the step log and the saved record have no way to mark it, and leaving it is
+     * accepting it.
+     */
+    fun stepRows(rows: List<TimerRow>, endMs: Long): List<Pair<Int, RecipeStep>> {
         if (rows.isEmpty()) return emptyList()
         val secs = rows.map { (it.startMs / 1000).toInt() }
         val end = maxOf((endMs / 1000).toInt(), secs.last())
-        data class Seg(val row: TimerRow, val start: Int, val next: Int)
-        val segs = rows.indices.map { i -> Seg(rows[i], secs[i], if (i < rows.lastIndex) maxOf(secs[i + 1], secs[i]) else end) }
+        data class Seg(val index: Int, val row: TimerRow, val start: Int, val next: Int)
+        val segs = rows.indices.map { i -> Seg(i, rows[i], secs[i], if (i < rows.lastIndex) maxOf(secs[i + 1], secs[i]) else end) }
             .filter { it.row.pour || it.row.notes.isNotEmpty() || it.next > it.start }
         var pourNo = 0
         return segs.mapIndexed { i, seg ->
@@ -178,7 +230,7 @@ object BrewTimerEngine {
                 i == segs.lastIndex -> DRAWDOWN
                 else -> "대기"
             }
-            RecipeStep(
+            seg.index to RecipeStep(
                 time = RecipeSteps.formatSec(seg.start) ?: "0:00",
                 water = if (seg.row.pour) seg.row.grams else "",
                 wait = wait.toString(),
@@ -244,11 +296,29 @@ object BrewTimerEngine {
         return marks.count { it * 1000L <= elapsedMs }
     }
 
-    /** The grams to suggest in the 붓기 끝 dialog: the water of the recipe's pour with the same number (1st, 2nd …). */
+    /** The recipe's grams for a pour: the water of the recipe's pour with the same number (1st, 2nd …). */
     fun suggestedGrams(ref: RecipeRef?, rows: List<TimerRow>, pourRowIndex: Int): String? {
         ref ?: return null
         val ordinal = rows.take(pourRowIndex + 1).count { it.pour } - 1
         if (ordinal < 0) return null
         return ref.steps.filter { (Numbers.parse(it.water) ?: 0.0) > 0 }.getOrNull(ordinal)?.water
+    }
+
+    /**
+     * The grams a pour that lasted [durationMs] is taken to have: [POUR_GRAMS_PER_SECOND], to the nearest
+     * [ESTIMATE_STEP_GRAMS] (halves up), and never less than that step.
+     */
+    fun gramsFromDuration(durationMs: Long): Int {
+        val grams = durationMs.coerceAtLeast(0) / 1000.0 * POUR_GRAMS_PER_SECOND
+        return maxOf((grams / ESTIMATE_STEP_GRAMS).roundToInt() * ESTIMATE_STEP_GRAMS, ESTIMATE_STEP_GRAMS)
+    }
+
+    /**
+     * A finished pour's grams until the user types them: the recipe's grams for it ([suggestedGrams]) when there are
+     * any, else [gramsFromDuration] of the pour, which ended at [endMs].
+     */
+    fun estimateGrams(ref: RecipeRef?, rows: List<TimerRow>, pourRowIndex: Int, endMs: Long): String {
+        suggestedGrams(ref, rows, pourRowIndex)?.let(Numbers::parse)?.takeIf { it > 0 }?.let { return Prices.trimNumber(it) }
+        return gramsFromDuration(endMs - rows[pourRowIndex].startMs).toString()
     }
 }
