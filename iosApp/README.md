@@ -41,9 +41,24 @@ iOS는 서명된 앱만 설치된다. CI가 만든 .ipa에는 서명이 없으�
   - 또는 등록한 기기에 1년짜리 서명으로 설치할 수 있다.
   - 이 경우 CI에 인증서와 프로비저닝 프로파일을 Secret으로 넣어, 서명된 .ipa를 만들도록 바꾼다.
 
-## iOS에 아직 없는 것
+## 상세 지도 (MapLibre Native iOS)
 
-- **상세 지도**: MapLibre Native iOS를 Xcode 프로젝트에 붙이기 전까지는 버튼이 숨겨지고 SGIS 지도만 쓴다.
+상세 지도는 안드로이드와 같은 공유 코드(`MapLibreDetailMap`, maplibre-compose 0.12.1)로 그린다. 지도 엔진인 MapLibre Native iOS는 Gradle 의존성이 아니라 Xcode 프로젝트가 붙인다.
+
+- `project.yml`의 `packages`: MapLibre의 공식 Swift 패키지 [maplibre-gl-native-distribution](https://github.com/maplibre/maplibre-gl-native-distribution)을 `exactVersion: 6.17.1`로 고정한다.
+  - 패키지는 MapLibre 릴리스의 동적 `MapLibre.xcframework`를 가리키고, 체크섬이 그 패키지의 `Package.swift`에 적혀 있다.
+  - 버전은 maplibre-compose 0.12.1이 빌드된 MapLibre iOS 버전이다(그 저장소의 `maplibreIosVersion`). maplibre-compose를 올리면 이 버전도 함께 올린다.
+  - 같은 버전이 `gradle/libs.versions.toml`의 `maplibreIos`에 있고, Gradle 빌드가 두 값이 같은지 확인한다(출처 · 라이선스 목록이 이 값을 쓴다).
+- CoffeeJournal 타깃의 `dependencies`에 MapLibre 제품을 링크한다.
+  - Shared는 정적 프레임워크라, Kotlin 코드가 부르는 MapLibre 심볼은 앱을 링크할 때 이 프레임워크에서 풀린다.
+  - Xcode가 MapLibre.framework를 앱의 `Frameworks/`에 넣는다(CI가 .ipa를 만들기 전에 확인한다).
+- `Info.plist`에 더할 키는 없다. 사용자 위치를 쓰지 않으므로 위치 권한 문구도 두지 않는다. 한글 라벨은 기기의 시스템 글꼴로 그린다(MapLibre 기본값).
+- Xcode가 처음 빌드할 때 GitHub에서 패키지와 xcframework(약 8.6 MB)를 받는다.
+- 시뮬레이터 테스트(`:shared:iosSimulatorArm64Test`)는 Xcode가 아니라 Kotlin/Native가 링크하므로 같은 xcframework가 따로 있어야 한다.
+  - `-Pcoffeejournal.maplibreFrameworkDir=<xcframework의 ios-arm64_x86_64-simulator 폴더>`로 넘긴다. 없으면 링크 전에 멈춘다.
+  - CI는 패키지의 `Package.swift`에서 주소와 체크섬을 읽어 받고, 체크섬을 확인한 뒤 넘긴다.
+
+## iOS에 아직 없는 것
 
 AI 노트 도우미는 iOS에서도 같다. 키는 Keychain에 이 기기 전용(iCloud 키체인·다른 기기로 옮기는 백업 제외)으로 저장하고, 요청은 NSURLSession으로 보낸다.
 
@@ -55,5 +70,5 @@ AI 노트 도우미는 iOS에서도 같다. 키는 Keychain에 이 기기 전용
   - 그 항목의 출처(Maven Central·Google·JetBrains)를 확인한 뒤 커밋한다.
 - 출처 · 라이선스
   - iOS 목록(`shared/src/iosMain/.../ui/about/PlatformLibraries.ios.kt`)은 `./gradlew :shared:updateThirdPartyNotices -Pcoffeejournal.iosKlibs=true`로 만든다.
-  - 프레임워크에 링크되는 klib의 POM에서 만들고, POM이 없는 Kotlin/Native 런타임과 skiko 안의 Skia(BSD-3-Clause)를 덧붙인다.
+  - 프레임워크에 링크되는 klib의 POM에서 만들고, POM이 없는 Kotlin/Native 런타임, skiko 안의 Skia(BSD-3-Clause), Swift 패키지로 들어오는 MapLibre Native iOS(BSD-2-Clause)를 덧붙인다.
 - Kotlin 버전: Koin 4.2의 iOS 라이브러리가 Kotlin 2.3.20으로 빌드되어 있어서 Kotlin을 2.3.20으로 맞췄다. 2.2 컴파일러는 새 klib ABI를 읽지 못한다.
