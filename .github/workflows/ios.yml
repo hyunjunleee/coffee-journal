@@ -67,10 +67,11 @@ jobs:
       # gradle/verification-metadata.xml is written on Linux, so what only a Mac resolves (Kotlin/Native's macOS
       # compiler) may be missing. This step records the checksums of what the framework build resolves; if that
       # changed the file, the job stops before anything is built for release and keeps the difference as an artifact,
-      # to be checked (every entry must come from Maven Central, Google or JetBrains) and committed.
+      # to be checked (every entry must come from Maven Central, Google or JetBrains) and committed. It resolves what the
+      # Xcode build resolves: the framework's klibs and the Compose resources of its dependencies.
       - name: Check the macOS-only dependency checksums
         run: |
-          ./gradlew --write-verification-metadata sha256 :shared:linkReleaseFrameworkIosArm64 -Pcoffeejournal.enableIos=true --no-daemon
+          ./gradlew --write-verification-metadata sha256 :shared:linkReleaseFrameworkIosArm64 :shared:iosArm64ResolveResourcesFromDependencies -Pcoffeejournal.enableIos=true --no-daemon
           if ! git diff --quiet -- gradle/verification-metadata.xml; then
             mkdir -p verification
             git diff -- gradle/verification-metadata.xml > verification/verification-metadata.diff
