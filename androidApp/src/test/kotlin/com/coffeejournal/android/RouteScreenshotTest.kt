@@ -33,6 +33,10 @@ import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.model.RecipeRef
 import com.coffeejournal.domain.reference.CafeRecipes
+import com.coffeejournal.ui.ai.AiErrors
+import com.coffeejournal.ui.ai.AiKeySlot
+import com.coffeejournal.ui.ai.AiProvider
+import com.coffeejournal.ui.ai.AiTexts
 import com.coffeejournal.ui.form.timer.BrewClock
 import com.coffeejournal.ui.form.timer.BrewTimerResult
 import com.coffeejournal.ui.map.detail.DetailMapCamera
@@ -310,5 +314,61 @@ class RouteScreenshotTest {
     @Test fun home_serifLarger() {
         Display.current = DisplaySettings(bodyFont = BodyFont.SERIF, textSize = TextSize.LARGER)
         show(Route.Extract, "69-home-serif-larger.png")
+    }
+
+    // ───────── AI 노트 도우미 (fake services, synthetic replies) ─────────
+
+    /** The answer arrives after the settings and keys are read: wait for [text] before the capture. */
+    private fun waitForText(text: String) {
+        val deadline = System.currentTimeMillis() + 10_000
+        while (compose.onAllNodes(hasText(text), useUnmergedTree = true).fetchSemanticsNodes().isEmpty()) {
+            check(System.currentTimeMillis() < deadline) { "no '$text' on screen" }
+            Thread.sleep(100)
+            compose.waitForIdle()
+        }
+        settle()
+    }
+
+    /** 설정's AI section from the option's description: the Gemini key saved, the model and the search settings (defaults). */
+    @Test fun settings_ai() {
+        AiSetup.key(AiKeySlot.GEMINI)
+        show(Route.Settings, "70-settings-ai.png") {
+            bringToTop(hasText(AiTexts.SECTION))
+            waitForText("저장됨 …a1b2")
+            bringToTop(hasText(AiProvider.GEMINI_TAVILY.summary))
+            waitForText(AiTexts.credits(3))
+        }
+    }
+
+    /** Mode A with Tavily + Gemini: marks, a grey sentence, ✓ / ✗ quote badges, the queries, sources with their kinds. */
+    @Test fun noteHelper_note() {
+        AiSetup.ready(AiProvider.GEMINI_TAVILY)
+        AiSetup.tavilyAnswers()
+        show(Route.NoteHelper(mode = "note", query = "자스민"), "71-note-helper-note.png") { waitForText(AiTexts.NOT_FOUND) }
+    }
+
+    /** Mode B from the record form: the candidate notes, one picked. */
+    @Test fun noteHelper_describe() {
+        AiSetup.ready(AiProvider.GEMINI_TAVILY)
+        AiSetup.tavilyAnswers(AiReplies.DESCRIBE_ANSWER, AiReplies.DESCRIBE_QUERIES)
+        show(Route.NoteHelper(mode = "describe", query = "잘 익은 자두 같고 끝이 쌉쌀해요", returnToForm = true), "72-note-helper-describe.png") {
+            waitForText(AiTexts.CANDIDATES)
+            click("자두")
+            waitForText("${AiTexts.ADD_TO_NOTES} (1)")
+        }
+    }
+
+    /** Gemini + Google 검색 on a free project: the billing message and the way to 설정. */
+    @Test fun noteHelper_error() {
+        AiSetup.ready(AiProvider.GEMINI_SEARCH)
+        AiSetup.http.on("generativelanguage", status = 429) { AiReplies.GEMINI_429 }
+        show(Route.NoteHelper(mode = "note", query = "자스민"), "73-note-helper-error.png") { waitForText(AiErrors.SEARCH_BILLING) }
+    }
+
+    /** Claude with web search: ✓ from the cited excerpt, the uncited search result listed after the cited one. */
+    @Test fun noteHelper_claude() {
+        AiSetup.ready(AiProvider.CLAUDE)
+        AiSetup.http.on("api.anthropic.com") { AiReplies.CLAUDE }
+        show(Route.NoteHelper(mode = "note", query = "자스민"), "74-note-helper-claude.png") { waitForText(AiTexts.FOUND) }
     }
 }

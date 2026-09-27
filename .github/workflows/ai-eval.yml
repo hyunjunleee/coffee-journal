@@ -1,0 +1,121 @@
+# PoC for the AI note helper (docs/ai-note-helper-plan.md, tools/ai-eval/): asks Gemini with Google Search grounding
+# the app's two kinds of questions and reports how well the answers are tied to real sources.
+#
+# Repository secret (Settings › Secrets and variables › Actions):
+#   GEMINI_API_KEY_DEBUG   a free Gemini API key for development only (a project without billing). It is never put
+#                          into the app: in the app every user enters their own key (docs/ai-note-helper-plan.md §5).
+#   TAVILY_API_KEY_DEBUG   a free Tavily API key for development only; with it the real "Gemini 무료 + Tavily" pipeline
+#                          runs (mode tavily), without it the fetched-pages stand-in (mode sources).
+# Without it only the parser self-test runs. The report goes to a short-lived artifact (7 days) and the job summary;
+# grounded answers are not committed to the repository.
+name: AI note helper eval
+
+on:
+  push:
+    branches: ['claude/**']
+    paths: ['tools/ai-eval/**', '.github/workflows/ai-eval.yml']
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: >-
+          auto: tavily when the Tavily secret is set, else sources; tavily: the real "Gemini 무료 + Tavily" pipeline;
+          sources: the same with fetched pages standing in for Tavily (cases_sources.json);
+          retrieval: Tavily alone at each of the depths below for the same written queries (no answers);
+          probe: which models answer with and without Google Search; full: Google Search grounded evaluation.
+        type: choice
+        options: [auto, tavily, retrieval, sources, probe, full]
+        default: auto
+      probe:
+        description: >-
+          Comma-separated models to probe (one short question each, without and with Google Search). Leave empty
+          to run the full evaluation with the model below.
+        default: gemini-2.5-flash-lite,gemini-2.5-pro,gemini-3.8-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite
+      plans:
+        description: >-
+          tavily mode: Tavily plans to compare, credits per question: adv+adv 4, adv+basic 3, basic+basic 2, adv 2,
+          basic 1, fast 1, ufast 1; a "tmpl-" prefix searches the template query instead of the model's (no query
+          step). Tavily may serve a query searched before from its cache, so list the plans from the lowest depth up.
+          People's impressions: adv+crowd 3, adv+crowdadv 4 (a community-only second search), adv+crowd-ko 3 (Korean
+          blogs, the app's default with 정밀 + 사람들 의견); the same query at both depths: sameadv+basic 3, sameadv+basic+ko 4.
+        default: adv+crowd-ko
+      people:
+        description: "tavily mode: ask for the people's impressions section, as the app does with 사람들 의견 on"
+        type: boolean
+        default: true
+      depths:
+        description: >-
+          retrieval mode: Tavily depths to compare, lowest first (advanced = 2 credits a query, basic, fast and
+          ultra-fast = 1); a repeated depth searches again and shows whether the earlier result is served from cache
+        default: ultra-fast,fast,basic,advanced,basic
+      model:
+        description: Gemini model for sources / full
+        default: gemini-3.5-flash-lite
+      notes:
+        description: How many notes to explain ("6", mode A, up to 20) or which ("7-10", from 1)
+        default: '12'
+      describes:
+        description: How many taste descriptions to match to notes ("4", mode B, up to 8) or which ("5-8")
+        default: '6'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ai-eval
+  cancel-in-progress: false
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Self-test the response parsing
+        run: python3 tools/ai-eval/eval.py --selftest
+
+      - name: Ask Gemini
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY_DEBUG }}
+          TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY_DEBUG }}
+          # a push runs the sources pipeline with the free model (the free key cannot use Google Search)
+          MODE: ${{ inputs.mode || 'auto' }}
+          PROBE: ${{ inputs.probe || 'gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite' }}
+          MODEL: ${{ inputs.model || 'gemini-3.5-flash-lite' }}
+          PLANS: ${{ inputs.plans || 'adv+crowd-ko' }}
+          DEPTHS: ${{ inputs.depths || 'ultra-fast,fast,basic,advanced,basic' }}
+          # a push asks as the app does by default (정밀 + 사람들 의견)
+          PEOPLE: ${{ (github.event_name == 'push' || inputs.people) && '--people' || '' }}
+          # a push asks fewer (Tavily: 3 credits a question out of 1,000 a month, so about 18 a push)
+          NOTES: ${{ inputs.notes || '4' }}
+          DESCRIBES: ${{ inputs.describes || '2' }}
+        run: |
+          if [ -z "$GEMINI_API_KEY" ]; then
+            echo "::warning::The GEMINI_API_KEY_DEBUG secret is not set; only the self-test ran."
+            exit 0
+          fi
+          if [ "$MODE" = "auto" ]; then
+            if [ -n "$TAVILY_API_KEY" ]; then MODE=tavily; else MODE=sources; fi
+          fi
+          echo "mode: $MODE"
+          if [ "$MODE" = "tavily" ]; then
+            python3 tools/ai-eval/eval.py --tavily --plans "$PLANS" $PEOPLE --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
+          elif [ "$MODE" = "retrieval" ]; then
+            python3 tools/ai-eval/eval.py --retrieval --depths "$DEPTHS" --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
+          elif [ "$MODE" = "sources" ]; then
+            python3 tools/ai-eval/eval.py --sources --model "$MODEL" --out ai-eval-out
+          elif [ "$MODE" = "probe" ]; then
+            python3 tools/ai-eval/eval.py --probe "$PROBE" --out ai-eval-out
+          else
+            python3 tools/ai-eval/eval.py --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
+          fi
+          # the summary part of the report (before the answers or snippets) on the run page
+          sed -E '/^## (Answers|Snippets side by side)/,$d' ai-eval-out/report.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report
+        if: always() && hashFiles('ai-eval-out/report.md') != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: ai-eval-report
+          path: ai-eval-out/
+          retention-days: 7

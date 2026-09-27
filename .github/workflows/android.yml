@@ -14,7 +14,11 @@ on:
   push:
     branches: [main, 'claude/**']
     tags: ['v*']
+    # design docs and the AI evaluation tool (ai-eval.yml) do not change the app; its prompt files (*.txt) do, since the
+    # app's prompts must equal them (AiPlatformTest)
+    paths-ignore: ['docs/**', 'tools/ai-eval/*.py', 'tools/ai-eval/*.md', 'tools/ai-eval/*.json', '.github/workflows/ai-eval.yml']
   pull_request:
+    paths-ignore: ['docs/**', 'tools/ai-eval/*.py', 'tools/ai-eval/*.md', 'tools/ai-eval/*.json', '.github/workflows/ai-eval.yml']
   workflow_dispatch:
     inputs:
       dependency_verification:

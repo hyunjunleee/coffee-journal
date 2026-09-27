@@ -28,6 +28,8 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
+import com.coffeejournal.ui.ai.NoteHelperResult
+import com.coffeejournal.ui.ai.NoteMode
 import com.coffeejournal.ui.form.sections.BagPhotoSection
 import com.coffeejournal.ui.form.sections.BasicSection
 import com.coffeejournal.ui.form.sections.BeanIdentitySection
@@ -77,6 +79,15 @@ fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cup
             if (json != null) {
                 results.remove<String>(BrewTimerResult.KEY)
                 BrewTimerResult.decode(json)?.let(vm::applyTimerSteps)
+            }
+        }
+    }
+    // the AI note helper hands back the candidate notes the user picked (mode B)
+    if (results != null) LaunchedEffect(results) {
+        results.getStateFlow<String?>(NoteHelperResult.KEY, null).collect { json ->
+            if (json != null) {
+                results.remove<String>(NoteHelperResult.KEY)
+                NoteHelperResult.decode(json)?.let(vm::addActualNotes)
             }
         }
     }
@@ -141,7 +152,10 @@ private fun RecordFormBody(
     if (!state.isCafe && !bagPhotosHidden) BagPhotoSection(state.bagPhotos, vm::photoModel, vm::setPhoto, vm::removePhoto)
     // a double tap opens one timer, not two
     RecipeSection(state, suggestions, update, onOpenTimer = dropUnlessResumed { nav.navigate(vm.timerRoute()) })
-    TastingSection(state, update)
+    // the dialog closes on the first tap of 묻기, so one question opens one answer screen
+    TastingSection(state, update, onAskAi = { query ->
+        nav.navigate(Route.NoteHelper(mode = NoteMode.DESCRIBE.key, query = query, returnToForm = true))
+    })
 }
 
 /** Sticky bottom bar (web .form-actions). */

@@ -5,7 +5,8 @@
     <!-- the brew timer vibrates at a recipe's step changes -->
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- the detail map (상세 지도) loads OpenStreetMap tiles for the area on screen from OpenFreeMap; the network state
-         tells it apart from being offline. Nothing else in the app uses the network. -->
+         tells it apart from being offline. The AI note helper calls the service the user chose, with the user's own key,
+         only when asked a question. Nothing else in the app uses the network. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- MapLibre's library manifest asks for these for its location component, which the app does not use -->
