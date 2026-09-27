@@ -11,7 +11,10 @@
   - `app`(macOS): 직접 돌리거나(Actions › iOS › Run workflow) 태그 v*에서만 돈다.
     - 비공개 저장소에서는 macOS 1분이 리눅스 약 10분 값이라 푸시마다 돌리지 않는다.
     - Shared 프레임워크를 링크하고, Xcode 프로젝트를 만들고, 서명 없이 아이폰용으로 빌드한다.
-    - 결과 `coffee-journal-<빌드 번호>-<커밋>-unsigned.ipa`를 "iOS builds" 릴리스에 올린다.
+    - 결과 `coffee-journal-<빌드 번호>-<커밋>-unsigned.ipa`를 "iOS builds" 릴리스에 올린다. 태그 v*이면 그 태그의 릴리스에도 APK 옆에 붙인다.
+  - `tests`(macOS): 직접 돌릴 때 tests를 켜면 `app` 옆에서 따로 돈다.
+    - 공유 테스트(commonTest · iosTest)를 아이폰 시뮬레이터에서 돌린다.
+    - 아래 "Mac에서 직접 빌드하기"와 같은 Debug 빌드를 시뮬레이터용으로 만들고, 시뮬레이터에서 실행해 30초 뒤에도 떠 있는지 확인한다. 그때 화면을 `ios-debug-app` 아티팩트로 남긴다.
   - 버전은 안드로이드와 같다. 버전 이름은 `androidApp/build.gradle.kts`의 versionName을 쓰고, 빌드 번호는 버전 코드와 같은 방식(2026-01-01부터 커밋 시각까지의 분)으로 계산한다.
 - Mac에서 직접 빌드하기:
   1. `brew install xcodegen`
