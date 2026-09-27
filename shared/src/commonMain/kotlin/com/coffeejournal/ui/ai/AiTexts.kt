@@ -134,7 +134,20 @@ object AiTexts {
     const val GEMINI_CHECK_HINT = "Gemini 키 확인은 검색 없이 아주 짧게 물어봐요. 결제가 켜졌는지는 첫 질문에서 알 수 있어요."
 
     const val TITLE = "AI 노트 도우미"
-    const val ASKING = "출처를 찾아 답을 쓰고 있어요…"
+    /** While asking; the screen adds three dots that come and go, or a still "…" when 화면 전환 is 끔. */
+    const val ASKING = "출처를 찾아 답을 쓰고 있어요"
+    const val STAGE_QUERY = "검색어 만들기"
+    const val STAGE_SEARCH = "검색"
+    const val STAGE_ANSWER = "답 쓰기"
+    const val STAGE_SEARCH_AND_ANSWER = "검색하고 답 쓰기"
+
+    /** What TalkBack reads after a step's name. */
+    fun stageState(status: StageStatus): String = when (status) {
+        StageStatus.DONE -> "끝남"
+        StageStatus.CURRENT -> "진행 중"
+        StageStatus.LATER -> "남음"
+        StageStatus.SKIPPED -> "건너뜀, 고친 검색어로 찾아요"
+    }
     const val DISCLAIMER = "AI 요약은 틀릴 수 있어요. 출처를 확인해 주세요."
     const val SOURCES = "출처"
     const val SUGGESTIONS = "Google 검색 제안"

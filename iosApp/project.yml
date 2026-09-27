@@ -1,0 +1,47 @@
+# The Xcode project, generated with XcodeGen (https://github.com/yonaskolb/XcodeGen): `cd iosApp && xcodegen generate`
+# writes CoffeeJournal.xcodeproj (not committed). CI does the same (.github/workflows/ios.yml).
+name: CoffeeJournal
+options:
+  deploymentTarget:
+    iOS: "16.0"
+  createIntermediateGroups: true
+settings:
+  base:
+    # CI passes the Android app's version name and code (androidApp/build.gradle.kts) so both builds carry the same
+    MARKETING_VERSION: "1.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  CoffeeJournal:
+    type: application
+    platform: iOS
+    sources:
+      - path: iosApp
+    settings:
+      base:
+        PRODUCT_NAME: CoffeeJournal
+        PRODUCT_BUNDLE_IDENTIFIER: com.coffeejournal.app
+        INFOPLIST_FILE: iosApp/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1"
+        SWIFT_VERSION: "5.0"
+        # the shared Kotlin code as a static framework, built by the script below for this configuration and SDK
+        FRAMEWORK_SEARCH_PATHS: "$(SRCROOT)/../shared/build/xcode-frameworks/$(CONFIGURATION)/$(SDK_NAME)"
+        OTHER_LDFLAGS: ["$(inherited)", "-framework", "Shared"]
+        # the Gradle build below reads and writes outside the sandbox Xcode gives run scripts
+        ENABLE_USER_SCRIPT_SANDBOXING: NO
+    preBuildScripts:
+      - name: Build the shared Kotlin framework
+        basedOnDependencyAnalysis: false
+        script: |
+          cd "$SRCROOT/.."
+          ./gradlew :shared:embedAndSignAppleFrameworkForXcode -Pcoffeejournal.enableIos=true
+schemes:
+  CoffeeJournal:
+    build:
+      targets:
+        CoffeeJournal: all
+    run:
+      config: Debug
+    archive:
+      config: Release

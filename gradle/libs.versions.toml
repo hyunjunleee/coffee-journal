@@ -1,5 +1,5 @@
 [versions]
-kotlin = "2.2.21"
+kotlin = "2.3.20"
 agp = "8.13.2"
 composeMultiplatform = "1.9.3"
 ksp = "2.3.12"
@@ -22,7 +22,8 @@ junit = "4.13.2"
 # reminders (daily WorkManager check) and the home-screen widget (Jetpack Glance)
 work = "2.12.0"
 glance = "1.2.0"
-# the last maplibre-compose release built with Kotlin 2.2.21 / Compose Multiplatform 1.9.x (0.13+ need Kotlin 2.3); brings MapLibre Native Android 12.0.1
+# the last maplibre-compose release built with Kotlin 2.2.21 / Compose Multiplatform 1.9.x (0.13+ need Kotlin 2.3, which the
+# build now uses; not moved yet); brings MapLibre Native Android 12.0.1
 maplibreCompose = "0.12.1"
 minSdk = "26"
 compileSdk = "36"

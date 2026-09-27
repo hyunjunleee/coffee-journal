@@ -79,6 +79,8 @@ internal fun FormTextField(
     modifier: Modifier = Modifier,
     label: String? = null,
     placeholder: String = "",
+    /** A placeholder that stands for a value the field already has (the brew timer's estimated grams) is darker. */
+    placeholderColor: Color = Ink.textFaint,
     singleLine: Boolean = true,
     minLines: Int = 1,
     keyboardType: KeyboardType = KeyboardType.Text,
@@ -109,7 +111,7 @@ internal fun FormTextField(
             // a wrapping placeholder would make a one-line field taller than its neighbours in a two-column row
             placeholder = {
                 Text(
-                    placeholder, style = AppType.input.copy(color = Ink.textFaint),
+                    placeholder, style = AppType.input.copy(color = placeholderColor),
                     maxLines = if (singleLine) 1 else Int.MAX_VALUE, overflow = if (singleLine) TextOverflow.Ellipsis else TextOverflow.Clip,
                 )
             },

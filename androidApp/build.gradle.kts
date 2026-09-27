@@ -59,7 +59,6 @@ android {
         // smaller than that and the installer extracts only the device's own ABI.
         jniLibs { useLegacyPackaging = true }
     }
-    kotlinOptions { jvmTarget = "17" }
     buildFeatures { compose = true }
     testOptions {
         unitTests {
@@ -144,3 +143,7 @@ dependencies {
 
 // In-app list of the libraries shipped in the APK (출처 · 라이선스 screen), kept in step with the dependencies.
 apply(from = rootProject.file("gradle/third-party-notices.gradle.kts"))
+
+kotlin {
+    compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17) }
+}

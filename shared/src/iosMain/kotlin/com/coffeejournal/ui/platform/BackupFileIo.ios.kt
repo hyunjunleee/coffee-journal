@@ -19,13 +19,13 @@ import platform.Foundation.create
 import platform.UIKit.UIActivityViewController
 import platform.UIKit.UIDocumentPickerDelegateProtocol
 import platform.UIKit.UIDocumentPickerViewController
+import platform.UIKit.popoverPresentationController
 import platform.UniformTypeIdentifiers.UTTypeJSON
 import platform.UniformTypeIdentifiers.UTTypePlainText
 import platform.darwin.NSObject
 
 /*
  * iOS backup file IO: UIDocumentPickerViewController for "save as" / open, UIActivityViewController for sharing.
- * Not compiled in this repository's Linux CI; verify on macOS when enabling the iOS target.
  */
 
 /** Export picker delegate; UIKit holds delegates weakly, so the composable keeps this object alive. */
