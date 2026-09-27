@@ -533,6 +533,13 @@ def tavily_search(key, query, depth):
         return 0, str(e)
 
 
+PLANS = {
+    "adv+basic": ["advanced", "basic"],   # two queries: 3 credits
+    "adv": ["advanced"],                  # first query only: 2 credits
+    "basic": ["basic"],                   # first query only: 1 credit
+}
+
+
 def run_tavily(args):
     gkey = os.environ.get("GEMINI_API_KEY", "").strip()
     tkey = os.environ.get("TAVILY_API_KEY", "").strip()
@@ -544,20 +551,29 @@ def run_tavily(args):
     system = sources_prompt()
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
+    plans = [x.strip() for x in args.plans.split(",") if x.strip()]
     lines = [f"# Gemini free + Tavily: {args.model}", "",
-             "| # | mode | question | queries | sources | cited sentences | bad [n] | quotes verified | credits | s |",
-             "|---|---|---|---|---|---|---|---|---|---|"]
+             "| # | plan | mode | question | queries | sources | institution | cited sentences | bad [n] | quotes verified | credits | s |",
+             "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     answers, credits = [], 0
-    for n, (mode, case) in enumerate(plan, 1):
-        queries, how, qsecs = write_queries(args.model, gkey, mode, case)
+    totals = {pl: {"q": 0, "v": 0, "cited": 0, "sent": 0, "src": 0, "inst": 0, "cred": 0, "n": 0} for pl in plans}
+    written = {}
+    for n, (mode, case, plan_name) in enumerate([(m, c, pl) for (m, c) in plan for pl in plans], 1):
+        if case not in written:
+            written[case] = write_queries(args.model, gkey, mode, case)
+            time.sleep(2)
+        queries, how, qsecs = written[case]
+        depths = PLANS[plan_name]
+        queries = queries[: len(depths)]
         sources, seen, errors, t0 = [], set(), [], time.monotonic()
         for i, q in enumerate(queries):
-            depth = "advanced" if i == 0 else "basic"
+            depth = depths[i]
             status, resp = tavily_search(tkey, q, depth)
             if status != 200:
                 errors.append(f"Tavily {status}: {resp}")
                 continue
             credits += 2 if depth == "advanced" else 1
+            totals[plan_name]["cred"] += 2 if depth == "advanced" else 1
             for r in resp.get("results", []):
                 if r.get("url") in seen or len(sources) >= 6:
                     continue
@@ -566,7 +582,7 @@ def run_tavily(args):
                                 "domain": urllib.parse.urlparse(r.get("url") or "").hostname or "",
                                 "content": r.get("content") or "", "raw": r.get("raw_content") or r.get("content") or ""})
         if not sources:
-            lines.append(f"| {n} | {mode} | {case} | {' · '.join(queries)} | 0 | - | - | - | {credits} | - |")
+            lines.append(f"| {n} | {plan_name} | {mode} | {case} | {' · '.join(queries)} | 0 | 0 | - | - | - | {credits} | - |")
             answers += [f"### {n}. {case}", "", "no sources: " + "; ".join(errors), ""]
             continue
         block = "\n\n".join(f"[{i}] {s['title']} — {s['domain']}\n{s['url']}\n{s['content']}" for i, s in enumerate(sources, 1))
@@ -578,18 +594,27 @@ def run_tavily(args):
         if status == 200:
             text = "".join(p.get("text", "") for p in ((resp.get("candidates") or [{}])[0].get("content") or {}).get("parts", []))
             chk = check_cited(text, sources)
-            lines.append(f"| {n} | {mode} | {case} | {' · '.join(queries)} ({how}) | {len(sources)} | {chk['cited']}/{chk['sentences']} | "
+            inst = sum(1 for s_ in sources if kind_of(s_["domain"].removeprefix("www.")) == "institution")
+            t = totals[plan_name]
+            t["q"] += chk["quotes"]; t["v"] += chk["verified"]; t["cited"] += chk["cited"]; t["sent"] += chk["sentences"]
+            t["src"] += len(sources); t["inst"] += inst; t["n"] += 1
+            lines.append(f"| {n} | {plan_name} | {mode} | {case} | {' · '.join(queries)} ({how}) | {len(sources)} | {inst} | {chk['cited']}/{chk['sentences']} | "
                          f"{chk['bad_refs']} | {chk['verified']}/{chk['quotes']} | {credits} | {total:.1f} |")
-            answers += [f"### {n}. {mode}: {case}", "", "검색어: " + " · ".join(queries), "", text, ""]
+            answers += [f"### {n}. [{plan_name}] {mode}: {case}", "", "검색어: " + " · ".join(queries), "", text, ""]
             answers += [f"- {'✓' if ok else '✗'} \"{q}\" → {refs}" for q, refs, ok in chk["quote_detail"]]
             answers += [""] + [f"[{i}] {s['title']} ({s['domain']}) {s['url']}" for i, s in enumerate(sources, 1)] + [""]
         else:
             err = resp.get("error", {}).get("message", "") if isinstance(resp, dict) else str(resp)
-            lines.append(f"| {n} | {mode} | {case} | {' · '.join(queries)} | {len(sources)} | HTTP {status} | - | - | {credits} | - |")
+            lines.append(f"| {n} | {plan_name} | {mode} | {case} | {' · '.join(queries)} | {len(sources)} | - | HTTP {status} | - | - | {credits} | - |")
             answers += [f"### {n}. {case}", "", f"Gemini HTTP {status}: {err[:300]}", ""]
         print(lines[-1], flush=True)
         time.sleep(args.delay)
-    (out / "report.md").write_text("\n".join(lines + ["", f"Tavily credits used: {credits}", "", "## Answers", ""] + answers) + "\n", encoding="utf-8")
+    summary = ["", "| plan | answers | sources/answer | institution sources | cited sentences | quotes verified | credits |",
+               "|---|---|---|---|---|---|---|"]
+    for pl, t in totals.items():
+        n_ = max(t["n"], 1)
+        summary.append(f"| {pl} | {t['n']} | {t['src'] / n_:.1f} | {t['inst']} | {t['cited']}/{t['sent']} | {t['v']}/{t['q']} | {t['cred']} |")
+    (out / "report.md").write_text("\n".join(lines[:2] + summary + [""] + lines[2:] + ["", f"Tavily credits used: {credits}", "", "## Answers", ""] + answers) + "\n", encoding="utf-8")
 
 
 def main():
@@ -603,6 +628,7 @@ def main():
     p.add_argument("--probe", default="", help="comma-separated models: one short question each, without and with search")
     p.add_argument("--sources", action="store_true", help="the Gemini free + Tavily pipeline with fetched pages (cases_sources.json)")
     p.add_argument("--tavily", action="store_true", help="the real Gemini free + Tavily pipeline (needs TAVILY_API_KEY)")
+    p.add_argument("--plans", default="adv+basic", help="comma-separated Tavily plans to compare: adv+basic, adv, basic")
     args = p.parse_args()
     if args.selftest:
         selftest()

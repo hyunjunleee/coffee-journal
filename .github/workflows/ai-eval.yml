@@ -29,6 +29,9 @@ on:
           Comma-separated models to probe (one short question each, without and with Google Search). Leave empty
           to run the full evaluation with the model below.
         default: gemini-2.5-flash-lite,gemini-2.5-pro,gemini-3.8-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite
+      plans:
+        description: "tavily mode: Tavily plans to compare (adv+basic = 3 credits, adv = 2, basic = 1 per question)"
+        default: adv+basic
       model:
         description: Gemini model for sources / full
         default: gemini-3.5-flash-lite
@@ -64,6 +67,7 @@ jobs:
           MODE: ${{ inputs.mode || 'auto' }}
           PROBE: ${{ inputs.probe || 'gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite' }}
           MODEL: ${{ inputs.model || 'gemini-3.5-flash-lite' }}
+          PLANS: ${{ inputs.plans || 'adv+basic' }}
           # a push asks fewer (Tavily: about 3 credits a question out of 1,000 a month)
           NOTES: ${{ inputs.notes || '6' }}
           DESCRIBES: ${{ inputs.describes || '4' }}
@@ -77,7 +81,7 @@ jobs:
           fi
           echo "mode: $MODE"
           if [ "$MODE" = "tavily" ]; then
-            python3 tools/ai-eval/eval.py --tavily --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
+            python3 tools/ai-eval/eval.py --tavily --plans "$PLANS" --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
           elif [ "$MODE" = "sources" ]; then
             python3 tools/ai-eval/eval.py --sources --model "$MODEL" --out ai-eval-out
           elif [ "$MODE" = "probe" ]; then
