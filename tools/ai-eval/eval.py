@@ -49,8 +49,10 @@ def wheel_terms():
     return terms, subs
 
 
-PEOPLE_NOTE = "- 사람들의 느낌: 커뮤니티·개인 블로그 글에서 사람들이 이 노트를 어떻게 느끼고 표현하는지(개인 의견이라고 밝히고, 그런 출처가 있을 때만)"
-PEOPLE_DESCRIBE = "- 비슷하게 느낀 사람들의 말: 커뮤니티·개인 글에서 비슷한 맛을 뭐라고 부르는지(개인 의견이라고 밝히고, 그런 출처가 있을 때만)"
+PEOPLE_NOTE = ("- 사람들의 느낌: 커뮤니티·개인 블로그 글에서 사람들이 이 노트를 어떻게 느끼고 표현하는지 "
+               "(개인 의견이라고 밝히고 문장마다 [n]을 붙인다. 그런 출처가 있을 때만)")
+PEOPLE_DESCRIBE = ("- 비슷하게 느낀 사람들의 말: 커뮤니티·개인 글에서 비슷한 맛을 뭐라고 부르는지 "
+                   "(개인 의견이라고 밝히고 문장마다 [n]을 붙인다. 그런 출처가 있을 때만)")
 
 
 def question(mode, case, terms, subs, people=False):
@@ -568,6 +570,9 @@ PLANS = {
     "adv+crowd": ["advanced", "basic@crowd"],         # 3 credits
     "adv+crowdadv": ["advanced", "advanced@crowd"],   # 4 credits
     "adv+crowd-ko": ["advanced", "basic@crowd-ko"],   # 3 credits
+    # the same (first) query at both depths, basic searched first so it cannot come back as the advanced result
+    "sameadv+basic": ["basic@q1", "advanced@q1"],                        # 3 credits
+    "sameadv+basic+ko": ["basic@q1", "advanced@q1", "basic@crowd-ko"],   # 4 credits
 }
 CREDITS = {"advanced": 2, "basic": 1, "fast": 1, "ultra-fast": 1}
 
@@ -585,7 +590,9 @@ def plan_searches(plan_name, queries, mode, case):
     out, i = [], 0
     for step in PLANS[plan_name]:
         depth, _, target = step.partition("@")
-        if target == "crowd":
+        if target == "q1":
+            out.append((queries[0], depth, None, "main"))
+        elif target == "crowd":
             out.append((queries[0] + " discussion", depth, CROWD, "crowd"))
         elif target == "crowd-ko":
             out.append((korean_query(mode, case), depth, CROWD_KO, "crowd-ko"))
@@ -709,7 +716,7 @@ def run_tavily(args):
             queries, how, qsecs = [template_query(mode, case)], "template", 0.0
         searches = plan_searches(plan_name.removeprefix("tmpl-"), queries, mode, case)
         queries = [q for q, _, _, _ in searches]
-        sources, seen, errors, t0 = [], set(), [], time.monotonic()
+        got, errors, t0 = [], [], time.monotonic()
         for q, depth, domains, label in searches:
             status, resp = tavily_search(tkey, q, depth, domains)
             if status != 200:
@@ -718,7 +725,10 @@ def run_tavily(args):
             cred = charged(resp, depth)
             credits += cred
             totals[plan_name]["cred"] += cred
-            for r in resp.get("results", [])[: args.per_search]:
+            got.append((label != "main", depth != "advanced", label, resp.get("results", [])[: args.per_search]))
+        sources, seen = [], set()
+        for _, _, label, results in sorted(got, key=lambda g: (g[0], g[1])):
+            for r in results:
                 if r.get("url") in seen or len(sources) >= args.max_sources:
                     continue
                 seen.add(r.get("url"))
@@ -778,9 +788,9 @@ def main():
     p.add_argument("--probe", default="", help="comma-separated models: one short question each, without and with search")
     p.add_argument("--sources", action="store_true", help="the Gemini free + Tavily pipeline with fetched pages (cases_sources.json)")
     p.add_argument("--tavily", action="store_true", help="the real Gemini free + Tavily pipeline (needs TAVILY_API_KEY)")
-    p.add_argument("--plans", default="adv+basic", help="comma-separated plans: adv+adv, adv+basic, basic+basic, adv, basic, fast, ufast, adv+crowd, adv+crowdadv, adv+crowd-ko; prefix tmpl- to skip the query step")
+    p.add_argument("--plans", default="adv+basic", help="comma-separated plans: adv+adv, adv+basic, basic+basic, adv, basic, fast, ufast, adv+crowd, adv+crowdadv, adv+crowd-ko, sameadv+basic, sameadv+basic+ko; prefix tmpl- to skip the query step")
     p.add_argument("--per-search", type=int, default=5, help="sources kept from each search")
-    p.add_argument("--max-sources", type=int, default=10, help="sources given to the answer at most")
+    p.add_argument("--max-sources", type=int, default=15, help="sources given to the answer at most")
     p.add_argument("--people", action="store_true", help="ask for the people's impressions section (experiment)")
     p.add_argument("--retrieval", action="store_true", help="Tavily only: compare search depths for the written queries")
     p.add_argument("--depths", default="advanced,basic,fast", help="depths for --retrieval (basic, advanced, fast, ultra-fast; a repeat searches again)")

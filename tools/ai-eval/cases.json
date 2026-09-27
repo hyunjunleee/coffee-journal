@@ -3,7 +3,8 @@
     "베르가못 (bergamot)", "자스민 (jasmine)", "흑설탕 (brown sugar)", "리치 (lychee)", "타마린드 (tamarind)",
     "위스키 (whiskey)", "홍차 (black tea)", "자몽 (grapefruit)", "헤이즐넛 (hazelnut)", "다크초콜릿 (dark chocolate)",
     "복숭아 (peach)", "청포도 (white grape)", "시나몬 (cinnamon)", "라벤더 (lavender)", "패션프루트 (passion fruit)",
-    "메이플시럽 (maple syrup)", "건포도 (raisin)", "카카오닙 (cacao nib)", "레몬그라스 (lemongrass)", "발효된 (fermented)"
+    "메이플시럽 (maple syrup)", "건포도 (raisin)", "카카오닙 (cacao nib)", "레몬그라스 (lemongrass)", "발효된 (fermented)",
+    "살구 (apricot)", "블루베리 (blueberry)", "캐러멜 (caramel)", "장미 (rose)", "흑후추 (black pepper)"
   ],
   "describe": [
     "잘 익은 자두 같은데 끝에 살짝 쌉쌀해요",
@@ -16,6 +17,8 @@
     "향신료처럼 톡 쏘는데 따뜻한 느낌이에요",
     "꿀처럼 달고 끝맛이 입안에 오래 남아요",
     "오렌지 껍질 같은 상큼함에 캐러멜 단맛이 있어요",
-    "부드럽고 고소한데 살짝 스모키해요"
+    "부드럽고 고소한데 살짝 스모키해요",
+    "새콤달콤한 딸기 같고 밀크초콜릿처럼 부드러워요",
+    "견과류처럼 고소하고 구수한 곡물 향이 나요"
   ]
 }
