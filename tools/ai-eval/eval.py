@@ -534,10 +534,64 @@ def tavily_search(key, query, depth):
 
 
 PLANS = {
+    "adv+adv": ["advanced", "advanced"],  # two queries: 4 credits
     "adv+basic": ["advanced", "basic"],   # two queries: 3 credits
+    "basic+basic": ["basic", "basic"],    # two queries: 2 credits
     "adv": ["advanced"],                  # first query only: 2 credits
     "basic": ["basic"],                   # first query only: 1 credit
+    "fast": ["fast"],                     # first query only: 1 credit
 }
+CREDITS = {"advanced": 2, "basic": 1, "fast": 1}
+
+
+def run_retrieval(args):
+    """Tavily only (no answer call): what each depth returns for the same written queries -- result overlap, sources,
+    institution share, whether the flavor words appear in the snippets -- plus the snippets side by side."""
+    gkey = os.environ.get("GEMINI_API_KEY", "").strip()
+    tkey = os.environ.get("TAVILY_API_KEY", "").strip()
+    if not gkey or not tkey:
+        sys.exit("GEMINI_API_KEY and TAVILY_API_KEY are both needed")
+    cases = json.loads((HERE / "cases.json").read_text(encoding="utf-8"))
+    plan = [("note", c) for c in cases["note"][: args.notes]] + [("describe", c) for c in cases["describe"][: args.describes]]
+    depths = [d.strip() for d in args.depths.split(",") if d.strip()]
+    out = Path(args.out)
+    out.mkdir(parents=True, exist_ok=True)
+    rows = ["| # | query | depth | results | institution | snippets with the flavor word | snippet chars | same URLs as " + depths[0] + " | s |",
+            "|---|---|---|---|---|---|---|---|---|"]
+    side, credits = [], 0
+    for n, (mode, case) in enumerate(plan, 1):
+        queries, how, _ = write_queries(args.model, gkey, mode, case)
+        time.sleep(2)
+        words = [w.lower() for w in re.findall(r"[A-Za-z]{3,}", " ".join(queries))
+                 if w.lower() not in {"coffee", "tasting", "notes", "note", "flavor", "flavour", "meaning", "descriptor", "the", "and", "with"}]
+        for qi, q in enumerate(queries):
+            got = {}
+            for d in depths:
+                t0 = time.monotonic()
+                status, resp = tavily_search(tkey, q, d)
+                secs = time.monotonic() - t0
+                if status != 200:
+                    rows.append(f"| {n}.{qi + 1} | {q} | {d} | HTTP {status} | - | - | - | - | {secs:.1f} |")
+                    continue
+                credits += CREDITS[d]
+                res = resp.get("results", [])
+                got[d] = res
+                inst = sum(1 for r in res if kind_of((urllib.parse.urlparse(r.get("url") or "").hostname or "").removeprefix("www.")) == "institution")
+                hit = sum(1 for r in res if any(w in (r.get("content") or "").lower() for w in words))
+                chars = sum(len(r.get("content") or "") for r in res)
+                base = {r.get("url") for r in got.get(depths[0], [])}
+                same = sum(1 for r in res if r.get("url") in base)
+                rows.append(f"| {n}.{qi + 1} | {q} | {d} | {len(res)} | {inst} | {hit}/{len(res)} | {chars} | {same}/{len(res)} | {secs:.1f} |")
+            side += [f"### {n}.{qi + 1} {case} → {q} ({how})", ""]
+            for d, res in got.items():
+                side.append(f"**{d}**")
+                for r in res:
+                    side.append(f"- {r.get('title')} ({urllib.parse.urlparse(r.get('url') or '').hostname}) — {(r.get('content') or '')[:260]}")
+                side.append("")
+        print(rows[-1], flush=True)
+    (out / "report.md").write_text("\n".join([f"# Tavily depths compared ({', '.join(depths)}), queries by {args.model}", "",
+                                              f"Tavily credits used: {credits}", ""] + rows + ["", "## Snippets side by side", ""] + side) + "\n",
+                                   encoding="utf-8")
 
 
 def run_tavily(args):
@@ -563,7 +617,9 @@ def run_tavily(args):
             written[case] = write_queries(args.model, gkey, mode, case)
             time.sleep(2)
         queries, how, qsecs = written[case]
-        depths = PLANS[plan_name]
+        if plan_name.startswith("tmpl-"):
+            queries, how, qsecs = [template_query(mode, case)], "template", 0.0
+        depths = PLANS[plan_name.removeprefix("tmpl-")]
         queries = queries[: len(depths)]
         sources, seen, errors, t0 = [], set(), [], time.monotonic()
         for i, q in enumerate(queries):
@@ -572,8 +628,8 @@ def run_tavily(args):
             if status != 200:
                 errors.append(f"Tavily {status}: {resp}")
                 continue
-            credits += 2 if depth == "advanced" else 1
-            totals[plan_name]["cred"] += 2 if depth == "advanced" else 1
+            credits += CREDITS[depth]
+            totals[plan_name]["cred"] += CREDITS[depth]
             for r in resp.get("results", []):
                 if r.get("url") in seen or len(sources) >= 6:
                     continue
@@ -628,10 +684,14 @@ def main():
     p.add_argument("--probe", default="", help="comma-separated models: one short question each, without and with search")
     p.add_argument("--sources", action="store_true", help="the Gemini free + Tavily pipeline with fetched pages (cases_sources.json)")
     p.add_argument("--tavily", action="store_true", help="the real Gemini free + Tavily pipeline (needs TAVILY_API_KEY)")
-    p.add_argument("--plans", default="adv+basic", help="comma-separated Tavily plans to compare: adv+basic, adv, basic")
+    p.add_argument("--plans", default="adv+basic", help="comma-separated plans: adv+adv, adv+basic, basic+basic, adv, basic, fast; prefix tmpl- to skip the query step")
+    p.add_argument("--retrieval", action="store_true", help="Tavily only: compare search depths for the written queries")
+    p.add_argument("--depths", default="advanced,basic,fast", help="depths for --retrieval")
     args = p.parse_args()
     if args.selftest:
         selftest()
+    elif args.retrieval:
+        run_retrieval(args)
     elif args.tavily:
         run_tavily(args)
     elif args.sources:

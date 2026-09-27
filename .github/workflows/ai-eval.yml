@@ -20,9 +20,10 @@ on:
         description: >-
           auto: tavily when the Tavily secret is set, else sources; tavily: the real "Gemini 무료 + Tavily" pipeline;
           sources: the same with fetched pages standing in for Tavily (cases_sources.json);
+          retrieval: Tavily alone at each of the depths below for the same written queries (no answers);
           probe: which models answer with and without Google Search; full: Google Search grounded evaluation.
         type: choice
-        options: [auto, tavily, sources, probe, full]
+        options: [auto, tavily, retrieval, sources, probe, full]
         default: auto
       probe:
         description: >-
@@ -30,8 +31,13 @@ on:
           to run the full evaluation with the model below.
         default: gemini-2.5-flash-lite,gemini-2.5-pro,gemini-3.8-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite
       plans:
-        description: "tavily mode: Tavily plans to compare (adv+basic = 3 credits, adv = 2, basic = 1 per question)"
+        description: >-
+          tavily mode: Tavily plans to compare, credits per question: adv+adv 4, adv+basic 3, basic+basic 2, adv 2,
+          basic 1, fast 1; a "tmpl-" prefix searches the template query instead of the model's (no query step)
         default: adv+basic
+      depths:
+        description: "retrieval mode: Tavily depths to compare (advanced = 2 credits a query, basic = 1, fast = 1)"
+        default: advanced,basic,fast
       model:
         description: Gemini model for sources / full
         default: gemini-3.5-flash-lite
@@ -68,6 +74,7 @@ jobs:
           PROBE: ${{ inputs.probe || 'gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite' }}
           MODEL: ${{ inputs.model || 'gemini-3.5-flash-lite' }}
           PLANS: ${{ inputs.plans || 'adv+basic' }}
+          DEPTHS: ${{ inputs.depths || 'advanced,basic,fast' }}
           # a push asks fewer (Tavily: about 3 credits a question out of 1,000 a month)
           NOTES: ${{ inputs.notes || '6' }}
           DESCRIBES: ${{ inputs.describes || '4' }}
@@ -82,6 +89,8 @@ jobs:
           echo "mode: $MODE"
           if [ "$MODE" = "tavily" ]; then
             python3 tools/ai-eval/eval.py --tavily --plans "$PLANS" --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
+          elif [ "$MODE" = "retrieval" ]; then
+            python3 tools/ai-eval/eval.py --retrieval --depths "$DEPTHS" --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
           elif [ "$MODE" = "sources" ]; then
             python3 tools/ai-eval/eval.py --sources --model "$MODEL" --out ai-eval-out
           elif [ "$MODE" = "probe" ]; then
@@ -89,8 +98,8 @@ jobs:
           else
             python3 tools/ai-eval/eval.py --model "$MODEL" --notes "$NOTES" --describes "$DESCRIBES" --out ai-eval-out
           fi
-          # the summary part of the report (before the answers) on the run page
-          sed '/^## Answers/,$d' ai-eval-out/report.md >> "$GITHUB_STEP_SUMMARY"
+          # the summary part of the report (before the answers or snippets) on the run page
+          sed -E '/^## (Answers|Snippets side by side)/,$d' ai-eval-out/report.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the report
         if: always() && hashFiles('ai-eval-out/report.md') != ''
