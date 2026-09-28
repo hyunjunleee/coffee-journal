@@ -9,7 +9,7 @@
 | 파일 | 대상 |
 |---|---|
 | `coffee-journal-<빌드 번호>-<커밋>.apk` | 안드로이드 8.0 이상. 프로젝트 고정 키로 서명되어 있어 바로 설치됩니다. |
-| `coffee-journal-<빌드 번호>-<커밋>-unsigned.ipa` | 아이폰 iOS 16 이상. 서명이 없어 설치할 때 본인 Apple ID로 서명합니다(아래). |
+| `coffee-journal-<빌드 번호>-<커밋>-unsigned.ipa` | 아이폰 iOS 16 이상. 서명이 없어 설치할 때 본인 Apple ID로 서명합니다(아래, SideStore 추천). |
 
 빌드 번호는 커밋 시각(2026-01-01부터의 분)이라 클수록 최신입니다. 버전별 릴리스(v1.1.0, v1.2.0 …)는 지우지 않고 남겨 두므로 이전 버전도 받을 수 있습니다. 푸시마다 만들어지는 개발 빌드는 **APK builds**·**iOS builds** 릴리스에 모입니다.
 
@@ -21,36 +21,57 @@
 업데이트: 새 `.apk`를 같은 방법으로 설치하면 기존 앱 위에 덮어 설치되고 기록·사진·설정이 그대로 남습니다. 모든 APK가 같은 키로 서명되어 있기 때문입니다. **앱을 먼저 지우지 마세요**(지우면 휴대폰 안의 데이터가 사라집니다).
 
 ### 아이폰 (앱스토어 없이)
-아이폰은 서명된 앱만 설치됩니다. 릴리스의 `.ipa`에는 서명이 없으므로, 컴퓨터의 사이드로딩 도구가 설치할 때 본인 Apple ID로 서명합니다. 무료 Apple ID로 충분하고, 도구는 Apple ID 비밀번호를 Apple에만 보냅니다(걱정되면 이 용도의 보조 Apple ID를 만들어 써도 됩니다).
+아이폰은 서명된 앱만 설치됩니다. 릴리스의 `.ipa`에는 서명이 없으므로, 사이드로딩 도구가 설치할 때 본인 Apple ID로 서명합니다. 무료 Apple ID로 충분합니다. 도구는 이 Apple ID로 Apple에 로그인해 서명용 인증서를 받습니다(걱정되면 이 용도의 보조 Apple ID를 만들어 써도 됩니다).
 
-준비물: 아이폰(iOS 16 이상), USB 케이블, Windows 또는 Mac 컴퓨터, Apple ID.
+**기본이자 추천은 SideStore입니다.** 컴퓨터는 처음 설정할 때 한 번만 쓰고, 그 뒤의 7일 갱신과 새 버전 설치는 아이폰 혼자 합니다. 컴퓨터로 설치하는 다른 도구(Sideloadly · AltStore)는 7일마다 컴퓨터가 필요해서 [다른 방법](#다른-방법-컴퓨터로-설치)으로 뒀습니다.
 
-**방법 A — Sideloadly (가장 간단, Windows · Mac)**
-1. 컴퓨터로 [Latest 릴리스](https://github.com/hyunjunleee/coffee-journal/releases/latest)에서 `…-unsigned.ipa`를 받습니다.
-2. [sideloadly.io](https://sideloadly.io)에서 Sideloadly를 받아 설치합니다. Windows에서는 Sideloadly 안내대로 iTunes와 iCloud도 설치합니다(Microsoft Store판이 아닌 Apple 웹사이트판).
-3. 아이폰을 USB로 연결하고 잠금을 풉니다. 아이폰에 "이 컴퓨터를 신뢰하겠습니까?"가 뜨면 **신뢰**를 누르고 암호를 넣습니다.
-4. Sideloadly 창에서 아이폰이 선택됐는지 확인하고, `.ipa`를 창에 끌어다 놓습니다. Apple ID(이메일)를 적고 **Start**를 누른 뒤, 묻는 대로 비밀번호와 2단계 인증 코드를 넣습니다.
-5. "Done."이 나오면 아이폰 홈 화면에 Coffee Journal이 생깁니다.
-6. 처음 한 번만 아이폰에서:
-   1. **설정 › 개인정보 보호 및 보안 › 개발자 모드**를 켜고, 재시동한 뒤 뜨는 창에서 **켜기**를 누릅니다(이 메뉴는 서명한 앱을 한 번 설치한 뒤에 보입니다).
-   2. **설정 › 일반 › VPN 및 기기 관리**의 "개발자 앱"에서 본인 Apple ID를 누르고 **신뢰**를 누릅니다.
-7. 앱을 엽니다. 알림을 켤 때, 봉투 사진을 찍거나 고를 때, "현재 위치"를 누를 때 각각 권한을 한 번 묻습니다.
+준비물: 아이폰(iOS 16 이상, 암호 설정), Wi‑Fi, USB 케이블, 처음 한 번 쓸 컴퓨터(Windows · Mac · Linux · 크롬북), Apple ID.
 
-**7일마다 다시 서명하기 (무료 Apple ID)**: 무료 계정으로 서명한 앱은 7일이 지나면 열리지 않습니다. 앱과 데이터는 그대로 남아 있으니, 같은 컴퓨터·같은 Apple ID로 4–6단계를 다시 하면(같은 `.ipa`든 새 버전이든) 이어서 쓸 수 있습니다. Sideloadly에는 컴퓨터가 켜져 있고 같은 Wi‑Fi에 있을 때 자동으로 다시 서명하는 기능도 있습니다(Sideloadly 안내 참고). 무료 계정은 이렇게 설치한 앱을 동시에 3개까지 둘 수 있습니다.
+#### SideStore로 설치 (추천)
+아래는 2026년 9월 기준 [SideStore 공식 안내](https://docs.sidestore.io/docs/installation/prerequisites)의 절차입니다. SideStore 쪽 사정으로 바뀔 수 있으니, 화면이 다르면 공식 안내를 따릅니다.
 
-**방법 B — AltStore (Windows · Mac)**: [altstore.io](https://altstore.io)의 안내대로 컴퓨터에 AltServer를 설치하고 아이폰에 AltStore를 설치합니다. `.ipa`를 아이폰의 파일 앱(또는 iCloud Drive)에 저장한 뒤 AltStore › My Apps › **+**로 고릅니다. 개발자 모드·신뢰는 방법 A의 6단계와 같습니다. AltServer가 켜진 컴퓨터와 같은 Wi‑Fi에 있으면 AltStore가 7일 갱신을 알아서 합니다.
+처음 한 번, 컴퓨터로 SideStore 설치:
+1. 아이폰 App Store에서 **LocalDevVPN**을 설치하고 한 번 열어 VPN 구성 추가를 허용합니다. SideStore가 아이폰 안에서 서명·설치를 할 때 쓰는 VPN이라, 앱을 설치·갱신·업데이트할 때마다 켜져 있어야 합니다.
+2. 컴퓨터에 SideStore 설치 도구 [iloader](https://github.com/nab138/iloader/releases/latest)를 설치합니다.
+3. 아이폰을 USB로 연결하고 잠금을 풉니다. "이 컴퓨터를 신뢰하겠습니까?"가 뜨면 **신뢰**를 누르고 암호를 넣습니다.
+4. iloader를 열고 Apple ID로 로그인한 뒤(대소문자까지 그대로), 아이폰을 고르고 **Install SideStore (Stable)**을 누릅니다. iloader가 SideStore와 함께 페어링 파일(SideStore가 아이폰에 설치를 요청할 수 있게 하는 파일)을 넣어 줍니다.
 
-**방법 C — SideStore**: 처음 한 번 컴퓨터로 설정하면 그 뒤로는 아이폰 혼자 7일 갱신을 합니다. 설정 절차가 자주 바뀌므로 [sidestore.io](https://sidestore.io)의 공식 안내를 따릅니다.
+처음 한 번, 아이폰에서:
 
-**Mac + Xcode**, **유료 개발자 계정(연 US$99, 1년 서명·TestFlight)**으로 설치하는 방법은 [`iosApp/README.md`](iosApp/README.md)에 있습니다.
+5. **설정 › 일반 › VPN 및 기기 관리**의 "개발자 앱"에서 본인 Apple ID를 누르고 **신뢰**를 누릅니다. iOS 18 이상에서 재시동을 허용하는 창(Allow & Restart)이 뜨면 누르고 암호를 넣습니다.
+6. **설정 › 개인정보 보호 및 보안 › 개발자 모드**를 켜고, 재시동한 뒤 뜨는 창에서 **켜기**를 누릅니다.
+7. Wi‑Fi에 연결하고 LocalDevVPN을 열어 **연결**합니다. SideStore를 열어 4단계의 Apple ID로 로그인하고, **My Apps**에서 SideStore 옆의 **7 DAYS**를 눌러 한 번 갱신합니다(인증서를 만들지 물으면 확인).
 
-업데이트: 새 버전의 `.ipa`를 **같은 도구, 같은 Apple ID**로 설치하면 기존 앱 위에 덮어 설치되어 데이터가 남습니다. 앱을 먼저 지우지 말고, 도구를 바꾸거나 도구의 번들 ID 바꾸기 옵션을 켜지 마세요(다른 앱으로 설치되어 기존 기록이 보이지 않습니다).
+Coffee Journal 설치:
 
-문제가 생기면:
-- **앱이 열리지 않음**: 7일이 지나 서명이 만료된 경우입니다. 위처럼 다시 서명해 설치합니다.
-- **"신뢰하지 않는 개발자"**: 6단계의 VPN 및 기기 관리에서 신뢰를 누릅니다.
-- **개발자 모드 메뉴가 없음**: 앱을 한 번 설치한 뒤에 나타납니다. 설치 후 다시 확인합니다.
-- **Sideloadly가 아이폰을 못 찾음**: 케이블을 다시 꽂고 아이폰 잠금을 푼 상태에서 "신뢰"를 눌렀는지 확인합니다(Windows는 iTunes가 아이폰을 인식해야 합니다).
+8. 아이폰 Safari로 [Latest 릴리스](https://github.com/hyunjunleee/coffee-journal/releases/latest)를 열고 `…-unsigned.ipa`를 받습니다(파일 앱의 "다운로드"에 저장됩니다).
+9. LocalDevVPN이 연결된 상태로 SideStore › **My Apps** › 왼쪽 위 **+**를 누르고 받은 `.ipa`를 고릅니다. 끝나면 홈 화면에 Coffee Journal이 생깁니다.
+10. 앱을 엽니다. 알림을 켤 때, 봉투 사진을 찍거나 고를 때, "현재 위치"를 누를 때 각각 권한을 한 번 묻습니다.
+
+**7일 갱신 (아이폰 혼자)**: 무료 Apple ID로 서명한 앱은 7일이 지나면 열리지 않습니다. SideStore가 백그라운드에서 알아서 다시 서명하는데, Wi‑Fi와 LocalDevVPN이 연결돼 있어야 하고 **설정 › 일반 › 백그라운드 앱 새로 고침**에서 SideStore가 켜져 있어야 합니다. 확실히 하려면 며칠에 한 번(My Apps의 남은 일수가 2–3일일 때) LocalDevVPN을 켜고 SideStore › My Apps › **Refresh All**을 누릅니다. 단축어 앱의 자동화로 이 갱신을 매일 돌리게 해 둘 수도 있습니다. 기한을 넘겨도 앱과 데이터는 그대로이고 갱신하면 다시 열립니다. 다만 **SideStore 자신도 7일짜리**라서, SideStore까지 만료되면 컴퓨터에서 iloader로 SideStore만 다시 설치합니다(Coffee Journal과 데이터는 남습니다).
+
+**컴퓨터가 다시 필요한 때**: iOS를 업데이트하거나 아이폰을 초기화하면(가끔은 이유 없이) 페어링 파일이 만료돼 SideStore가 설치·갱신 중 오류를 냅니다. 이때 iloader로 페어링 파일을 다시 넣습니다([공식 안내](https://docs.sidestore.io/docs/advanced/pairing-file): iloader의 Manage Pairing File › SideStore › Place).
+
+**무료 계정 한도**: 이렇게 설치한 앱은 SideStore를 포함해 동시에 3개까지(Coffee Journal 말고 하나 더), 새 앱은 일주일에 10개까지입니다.
+
+#### 다른 방법 (컴퓨터로 설치)
+이 방법들은 7일마다 컴퓨터로 다시 서명해야 합니다(컴퓨터가 켜져 있고 같은 Wi‑Fi에 있을 때 자동으로 하는 기능은 있습니다). 개발자 모드와 신뢰는 위 5–6단계와 같습니다.
+
+- **Sideloadly (Windows · Mac)**: [sideloadly.io](https://sideloadly.io)에서 받아 설치합니다(Windows는 안내대로 Apple 웹사이트판 iTunes와 iCloud도 설치). 아이폰을 USB로 연결해 신뢰하고, 컴퓨터로 받은 `.ipa`를 Sideloadly 창에 끌어다 놓은 뒤 Apple ID를 적고 **Start**를 누릅니다(비밀번호와 2단계 인증 코드를 묻습니다). 7일이 지나기 전에 같은 컴퓨터·같은 Apple ID로 다시 설치합니다.
+- **AltStore (Windows · Mac)**: [altstore.io](https://altstore.io)의 안내대로 컴퓨터에 AltServer를, 아이폰에 AltStore를 설치합니다. `.ipa`를 아이폰의 파일 앱에 저장한 뒤 AltStore › My Apps › **+**로 고릅니다. AltServer가 켜진 컴퓨터와 같은 Wi‑Fi에 있으면 7일 갱신을 알아서 합니다.
+- **Mac + Xcode**, **유료 개발자 계정(연 US$99, 1년 서명·TestFlight)**: [`iosApp/README.md`](iosApp/README.md)에 있습니다.
+
+#### 업데이트
+새 버전의 `.ipa`를 **처음 설치한 도구와 같은 Apple ID로** 설치하면 기존 앱 위에 덮어 설치되어 데이터가 남습니다. SideStore라면 새 `.ipa`를 받아 9단계처럼 My Apps › **+**로 고르면 됩니다. 앱을 먼저 지우지 마세요. 도구를 바꾸지도 마세요: SideStore·AltStore는 무료 계정에서 번들 ID 뒤에 팀 ID를 붙여 설치하고 Sideloadly는 원래 번들 ID로 설치해서, 도구를 바꾸면 다른 앱으로 설치되어 기존 기록이 보이지 않습니다. 꼭 바꿔야 하면 먼저 홈 화면의 **💾 백업**으로 백업 파일을 받고, 새로 설치한 앱에서 복원합니다.
+
+#### 문제가 생기면
+- **앱이 열리지 않음**: 7일이 지나 서명이 만료된 경우입니다. LocalDevVPN을 켜고 SideStore › My Apps › **Refresh All**을 누릅니다. SideStore도 열리지 않으면 컴퓨터에서 iloader로 SideStore를 다시 설치한 뒤 갱신합니다.
+- **SideStore가 Wi‑Fi나 VPN에 연결되지 않았다고 함**: Wi‑Fi에 연결하고 LocalDevVPN을 **연결** 상태로 둔 뒤 다시 합니다.
+- **iOS 업데이트 뒤 SideStore 설치·갱신 오류**: 페어링 파일이 만료된 경우입니다. 위 "컴퓨터가 다시 필요한 때"대로 iloader로 다시 넣습니다.
+- **앱 개수 한도 오류**: 무료 계정은 SideStore 포함 3개까지입니다. 다른 사이드로딩 앱을 지우거나 SideStore에서 비활성화합니다.
+- **"신뢰하지 않는 개발자"**: 5단계의 VPN 및 기기 관리에서 신뢰를 누릅니다.
+- **개발자 모드 메뉴가 없음**: 서명된 앱을 한 번 설치한 뒤에 나타납니다. 설치 후 다시 확인합니다.
+- **컴퓨터 도구(iloader · Sideloadly)가 아이폰을 못 찾음**: 케이블을 다시 꽂고 아이폰 잠금을 푼 상태에서 "신뢰"를 눌렀는지 확인합니다(Windows는 iTunes가 아이폰을 인식해야 합니다).
 
 ### 업데이트해도 데이터가 남나요?
 네. 위처럼 **덮어 설치**하면 기록·사진·설정이 그대로입니다. 데이터 구조가 바뀌는 버전(예: 1.2.0의 카페 주소 칸)은 앱이 처음 열릴 때 기존 데이터를 새 구조로 옮기고, 데이터를 지우고 새로 만드는 방식은 쓰지 않습니다. 앱을 **지웠다가** 다시 설치할 때만 데이터가 사라집니다. 기기 변경·앱 삭제·사이드로딩 도구 변경 전에는 홈 화면의 **💾 백업**에서 백업 파일(JSON, 사진 포함)을 받아 두세요. AI 키·카카오 키와 이 기기의 설정(화면·알림), 작성 중인 초안은 백업에 들어가지 않습니다.
