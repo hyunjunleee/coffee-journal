@@ -17,9 +17,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -56,6 +58,7 @@ import com.coffeejournal.domain.rules.Numbers
 import com.coffeejournal.domain.rules.Prices
 import com.coffeejournal.domain.rules.RecipeSteps
 import com.coffeejournal.ui.form.FormTextField
+import com.coffeejournal.ui.form.TextLink
 import com.coffeejournal.ui.form.sections.StepHeaderRow
 import com.coffeejournal.ui.form.sections.StepsSummaryBox
 import com.coffeejournal.ui.platform.KeepScreenOn
@@ -64,6 +67,7 @@ import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FitText
 import com.coffeejournal.ui.theme.GhostButton
+import com.coffeejournal.ui.theme.GlyphButton
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.HairlineCard
 import com.coffeejournal.ui.theme.HintText
@@ -129,9 +133,9 @@ fun BrewTimerScreen(nav: NavHostController, recipeJson: String?, formHasLog: Boo
                 }
                 HintText(
                     "붓기 시작·끝으로 부은 구간을, 뜸·스월·드로우다운으로 그 사이 대기를 적어요. 끝나면 단계 로그로 옮겨져요. " +
-                        "부은 물은 어림값이 먼저 들어가고, 기록에서 푸어를 누르면 고칠 수 있어요.",
+                        "부은 물은 어림값이 먼저 들어가고, 기록에서 푸어를 누르면 고칠 수 있어요. 잘못 누른 붓기는 옆의 ✕로 지워요.",
                 )
-                LiveRows(ui, onEditGrams = vm::editGrams)
+                LiveRows(ui, onEditGrams = vm::editGrams, onRemove = vm::removePour, onUndoRemove = vm::undoRemovePour)
             } else {
                 if (grams != null) {
                     Spacer(Modifier.height(12.dp))
@@ -285,13 +289,18 @@ private fun GuidanceCard(ui: BrewTimerUi) {
     }
 }
 
-/** The rows so far, newest last; an estimated amount is muted ("≈ 60g") until it is typed or confirmed. */
+/**
+ * The rows so far, newest last; an estimated amount is muted ("≈ 60g") until it is typed or confirmed. Every pour has a
+ * faint ✕ for a 붓기 시작·끝 tapped by mistake (a pour still going is cancelled); where it was, a line offers 되돌리기
+ * until the log changes again.
+ */
 @Composable
-private fun LiveRows(ui: BrewTimerUi, onEditGrams: (Int) -> Unit) {
-    if (ui.rows.isEmpty()) return
+private fun LiveRows(ui: BrewTimerUi, onEditGrams: (Int) -> Unit, onRemove: (Int) -> Unit, onUndoRemove: () -> Unit) {
+    if (ui.rows.isEmpty() && ui.removed == null) return
     SectionLabel("기록")
     var pourNo = 0
     ui.rows.forEachIndexed { i, row ->
+        if (ui.removed?.at == i) RemovedPourLine(ui.removed, onUndoRemove)
         if (row.pour) pourNo++
         val inProgress = i == ui.rows.lastIndex && ui.pouring
         val what = buildAnnotatedString {
@@ -310,8 +319,25 @@ private fun LiveRows(ui: BrewTimerUi, onEditGrams: (Int) -> Unit) {
         LogRow("timer-row-$i", editable = row.pour && !inProgress, selected = ui.gramsPanel?.rowIndex == i, onClick = { onEditGrams(i) }) {
             Text(clock(row.startMs / 1000), style = AppType.monoValue, softWrap = false, modifier = Modifier.width(52.dp.fontScaled(1.5f)))
             Text(what, style = AppType.small.copy(color = if (row.pour) Ink.text else Ink.textMuted), modifier = Modifier.weight(1f))
+            if (row.pour) {
+                GlyphButton(
+                    "✕", label = "${pourNo}차 푸어 삭제", onClick = { onRemove(i) },
+                    modifier = Modifier.size(Dimens.touch).wrapContentSize(Alignment.Center), style = AppType.small.copy(color = Ink.textFaint),
+                )
+            }
         }
     }
+    if (ui.removed?.at == ui.rows.size) RemovedPourLine(ui.removed, onUndoRemove)
+}
+
+/** Where a removed pour was: what happened, faint, and 되돌리기. */
+@Composable
+private fun RemovedPourLine(removed: BrewTimerUi.Removed, onUndo: () -> Unit) {
+    Row(Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).testTag("timer-removed"), verticalAlignment = Alignment.CenterVertically) {
+        Text("${removed.pourNumber}차 푸어를 지웠어요", style = AppType.faint, modifier = Modifier.weight(1f))
+        TextLink("되돌리기", Ink.textMuted, onUndo)
+    }
+    Hairline()
 }
 
 /**
