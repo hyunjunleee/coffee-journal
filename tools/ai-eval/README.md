@@ -1,6 +1,6 @@
 # AI 노트 도우미 PoC
 
-`docs/ai-note-helper-plan.md`의 PoC입니다. Gemini 무료 등급(Google 검색 그라운딩)에 앱이 할 두 종류의 질문을 보냅니다.
+`docs/ai-note-helper-plan.md`의 PoC이자 평가 도구입니다. 앱이 할 두 종류의 질문을 Gemini에 보냅니다. 기본은 앱의 기본 방식과 같은 "Gemini 무료 + Tavily"(`--tavily`)이고, 결제한 키로는 Google 검색 그라운딩(모드 full)도 잽니다(무료 키는 Google 검색을 쓸 수 없음).
 
 - 노트 설명: `cases.json`의 `note`
 - 맛 묘사로 노트 찾기: `cases.json`의 `describe`
@@ -19,7 +19,7 @@
   - `tools/ai-eval/`을 바꿔 푸시하면 자동으로 돕니다.
   - Actions 탭에서 모델과 개수를 골라 수동으로도 실행할 수 있습니다.
   - 저장소 Secret `GEMINI_API_KEY_DEBUG`(개발용 무료 키, 결제가 꺼진 프로젝트)가 있어야 실제 질문을 보냅니다. 없으면 자체 점검만 합니다.
-  - 이 키는 개발용이라 앱(APK)에는 넣지 않습니다. 앱에서는 사용자가 자기 키를 직접 입력합니다.
+  - 이 키는 개발용이라 앱(APK·.ipa)에는 넣지 않습니다. 앱에서는 사용자가 자기 키를 직접 입력합니다.
   - 저장소 Secret `TAVILY_API_KEY_DEBUG`(개발용 무료 Tavily 키)도 있으면 실제 "Gemini 무료 + Tavily" 파이프라인(`--tavily`: 검색어 만들기 → Tavily → Gemini → 인용 확인)을 돌리고, 없으면 미리 고른 페이지로 대신합니다(`--sources`). 푸시 한 번에 앱 기본값(정밀 + 사람들 의견, `adv+crowd-ko --people`)으로 노트 4개·묘사 2개, Tavily 약 18크레딧(월 1,000 무료).
   - 검색 설정 비교: `--tavily --plans basic,adv+basic,…`는 같은 질문을 플랜마다 답하게 하고, `--retrieval --depths ultra-fast,fast,basic,advanced,basic`은 답 없이 Tavily 결과만 깊이별로 나란히 놓습니다. Tavily는 전에 검색한 같은 검색어를 캐시에서 돌려줄 수 있어서(advanced 뒤의 basic이 advanced 결과를 그대로 받음), 공정하게 비교하려면 검색한 적 없는 질문(`--notes 7-10`처럼 범위로 고름)을 낮은 깊이부터 검색합니다. 크레딧은 Tavily가 응답에 적어 준 값(`include_usage`)으로 셉니다.
   - 사람들 의견 실험: `--people`은 답에 "사람들의 느낌" 항목을 더하고, `adv+crowd`(커뮤니티만 검색하는 basic 한 번 더), `adv+crowdadv`(같은 검색을 advanced로), `adv+crowd-ko`(한국어 블로그)가 커뮤니티 출처를 따로 찾아 줍니다(Tavily `include_domains`). 두 검색이면 출처를 검색마다 5개, 모두 10개까지 넘깁니다.

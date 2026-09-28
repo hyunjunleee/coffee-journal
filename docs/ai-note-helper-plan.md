@@ -174,9 +174,9 @@
   - `GroundingCheck`: 4장 ②·③의 판정과 번호 붙이기.
   - `NoteHelperViewModel`.
 - **플랫폼 경계(expect/actual)**
-  - `AiHttp`: Android는 OkHttp, iOS는 NSURLSession.
+  - `AiHttp`: Android는 OkHttp, iOS는 NSURLSession. (구현: Android는 `HttpURLConnection`, 12.5)
   - `AiKeyStore`: Android는 Keystore + 파일, iOS는 Keychain.
-- **DB:** Room v3에 `ai_history`(id, mode, question, answer_json, model, created_at) 표를 추가하는 자동 마이그레이션. JSON 백업에서는 뺀다.
+- **DB:** Room v3에 `ai_history`(id, mode, question, answer_json, model, created_at) 표를 추가하는 자동 마이그레이션. JSON 백업에서는 뺀다. (구현하지 않음: 답은 화면을 닫으면 남기지 않기로 했다(12장). Room v3은 이후 카페 주소 열(`cafe_places.address`)에 쓰였다.)
 - **화면:**
   - 설정 › AI: 켜기, 키 입력·확인·삭제, 모델, 오늘 사용 횟수(앱이 센 값), 동의 문구, AI 기록.
   - `Route.NoteHelper(mode, query)` 답 화면: 본문과 [번호], 출처 목록, 검색 제안, "노트에 추가" 칩(모드 B), "다시 묻기".
@@ -287,7 +287,7 @@
 - **설정**: 방식, 방식별 모델, 방식별 안내 확인, Tavily의 "검색"(`device.ai.searchDepth`)과 "사람들 의견"(`device.ai.people`)은 `device.ai.*` 키(백업 제외). 입력 중인 키는 저장 상태 번들에 남기지 않는다. 저장된 키는 마지막 4자리("…a1b2")만 보인다.
 - **키 확인**: Gemini는 도구 없는 아주 짧은 요청(`maxOutputTokens` 8, 고른 방식의 모델), Tavily는 basic 검색 1개(1크레딧, 화면에 적음), OpenAI·Anthropic은 `GET /v1/models`(무료; 목록이 끝까지 왔는데 고른 모델이 없으면 "이 모델은 쓸 수 없어요"). 결과는 정상 / 키가 틀려요 / 결제가 필요해요 / 한도를 넘었어요 / 이 모델은 쓸 수 없어요 / 연결 실패.
 - **동의**: 방식마다 처음 물을 때 무엇을(질문 글만; 기록·원두·장소·사진은 안 보냄) 어디로 보내는지, Gemini 무료 등급의 학습·사람 검토 조건과 유료 방식의 과금을 보이고 확인을 받는다.
-- **HTTP**: `AiHttp`. Android는 `HttpURLConnection`(연결 15초, 읽기 120초, IO 디스패처, 4xx/5xx는 오류 스트림). 새 라이브러리 0개라 `verification-metadata.xml`과 라이브러리 목록은 그대로다. iOS는 미연결.
+- **HTTP**: `AiHttp`. Android는 `HttpURLConnection`(연결 15초, 읽기 120초, IO 디스패처, 4xx/5xx는 오류 스트림). 새 라이브러리 0개라 `verification-metadata.xml`과 라이브러리 목록은 그대로다. iOS는 `IosAiHttp`(`NSURLSession` 임시 세션, 응답 120초, 4xx/5xx 본문도 전달), 키는 `IosSecretStore`(Keychain 일반 암호, 이 기기 전용: iCloud 키체인·다른 기기로 옮기는 백업 제외).
 
 ### 12.6 오류 안내 (요지)
 | 서비스 | 상태 | 안내 |

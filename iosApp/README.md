@@ -8,7 +8,7 @@
   - `klibs`(Linux): 공유 코드나 iosApp이 바뀐 모든 푸시에서 돈다.
     - iOS용 Kotlin 코드를 klib으로 컴파일한다(Kotlin/Native 크로스 컴파일, `-Pcoffeejournal.iosKlibs=true`). iOS에서만 깨지는 변경을 macOS 없이 잡는다.
     - iOS 앱의 출처 · 라이선스 목록이 의존성과 맞는지도 확인한다.
-  - `app`(macOS): 직접 돌리거나(Actions › iOS › Run workflow) 태그 v*에서만 돈다.
+  - `app`(macOS): 직접 돌리거나(Actions › iOS › Run workflow) 태그 v*에서만 돈다. main에서 release 입력(예: `v1.2.0`)을 주고 돌리면 그 버전 릴리스를 만들어 .ipa를 붙인다(Android 워크플로도 같은 입력으로 돌리면 APK가 같은 릴리스에 붙는다).
     - 비공개 저장소에서는 macOS 1분이 리눅스 약 10분 값이라 푸시마다 돌리지 않는다.
     - Shared 프레임워크를 링크하고, Xcode 프로젝트를 만들고, 서명 없이 아이폰용으로 빌드한다.
     - 결과 `coffee-journal-<빌드 번호>-<커밋>-unsigned.ipa`를 "iOS builds" 릴리스에 올린다. 태그 v*이면 그 태그의 릴리스에도 APK 옆에 붙인다.
@@ -23,26 +23,18 @@
   4. Signing & Capabilities에서 Team을 본인 Apple ID(Personal Team)로 고른 뒤 아이폰에 실행한다.
      - 빌드 중에 Xcode가 `./gradlew :shared:embedAndSignAppleFrameworkForXcode`로 공유 코드를 컴파일한다. 처음에는 몇 분 걸린다.
 
-## 아이폰에 설치하기 (앱스토어 없이)
+## 아이폰에 설치하기
 
-iOS는 서명된 앱만 설치된다. CI가 만든 .ipa에는 서명이 없으므로, 설치할 때 본인 Apple ID로 서명한다.
+사이드로딩 도구(Sideloadly · AltStore · SideStore)로 무료 Apple ID 서명을 해 설치하는 단계별 방법, 7일 갱신, 업데이트할 때 데이터를 지키는 법, 문제 해결은 저장소 첫 [README의 "아이폰" 절](../README.md#아이폰-앱스토어-없이)에 있다. 여기에는 컴퓨터에서 직접 빌드하거나 유료 계정을 쓰는 방법만 적는다.
 
-- **무료 Apple ID + 사이드로딩 도구**
-  - 방법:
-    - [Sideloadly](https://sideloadly.io)(Windows·Mac)에 .ipa를 끌어다 놓고, Apple ID로 로그인해 설치한다.
-    - 또는 [AltStore](https://altstore.io)나 [SideStore](https://sidestore.io)를 쓴다.
-  - 무료 계정으로 서명한 앱은 7일 뒤 만료되어 다시 서명해야 한다. 한 번에 3개 앱까지다.
-    - AltStore는 같은 Wi-Fi에 있는 AltServer가 갱신한다.
-    - SideStore는 처음 설정한 뒤에는 기기 혼자 갱신한다.
-  - 처음 실행하기 전에:
-    1. 설정 › 개인정보 보호 및 보안 › 개발자 모드를 켜고 재시동한다.
-    2. 설정 › 일반 › VPN 및 기기 관리에서 본인 Apple ID 개발자를 신뢰한다.
-  - 원격 푸시는 안 된다. 이 앱의 알림은 기기 안의 로컬 알림이라 그대로 동작한다.
-- **Mac + Xcode**: 위 "Mac에서 직접 빌드하기"대로 실행하면 같은 무료 서명(7일)으로 설치된다.
+- **Mac + Xcode**: 위 "Mac에서 직접 빌드하기"대로 아이폰에 실행하면 같은 무료 서명(7일)으로 설치된다. 다시 서명하려면 7일 안에 다시 실행한다. 번들 ID(`com.coffeejournal.app`)가 사이드로딩 도구가 쓴 것과 같아야 기존 앱 위에 덮어 설치된다. 무료 Personal Team은 번들 ID를 바꾸라고 할 수 있는데, 바꾸면 다른 앱으로 설치된다.
 - **Apple Developer Program(연 US$99)**
   - TestFlight로 설치 링크를 보낼 수 있다(빌드당 90일).
   - 또는 등록한 기기에 1년짜리 서명으로 설치할 수 있다.
-  - 이 경우 CI에 인증서와 프로비저닝 프로파일을 Secret으로 넣어, 서명된 .ipa를 만들도록 바꾼다.
+  - 이 경우 CI에 인증서와 프로비저닝 프로파일을 Secret으로 넣어 서명된 .ipa를 만들도록 `ios.yml`을 바꾼다(지금은 서명 없이 만든다).
+- 원격 푸시는 쓰지 않는다. 이 앱의 알림은 기기 안의 로컬 알림이라 무료 서명에서도 그대로 동작한다.
+- 앱이 쓰는 권한: 알림(설정에서 켤 때), 사진·카메라(봉투 사진), 위치(위치 지정의 "현재 위치"를 누를 때, 앱을 사용하는 동안만). 키(AI·카카오)는 Keychain에 이 기기 전용으로 저장한다.
+- 데이터는 앱의 Documents 폴더(`coffee_journal.db`, `photos/`)에 있다. 덮어 설치해도 남고, 앱을 지우면 사라진다(아이폰의 iCloud·컴퓨터 백업에는 포함된다).
 
 ## 상세 지도 (MapLibre Native iOS)
 
