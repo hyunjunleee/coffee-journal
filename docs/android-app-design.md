@@ -307,7 +307,7 @@ coffee-journal/
 1. macOS에서 `coffeejournal.enableIos=true`로 iOS 타깃을 켜 `Shared` 정적 프레임워크를 만든다(Xcode 빌드 단계 `embedAndSignAppleFrameworkForXcode`). Linux에서는 `coffeejournal.iosKlibs=true`로 klib까지 컴파일해 iOS에서만 깨지는 변경을 잡는다.
 2. `iosMain`의 actual 구현(§3.1 표의 iOS 열): 사진(PHPicker·카메라, Documents/photos), 백업 파일(UIDocumentPicker·공유 시트), 알림(미리 예약), AI(NSURLSession·Keychain), 상세 지도(MapLibre Native iOS, Swift 패키지), 장소 검색·현재 위치(MKLocalSearch·CLLocationManager).
 3. `iosApp/` SwiftUI 앱이 `MainViewController()`를 띄운다. 하단 탭·내비게이션은 Compose 공용 코드 그대로다. Xcode 프로젝트는 `project.yml`에서 XcodeGen으로 만든다.
-4. CI(`.github/workflows/ios.yml`): klib 컴파일(모든 관련 푸시), 서명 없는 .ipa(직접 실행·태그·release 입력), 시뮬레이터에서 공유 테스트와 Debug 앱 실행 확인(직접 실행). 설치는 사이드로딩 도구로 사용자의 Apple ID 서명(루트 `README.md`).
+4. CI(`.github/workflows/ios.yml`): klib 컴파일(모든 관련 푸시), 서명 없는 .ipa(직접 실행·태그·release 입력), 시뮬레이터에서 공유 테스트와 Debug 앱 실행 확인(직접 실행). 설치는 사용자의 Apple ID 서명으로 하고, 기본·추천은 컴퓨터 없이 아이폰 혼자 7일 갱신하는 SideStore(루트 `README.md`, 다른 도구는 Sideloadly · AltStore).
 5. 남은 것: 홈 화면 위젯(WidgetKit 확장과 앱 그룹이 필요하고, 무료 Apple ID 서명에서는 앱 그룹이 제대로 되지 않을 수 있어 미룸).
 
 ## 10. 구현 마일스톤
