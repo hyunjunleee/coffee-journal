@@ -59,6 +59,8 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
     private val newId = Ids.newId()
     val state: StateFlow<State> = _state
     val spec: FlatItemLogic.Spec = FlatItemLogic.spec(type)
+    /** The form as it was opened (blank, or the stored item): leaving asks only when the input differs from it. */
+    private var opened: State? = _state.value.takeIf { itemId == null }
 
     init {
         if (itemId != null) viewModelScope.launch {
@@ -67,8 +69,11 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
                 if (m == null) s.copy(loaded = true)
                 else s.copy(name = m.name, status = m.status, scope = m.scope.ifBlank { Scope.DOMESTIC }, location = m.location, notes = m.notes, existing = m, loaded = true, point = m.point)
             }
+            opened = _state.value
         }
     }
+
+    fun hasChanges(): Boolean = opened?.let { it != _state.value.copy(saving = false) } ?: false
 
     fun setName(v: String) = _state.update { it.copy(name = v) }
     fun setStatus(v: String) = _state.update { it.copy(status = v) }
@@ -139,6 +144,8 @@ class BlendFormViewModel(private val blendId: String?, private val blends: Blend
     val suggestions: StateFlow<List<String>> = entries.observeAll()
         .deriveOffMain { e -> BlendSources.recentBeanNames(BeanRecords.flatten(e)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** The form as it was opened (blank, or the stored blend): leaving asks only when the input differs from it. */
+    private var opened: State? = _state.value.takeIf { blendId == null }
 
     init {
         if (blendId != null) viewModelScope.launch {
@@ -147,8 +154,11 @@ class BlendFormViewModel(private val blendId: String?, private val blends: Blend
                 if (b == null) s.copy(loaded = true)
                 else s.copy(name = b.name, date = b.date.ifBlank { s.date }, rows = b.beans.ifEmpty { listOf(BlendComponent("")) }, notes = b.notes, existing = b, loaded = true)
             }
+            opened = _state.value
         }
     }
+
+    fun hasChanges(): Boolean = opened?.let { it != _state.value.copy(saving = false) } ?: false
 
     fun setName(v: String) = _state.update { it.copy(name = v) }
     fun setDate(v: String) = _state.update { it.copy(date = v) }

@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
@@ -86,6 +87,10 @@ class MiscFormViewModel(
     val state: StateFlow<MiscFormState> = _state.asStateFlow()
     private var original: MiscItem? = null
 
+    /** The form as it was opened (blank, or the stored item), kept next to the input: leaving asks only when they differ. */
+    private val keptOpened = SavedFormState(savedState, "miscForm.opened", MiscFormDraft.serializer())
+    private var opened: MiscFormDraft? = keptOpened.restore() ?: _state.value.takeIf { itemId == null }?.toDraft()?.also(keptOpened::put)
+
     init {
         kept.keep(viewModelScope, _state.map { it.toDraft() }.distinctUntilChanged())
         if (itemId != null) viewModelScope.launch {
@@ -95,7 +100,7 @@ class MiscFormViewModel(
                 item == null -> _state.update { it.copy(loading = false, isEdit = false) }
                 // the restored input wins; only the stored item behind it (id, scope, created date) was needed
                 restored != null -> _state.update { it.copy(loading = false) }
-                else -> _state.update {
+                else -> _state.updateAndGet {
                     it.copy(
                         type = item.type,
                         status = item.status.ifBlank { MiscStatus.OWNED },
@@ -105,9 +110,16 @@ class MiscFormViewModel(
                         slots = List(2) { i -> item.photos.getOrNull(i)?.let { name -> PhotoSlot.Existing(name) } },
                         loading = false,
                     )
-                }
+                }.toDraft().also { opened = it; keptOpened.put(it) }
             }
         }
+    }
+
+    /** Whether the input differs from the form as it was opened; a photo picked but not saved yet counts. */
+    fun hasChanges(): Boolean {
+        val start = opened ?: return false
+        val s = _state.value
+        return s.toDraft() != start || s.slots.any { it is PhotoSlot.Fresh }
     }
 
     fun setStatus(value: String) { if (value.isNotBlank()) _state.update { it.copy(status = value) } }

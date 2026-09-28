@@ -129,6 +129,7 @@ class FormFixesFlowTest : FlowTestBase() {
         waitGone(hasText(lockBanner))
         assertFalse("closing the banner does not bring the photo slots back", has(bagPhotoSlot))
         back()
+        clickNode(dialogButton("지우고 나가기")) // the typed form asks before it is left
 
         // editing the later of two records of the same bean (e2): locked
         typeInto(searchPlaceholder, "워카")

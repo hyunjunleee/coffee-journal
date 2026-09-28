@@ -24,6 +24,14 @@ class SavedFormState<T>(private val handle: SavedStateHandle?, private val key: 
         state.drop(1).onEach { h[key] = json.encodeToString(serializer, it) }.launchIn(scope)
     }
 
+    /** Writes [value] once, e.g. the form as it was opened, which the leave question compares the input with. */
+    fun put(value: T) {
+        handle?.set(key, json.encodeToString(serializer, value))
+    }
+
+    /** Whether [a] and [b] hold the same input: what is kept counts; `@Transient` flags (errors, saving) do not. */
+    fun sameInput(a: T, b: T): Boolean = a == b || json.encodeToString(serializer, a) == json.encodeToString(serializer, b)
+
     private companion object {
         val json = Json { ignoreUnknownKeys = true }
     }

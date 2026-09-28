@@ -29,8 +29,10 @@ import com.coffeejournal.domain.rules.PantryRules
 import com.coffeejournal.ui.ai.NoteHelperResult
 import com.coffeejournal.ui.form.timer.BrewTimerResult
 import com.coffeejournal.ui.nav.Route
+import com.coffeejournal.ui.theme.DerivationDispatcher
 import com.coffeejournal.ui.theme.deriveOffMain
 import kotlin.concurrent.Volatile
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -40,7 +42,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
@@ -77,14 +81,33 @@ class RecordFormViewModel(
     private val photos: PhotoStore,
     /** Keeps the typed form across process death (e.g. while the camera app is in front). Null in plain unit tests. */
     private val savedState: SavedStateHandle? = null,
+    /** Keeps the typed form as a draft in the settings table while it is written. Null in plain unit tests. */
+    private val drafts: RecordDrafts? = null,
 ) : ViewModel() {
     private val restored: FormState? = savedState?.get<String>(STATE_KEY)?.let(FormStateCodec::decode)
 
     private val _state = MutableStateFlow(restored ?: FormMapper.newState(args.mode, args.cuppingType, Dates.nowMillis()))
     val state: StateFlow<FormState> = _state.asStateFlow()
 
-    private val _loaded = MutableStateFlow(args.entryId == null)
+    /**
+     * The form as it was opened: the stored record, or a new form's starting values. Leaving asks, and a draft is
+     * kept, only while the input differs from it. Null until loaded; kept in the saved state next to the input.
+     */
+    private var opened: FormState? = savedState?.get<String>(OPENED_KEY)?.let(FormStateCodec::decode)
+
+    // a new form waits for its draft check (so a restored draft does not replace what was typed meanwhile) or, after
+    // process death, for what it opened with when that was not kept
+    private val _loaded = MutableStateFlow(args.entryId == null && (drafts == null || (restored != null && opened != null)))
     val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
+
+    private val draftKey = RecordDrafts.keyFor(args)
+
+    /** Set once the record is saved or the form is left: nothing more is written to the draft. */
+    private var draftClosed = false
+
+    private val _restoredDraft = MutableStateFlow(savedState?.get<Int>(DRAFT_NOTICE_KEY)?.let(::RestoredDraft))
+    /** The form opened with the draft left last time (the banner with 새로 쓰기); null otherwise or once closed. */
+    val restoredDraft: StateFlow<RestoredDraft?> = _restoredDraft.asStateFlow()
 
     /** The running save, so a second tap on 저장 while it is in flight does nothing. */
     private var saveJob: Job? = null
@@ -111,6 +134,11 @@ class RecordFormViewModel(
         if (savedState != null) {
             _state.drop(1).onEach { savedState[STATE_KEY] = FormStateCodec.encode(it) }.launchIn(viewModelScope)
         }
+        if (drafts != null) {
+            // the pause is timed off the main thread; the write itself is asked for on it, in order with leaving
+            @OptIn(FlowPreview::class)
+            _state.drop(1).debounce(DRAFT_DELAY_MS).flowOn(DerivationDispatcher).onEach(::writeDraft).launchIn(viewModelScope)
+        }
         viewModelScope.launch { load() }
     }
 
@@ -118,24 +146,99 @@ class RecordFormViewModel(
         val id = args.entryId
         if (id != null) {
             val en = entries.getById(id)
-            if (en == null) { _events.emit(FormEvent.NotFound); return }
+            if (en == null) { drafts?.delete(draftKey); _events.emit(FormEvent.NotFound); return }
             existing = en
+            val repeat = FormMapper.hasEarlierSameBean(en, entries.getAll())
+            val stored = FormMapper.fromEntry(en, args.mode).copy(repeatBean = repeat, autofillBanner = repeat)
             if (restored == null) {
-                val repeat = FormMapper.hasEarlierSameBean(en, entries.getAll())
-                _state.value = FormMapper.fromEntry(en, args.mode).copy(repeatBean = repeat, autofillBanner = repeat)
-            }
+                val draft = takeDraft(stored)
+                markOpened(stored)
+                _state.value = draft ?: stored
+            } else if (opened == null) markOpened(stored)
             _loaded.value = true
             return
         }
-        if (restored != null) return
         // 최근 원두 기록의 분쇄도·사용한 물을 기본값으로 (web openForm)
         val brews = entries.getAll().filter { it.isBrew }.sortedByDescending { it.createdAt }
         val lastGrind = brews.firstOrNull { it.grind.isNotBlank() }?.grind ?: ""
         val lastWater = brews.firstOrNull { it.waterType.isNotBlank() }?.waterType ?: ""
-        _state.update { s ->
+        val withDefaults = { s: FormState ->
             if (s.mode == com.coffeejournal.ui.nav.FormMode.CAFE) s
             else s.copy(grind = s.grind.ifBlank { lastGrind }, waterType = s.waterType.ifBlank { lastWater })
         }
+        if (restored != null) {
+            // after process death the saved state wins; one kept by an older version is measured against a new form
+            if (opened == null) markOpened(withDefaults(FormMapper.newState(args.mode, args.cuppingType, restored.createdAt, draftId = restored.draftId)))
+            _loaded.value = true
+            return
+        }
+        _state.update(withDefaults)
+        val start = _state.value
+        val draft = takeDraft(start)
+        markOpened(start)
+        draft?.let { _state.value = it }
+        _loaded.value = true
+    }
+
+    private fun markOpened(start: FormState) {
+        opened = start
+        savedState?.set(OPENED_KEY, FormStateCodec.encode(start))
+    }
+
+    /** The draft left last time, when there is one that holds more than the form opens with (else it is dropped). */
+    private suspend fun takeDraft(start: FormState): FormState? {
+        val store = drafts ?: return null
+        store.pruneExpired()
+        val draft = store.load(draftKey) ?: return null
+        val state = FormDrafts.reopened(draft, args)
+        if (state.editingId != args.entryId || !FormDrafts.changed(start, state)) {
+            store.delete(draftKey)
+            return null
+        }
+        _restoredDraft.value = RestoredDraft(draft.droppedPhotos)
+        savedState?.set(DRAFT_NOTICE_KEY, draft.droppedPhotos)
+        return state
+    }
+
+    /** Keeps [s] as the draft, or deletes the draft once the input is back to the form as it was opened. */
+    private fun writeDraft(s: FormState) {
+        val store = drafts ?: return
+        val start = opened ?: return
+        if (draftClosed || s.saving) return
+        if (FormDrafts.changed(start, s)) store.put(draftKey, FormDrafts.draftOf(s, Dates.nowMillis())) else store.delete(draftKey)
+    }
+
+    /** Whether the input differs from the form as it was opened: leaving then asks first. */
+    fun hasChanges(): Boolean = opened?.let { FormDrafts.changed(it, _state.value) } ?: false
+
+    /** 나가기 (and any other way out): the input as it is now becomes the draft, without waiting for the debounce. */
+    fun keepDraft() {
+        writeDraft(_state.value)
+        draftClosed = true
+    }
+
+    /** 지우고 나가기: the draft is deleted and the form is left. */
+    fun discardDraft() {
+        draftClosed = true
+        drafts?.delete(draftKey)
+    }
+
+    /** The banner's 새로 쓰기: the draft is deleted and the form starts over as it opens without one. */
+    fun startOver() {
+        val start = opened ?: return
+        drafts?.delete(draftKey)
+        closeDraftNotice()
+        _state.value = start
+    }
+
+    fun closeDraftNotice() {
+        _restoredDraft.value = null
+        savedState?.remove<Int>(DRAFT_NOTICE_KEY)
+    }
+
+    /** Leaving by a way the dialog did not see (a pop from elsewhere) still leaves the draft up to date. */
+    override fun onCleared() {
+        if (!draftClosed) keepDraft()
     }
 
     /** Every field change goes through here so the computed 총 추출시간 stays in sync. */
@@ -216,6 +319,9 @@ class RecordFormViewModel(
             }
             val entry = FormMapper.toEntry(s, id, existing, finalPhotos, Dates.nowMillis())
             pipeline.save(entry, isNew)
+            // saved: the draft has done its job
+            draftClosed = true
+            drafts?.delete(draftKey)
             previous.filter { it !in finalPhotos }.forEach { runCatching { photos.delete(it) } }
             _events.emit(FormEvent.Saved(id, wasEdit = !isNew))
         } catch (e: Exception) {
@@ -265,6 +371,10 @@ class RecordFormViewModel(
 
     private companion object {
         const val STATE_KEY = "recordForm"
+        const val OPENED_KEY = "recordForm.opened"
+        const val DRAFT_NOTICE_KEY = "recordForm.draftNotice"
+        /** A draft is written this long after the last change. */
+        const val DRAFT_DELAY_MS = 700L
     }
 }
 

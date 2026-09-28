@@ -38,9 +38,11 @@ import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.InputFilters
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.LeaveDialog
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
 import com.coffeejournal.ui.theme.Seg
+import com.coffeejournal.ui.theme.rememberLeaveGuard
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -59,8 +61,11 @@ fun PantryEditorScreen(nav: NavHostController, itemId: String?) {
 
     val saving = form.saving && !form.saved
     BlockBackWhile(saving)
+    // back and 취소 ask before typed input is lost
+    val guard = rememberLeaveGuard(vm::hasChanges, busy = form.saving, leave = leave)
+    LeaveDialog(guard)
     Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar(title = "원두 보관함", onBack = { if (!saving) leave() })
+        ScreenTitleBar(title = "원두 보관함", onBack = guard::request)
         if (!form.loaded) return
         Column(
             Modifier.fillMaxSize().imeOverlapPadding().verticalScroll(rememberScrollState())
@@ -105,7 +110,7 @@ fun PantryEditorScreen(nav: NavHostController, itemId: String?) {
             Spacer(Modifier.height(4.dp))
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton(if (form.isEdit) "수정 저장" else "저장", onClick = vm::save, enabled = !form.saving, modifier = Modifier.weight(1f))
-                GhostButton("취소", onClick = leave, enabled = !saving, modifier = Modifier.weight(1f))
+                GhostButton("취소", onClick = guard::request, enabled = !saving, modifier = Modifier.weight(1f))
             }
         }
     }

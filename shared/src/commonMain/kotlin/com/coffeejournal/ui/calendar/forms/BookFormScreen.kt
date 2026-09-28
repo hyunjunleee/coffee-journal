@@ -27,7 +27,7 @@ fun BookFormScreen(nav: NavHostController, bookId: String?) {
     val s by vm.state.collectAsStateWithLifecycle()
     // one pop per back / 취소 / successful save, even when tapped again during the exit transition
     val leave = dropUnlessResumed { nav.popBackStack() }
-    FormScaffold(title = if (s.isEdit) "책 수정" else "책 추가", onBack = leave, onSave = { vm.save(leave) }, saving = s.saving) {
+    FormScaffold(title = if (s.isEdit) "책 수정" else "책 추가", onBack = leave, onSave = { vm.save(leave) }, saving = s.saving, hasChanges = vm::hasChanges) {
         AppTextField(label = "책 제목", value = s.title, onValueChange = { v -> vm.update { copy(title = v, titleError = false) } }, placeholder = "예: 커핑 바이블")
         RequiredHint(s.titleError, "책 제목을 입력해주세요")
         Spacer(Modifier.height(12.dp))

@@ -21,7 +21,7 @@ fun VideoFormScreen(nav: NavHostController, videoId: String?) {
     val s by vm.state.collectAsStateWithLifecycle()
     // one pop per back / 취소 / successful save, even when tapped again during the exit transition
     val leave = dropUnlessResumed { nav.popBackStack() }
-    FormScaffold(title = if (s.isEdit) "동영상 수정" else "동영상 추가", onBack = leave, onSave = { vm.save(leave) }, saving = s.saving) {
+    FormScaffold(title = if (s.isEdit) "동영상 수정" else "동영상 추가", onBack = leave, onSave = { vm.save(leave) }, saving = s.saving, hasChanges = vm::hasChanges) {
         AppTextField(label = "동영상 제목", value = s.title, onValueChange = { v -> vm.update { copy(title = v, titleError = false) } }, placeholder = "예: 추출 변수와 맛의 관계")
         RequiredHint(s.titleError, "동영상 제목을 입력해주세요")
         Spacer(Modifier.height(12.dp))
