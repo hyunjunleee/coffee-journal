@@ -21,6 +21,7 @@ import com.coffeejournal.domain.rules.KoreaRegions
 import com.coffeejournal.ui.map.KoreaFrames
 import com.coffeejournal.ui.map.MapViewportMath
 import com.coffeejournal.ui.map.detail.OpenFreeMap
+import com.coffeejournal.ui.theme.LeaveTexts
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -181,7 +182,10 @@ class PlaceAddFlowTest : CoverageFlowBase() {
         tapText("+ 카페 추가")
         typeInto(cafeName, " 가 볼 카페 연남 ")
         waitForText("이미 있는 카페예요: 가 볼 카페 연남 · 방문 기록 없음 · 위치 미지정")
+        // a typed name is not thrown away without asking
         tapText("취소")
+        waitForText(LeaveTexts.DISCARD_TITLE)
+        clickNode(dialogButton(LeaveTexts.LEAVE))
         waitForText("카페 위치")
         assertEquals(1, cafes().size)
 
