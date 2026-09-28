@@ -8,6 +8,8 @@ import com.coffeejournal.ui.map.detail.DetailMapRenderer
 import com.coffeejournal.ui.map.detail.DetailMapScreen
 import com.coffeejournal.ui.map.detail.DetailMapViewModel
 import com.coffeejournal.ui.map.detail.platformDetailMapRenderer
+import com.coffeejournal.ui.map.search.PlaceSearchService
+import com.coffeejournal.ui.map.search.PlaceSearchSettingsViewModel
 import com.coffeejournal.ui.nav.Feature
 import com.coffeejournal.ui.nav.Route
 import org.koin.compose.viewmodel.koinViewModel
@@ -17,11 +19,16 @@ import org.koin.core.module.dsl.viewModelOf
 import org.koin.core.parameter.parametersOf
 import org.koin.dsl.module
 
-/** Korea / world maps shared by the roastery map, the café map and the location picker, and the detail map (design v2 §1). */
+/**
+ * Korea / world maps shared by the roastery map, the café map and the location picker, the detail map (design v2 §1),
+ * and the picker's place search and current location (their platform parts come from the platform module).
+ */
 object MapFeature : Feature {
     override val module: Module = module {
         viewModelOf(::CafeMapViewModel)
-        viewModel { (r: Route.MapPicker) -> MapPickerViewModel(r.target, r.name, r.scope, MapPickResult.decode(r.point), get()) }
+        viewModel { (r: Route.MapPicker) -> MapPickerViewModel(r.target, r.name, r.scope, MapPickResult.decode(r.point), get(), get(), get()) }
+        single { PlaceSearchService(get(), get(), get()) }
+        viewModelOf(::PlaceSearchSettingsViewModel)
         viewModel { (r: Route.DetailMap) -> DetailMapViewModel(r, get(), get(), get()) }
         // the detail map's renderer (MapLibre Native on Android and iOS); the flow tests put a fake in its place
         single<DetailMapRenderer> { platformDetailMapRenderer() }

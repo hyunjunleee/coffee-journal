@@ -9,6 +9,8 @@ import com.coffeejournal.data.photo.PhotoStore
 import com.coffeejournal.di.dataModule
 import com.coffeejournal.ui.ai.AiHttp
 import com.coffeejournal.ui.ai.SecretStore
+import com.coffeejournal.ui.map.search.CurrentLocation
+import com.coffeejournal.ui.map.search.DevicePlaceSearch
 import com.coffeejournal.ui.nav.Features
 import com.coffeejournal.ui.notify.AndroidReminderPlatform
 import com.coffeejournal.ui.notify.ReminderPlatform
@@ -29,7 +31,10 @@ class TestApp : Application() {
     }
 }
 
-/** In-memory Room database on the framework SQLite (Robolectric), a photo store in a temp dir, fake AI HTTP and key store. */
+/**
+ * In-memory Room database on the framework SQLite (Robolectric), a photo store in a temp dir, fake AI HTTP and key
+ * store, and a fake place search and position for the location picker.
+ */
 fun testPlatformModule(context: Context) = module {
     single<AppDatabase> {
         Room.inMemoryDatabaseBuilder<AppDatabase>(context)
@@ -44,6 +49,9 @@ fun testPlatformModule(context: Context) = module {
     // AI 노트 도우미: no test reaches the network, and Robolectric has no AndroidKeyStore
     single<AiHttp> { FakeAiHttp() }
     single<SecretStore> { MemorySecretStore() }
+    // 위치 지정: no test asks the phone's geocoder or reads a real position
+    single<DevicePlaceSearch> { FakePlaceSearch() }
+    single<CurrentLocation> { FakeCurrentLocation() }
 }
 
 class TempPhotoStore(private val dir: File) : PhotoStore {

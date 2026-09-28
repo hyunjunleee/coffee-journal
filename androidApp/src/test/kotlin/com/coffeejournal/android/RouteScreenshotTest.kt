@@ -39,7 +39,12 @@ import com.coffeejournal.ui.ai.AiProvider
 import com.coffeejournal.ui.ai.AiTexts
 import com.coffeejournal.ui.form.timer.BrewClock
 import com.coffeejournal.ui.form.timer.BrewTimerResult
+import com.coffeejournal.ui.map.MapPickTarget
 import com.coffeejournal.ui.map.detail.DetailMapCamera
+import com.coffeejournal.ui.map.search.LocateResult
+import com.coffeejournal.ui.map.search.LocateTexts
+import com.coffeejournal.ui.map.search.PlaceSearchService
+import com.coffeejournal.ui.map.search.PlaceSearchTexts
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.ReminderKind
 import com.coffeejournal.ui.nav.FormMode
@@ -439,5 +444,29 @@ class RouteScreenshotTest {
         AiSetup.ready(AiProvider.CLAUDE)
         AiSetup.http.on("api.anthropic.com") { AiReplies.CLAUDE }
         show(Route.NoteHelper(mode = "note", query = "자스민"), "74-note-helper-claude.png") { waitForText(AiTexts.FOUND) }
+    }
+
+    // ───────── 위치 지정: search and 현재 위치 (fake phone search and position) ─────────
+
+    /** A café's picker after "현재 위치" and 검색: its name found near the phone, with the distances and the source. */
+    @Test fun mapPicker_search() {
+        PlaceSetup.grantLocation(ApplicationProvider.getApplicationContext())
+        PlaceSetup.location.answer = LocateResult.Found(GeoPoint(37.5700, 126.9830), accuracyM = 25.0)
+        PlaceSetup.search.hits = listOf(PlaceFixtures.FELT, PlaceFixtures.FELT_OTHER)
+        show(Route.MapPicker(target = MapPickTarget.CAFE, name = "FELT 청계천"), "76-map-picker-search.png") {
+            click(PlaceSearchTexts.HERE)
+            waitForText(LocateTexts.found(25.0))
+            click(PlaceSearchTexts.SEARCH)
+            waitForText(PlaceFixtures.FELT.name)
+        }
+    }
+
+    /** 설정's 장소 검색 with a Kakao key saved. */
+    @Test fun settings_placeSearch() {
+        AiSetup.secrets.values[PlaceSearchService.KAKAO_SECRET] = "kakao-rest-key-9f3a"
+        show(Route.Settings, "77-settings-place-search.png") {
+            bringToTop(hasText(PlaceSearchTexts.SECTION))
+            waitForText("저장됨 …9f3a")
+        }
     }
 }

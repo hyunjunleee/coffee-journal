@@ -175,4 +175,20 @@ class CafeMapLogicTest {
         assertEquals("일본", MapPickResult.placeName(GeoPoint(35.0116, 135.7681), overseas = true))
         assertNull(MapPickResult.placeName(GeoPoint(36.0, 125.5), overseas = false), "the Yellow Sea")
     }
+
+    @Test fun pickResult_carriesASearchedAddress_andOlderResultsStillRead() {
+        val p = GeoPoint(37.5446, 127.0557)
+        // without an address the result is exactly what it was before (and what Route.MapPicker's point carries)
+        assertEquals("37.5446,127.0557", MapPickResult.encode(p))
+        assertEquals("37.5446,127.0557", MapPickResult.encode(p, "  "))
+        assertNull(MapPickResult.address("37.5446,127.0557"))
+        val withAddress = MapPickResult.encode(p, "서울 성동구\n성수이로7길 51, 1층")
+        assertEquals("37.5446,127.0557\t서울 성동구 성수이로7길 51, 1층", withAddress)
+        assertEquals(p, MapPickResult.decode(withAddress))
+        assertEquals("서울 성동구 성수이로7길 51, 1층", MapPickResult.address(withAddress))
+        // a cleared or damaged result carries no address either
+        assertNull(MapPickResult.address(MapPickResult.CLEARED))
+        assertNull(MapPickResult.address("91,10\t바다"))
+        assertNull(MapPickResult.decode("91,10\t바다"))
+    }
 }
