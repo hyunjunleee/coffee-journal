@@ -256,7 +256,7 @@ class SettingsRepository(private val dao: SettingsDao) {
 
         /**
          * Settings that belong to this phone rather than to the journal (notification switches, the reminder time,
-         * the reminders already sent): a backup neither writes nor restores them.
+         * the reminders already sent, the record form's unsaved draft): a backup neither writes nor restores them.
          */
         const val DEVICE_PREFIX = "device."
 

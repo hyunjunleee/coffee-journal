@@ -25,7 +25,8 @@ import kotlinx.serialization.Transient
 /**
  * What the three study forms share: the typed input is kept in the SavedStateHandle (it survives process death), and
  * a save runs once — taps while it runs, or after it succeeded while the screen is closing, are ignored. A new item
- * keeps one id for the life of the form, so even a repeated save could only upsert the same row.
+ * keeps one id for the life of the form, so even a repeated save could only upsert the same row. Leaving asks first
+ * when the input differs from the form as it was opened ([hasChanges]).
  */
 abstract class StudyFormViewModel<S : Any>(savedState: SavedStateHandle?, key: String, serializer: KSerializer<S>, initial: S) : ViewModel() {
     private val kept = SavedFormState(savedState, key, serializer)
@@ -33,11 +34,25 @@ abstract class StudyFormViewModel<S : Any>(savedState: SavedStateHandle?, key: S
     protected val mutableState = MutableStateFlow(restored ?: initial)
     val state: StateFlow<S> = mutableState.asStateFlow()
 
+    /** The form as it was opened: [initial] until a stored item is [open]ed. Kept next to the input. */
+    private val keptOpened = SavedFormState(savedState, "$key.opened", serializer)
+    private var opened: S = keptOpened.restore() ?: initial.also(keptOpened::put)
+
     init {
         kept.keep(viewModelScope, mutableState)
     }
 
     fun update(block: S.() -> S) = mutableState.update(block)
+
+    /** Shows the stored item: it is both the input and what the form was opened with. */
+    protected fun open(stored: S) {
+        mutableState.value = stored
+        opened = stored
+        keptOpened.put(stored)
+    }
+
+    /** Whether the input differs from the form as it was opened. */
+    fun hasChanges(): Boolean = !kept.sameInput(opened, mutableState.value)
 
     /** Marks the state as saving and runs [write]; the mark is undone only when [write] fails, so the user can retry. */
     protected fun saveOnce(setSaving: (S, Boolean) -> S, write: suspend () -> Unit) {
@@ -83,9 +98,11 @@ class BookFormViewModel(bookId: String?, private val repo: StudyRepository, save
     init {
         if (bookId != null && restored == null) viewModelScope.launch {
             repo.getBook(bookId)?.let { b ->
-                mutableState.value = BookFormState(
-                    id = b.id, isEdit = true, createdAt = b.createdAt, title = b.title, author = b.author,
-                    status = b.status.ifBlank { BookStatus.READING }, startDate = b.startDate, endDate = b.endDate, rating = b.rating, notes = b.notes,
+                open(
+                    BookFormState(
+                        id = b.id, isEdit = true, createdAt = b.createdAt, title = b.title, author = b.author,
+                        status = b.status.ifBlank { BookStatus.READING }, startDate = b.startDate, endDate = b.endDate, rating = b.rating, notes = b.notes,
+                    ),
                 )
             }
         }
@@ -131,7 +148,7 @@ class VideoFormViewModel(videoId: String?, private val repo: StudyRepository, sa
     init {
         if (videoId != null && restored == null) viewModelScope.launch {
             repo.getVideo(videoId)?.let { v ->
-                mutableState.value = VideoFormState(id = v.id, isEdit = true, createdAt = v.createdAt, title = v.title, channel = v.channel, url = v.url, notes = v.notes)
+                open(VideoFormState(id = v.id, isEdit = true, createdAt = v.createdAt, title = v.title, channel = v.channel, url = v.url, notes = v.notes))
             }
         }
     }
@@ -174,10 +191,12 @@ class ClassFormViewModel(classId: String?, private val repo: StudyRepository, sa
     init {
         if (classId != null && restored == null) viewModelScope.launch {
             repo.getClass(classId)?.let { c ->
-                mutableState.value = ClassFormState(
-                    id = c.id, isEdit = true, createdAt = c.createdAt, title = c.title,
-                    classType = if (c.classType == ClassType.RECURRING) ClassType.RECURRING else ClassType.ONEDAY,
-                    date = c.date, startDate = c.startDate, endDate = c.endDate, notes = c.notes,
+                open(
+                    ClassFormState(
+                        id = c.id, isEdit = true, createdAt = c.createdAt, title = c.title,
+                        classType = if (c.classType == ClassType.RECURRING) ClassType.RECURRING else ClassType.ONEDAY,
+                        date = c.date, startDate = c.startDate, endDate = c.endDate, notes = c.notes,
+                    ),
                 )
             }
         }

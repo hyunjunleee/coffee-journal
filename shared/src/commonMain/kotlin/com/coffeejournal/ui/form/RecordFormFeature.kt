@@ -4,6 +4,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
+import com.coffeejournal.di.AppScope
 import com.coffeejournal.ui.form.timer.BrewClock
 import com.coffeejournal.ui.form.timer.BrewTimerArgs
 import com.coffeejournal.ui.form.timer.BrewTimerScreen
@@ -19,8 +20,10 @@ import org.koin.dsl.module
 /** Record form, entry detail, my recipes and the brew timer: Koin module (view models) and full-screen routes. */
 object RecordFormFeature : Feature {
     override val module: Module = module {
-        // the last get() is the destination's SavedStateHandle, created by Koin from the view model's CreationExtras
-        viewModel { (args: FormArgs) -> RecordFormViewModel(args, get(), get(), get(), get(), get(), get(), get()) }
+        // one draft store for the app: its writes run on the app scope, so the last one lands after the form closed
+        single { RecordDrafts(get(), get<AppScope>()) }
+        // the second-to-last get() is the destination's SavedStateHandle, created by Koin from the view model's CreationExtras
+        viewModel { (args: FormArgs) -> RecordFormViewModel(args, get(), get(), get(), get(), get(), get(), get(), get()) }
         viewModel { (entryId: String) -> EntryDetailViewModel(entryId, get(), get(), get(), get()) }
         viewModelOf(::MyRecipesViewModel)
         single<BrewClock> { SystemBrewClock }

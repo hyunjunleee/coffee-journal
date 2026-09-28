@@ -17,12 +17,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -42,13 +47,17 @@ import com.coffeejournal.ui.form.timer.BrewTimerResult
 import com.coffeejournal.ui.map.CafeMapViewModel
 import com.coffeejournal.ui.map.MapPickTarget
 import com.coffeejournal.ui.nav.Route
+import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.BlockBackWhile
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Hairline
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.LeaveGuard
+import com.coffeejournal.ui.theme.LeaveTexts
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
+import com.coffeejournal.ui.theme.rememberLeaveGuard
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -59,6 +68,7 @@ fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cup
     val state by vm.state.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val loaded by vm.loaded.collectAsStateWithLifecycle()
+    val restoredDraft by vm.restoredDraft.collectAsStateWithLifecycle()
     val nameFocus = remember { FocusRequester() }
     val blendFocus = remember { FocusRequester() }
     val cuppingFocus = remember { FocusRequester() }
@@ -103,19 +113,22 @@ fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cup
         runCatching { requester.requestFocus() }
     }
 
-    // The title-bar back and 취소 wait while "저장 중..." is shown (the save itself also survives leaving, see save()).
-    val leave = { if (!vm.state.value.saving) nav.popBackStack() }
-    // system back waits too, so a new record still opens its detail screen when the save finishes
+    // system back waits while "저장 중..." is shown, so a new record still opens its detail screen when the save finishes
     BlockBackWhile(state.saving)
+    // The title-bar back, 취소 and system back wait too (the save itself also survives leaving, see save()); with
+    // input the form did not open with they ask first. Any way out keeps the input as the draft right away.
+    val guard = rememberLeaveGuard(vm::hasChanges, busy = state.saving, leave = { vm.keepDraft(); nav.popBackStack() })
+    DraftLeaveDialog(guard, isEdit = state.isEdit, photosLost = state.bagPhotos.any { it.pending != null }, onDiscard = vm::discardDraft)
     Column(Modifier.fillMaxSize().background(Ink.bg).statusBarsPadding()) {
-        ScreenTitleBar(title = if (state.isEdit) "기록 수정" else "새 기록", onBack = { leave() })
+        ScreenTitleBar(title = if (state.isEdit) "기록 수정" else "새 기록", onBack = guard::request)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             if (loaded) {
+                restoredDraft?.let { DraftBanner(it, onStartOver = vm::startOver, onClose = vm::closeDraftNotice) }
                 RecordFormBody(state, suggestions, vm, nav, nameFocus, blendFocus, cuppingFocus)
             }
             Spacer(Modifier.height(96.dp))
         }
-        FormActions(state, onSave = vm::save, onCancel = { leave() })
+        FormActions(state, onSave = vm::save, onCancel = guard::request)
     }
 }
 
@@ -180,4 +193,56 @@ private fun FormActions(state: FormState, onSave: () -> Unit, onCancel: () -> Un
             GhostButton("취소", onClick = onCancel, enabled = !state.saving)
         }
     }
+}
+
+/** Copy of the record form's draft banner and leave question, shared with the tests. */
+object RecordDraftTexts {
+    const val RESTORED = "작성하던 내용을 불러왔어요."
+    const val PHOTOS_AGAIN = "고른 봉투 사진은 임시 저장되지 않아요. 다시 골라 주세요."
+    const val START_OVER = "새로 쓰기"
+    const val LEAVE_TITLE = "작성 중인 내용이 있어요"
+    const val LEAVE_NEW = "나가도 지금까지 쓴 내용은 임시 저장돼요. 다음에 새 기록을 열면 이어서 쓸 수 있어요."
+    const val LEAVE_EDIT = "나가도 고친 내용은 임시 저장돼요. 다음에 이 기록을 수정할 때 이어서 쓸 수 있어요."
+    const val LEAVE_PHOTOS = "새로 고른 봉투 사진은 임시 저장되지 않아 다시 골라야 해요."
+    const val LEAVE = "나가기"
+    const val DISCARD = "지우고 나가기"
+}
+
+/** The form opened with the draft left last time: 새로 쓰기 deletes it and starts over, 닫기 only hides this. */
+@Composable
+private fun DraftBanner(draft: RestoredDraft, onStartOver: () -> Unit, onClose: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 12.dp).background(Ink.surfaceRaised).padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+            .testTag("draft-banner"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+            Text("✓ " + RecordDraftTexts.RESTORED, style = AppType.small.copy(color = Ink.text))
+            if (draft.droppedPhotos > 0) Text(RecordDraftTexts.PHOTOS_AGAIN, style = AppType.small, modifier = Modifier.padding(top = 2.dp))
+        }
+        TextLink(RecordDraftTexts.START_OVER, Ink.text, onStartOver)
+        TextLink("닫기", Ink.textMuted, onClose)
+    }
+}
+
+/**
+ * The record form keeps its input as a draft, so leaving loses nothing: [계속 쓰기] stays, [나가기] leaves with the
+ * draft kept, [지우고 나가기] deletes it first. A picked bag photo is the exception, and the text says so.
+ */
+@Composable
+private fun DraftLeaveDialog(guard: LeaveGuard, isEdit: Boolean, photosLost: Boolean, onDiscard: () -> Unit) {
+    if (!guard.asking) return
+    val body = (if (isEdit) RecordDraftTexts.LEAVE_EDIT else RecordDraftTexts.LEAVE_NEW) + if (photosLost) "\n" + RecordDraftTexts.LEAVE_PHOTOS else ""
+    AlertDialog(
+        onDismissRequest = guard::stay,
+        shape = RectangleShape, containerColor = Ink.bg,
+        modifier = Modifier.testTag("leave-dialog"),
+        title = { Text(RecordDraftTexts.LEAVE_TITLE, style = AppType.title) },
+        text = { Text(body, style = AppType.body) },
+        confirmButton = { PrimaryButton(LeaveTexts.STAY, small = true, onClick = guard::stay) },
+        dismissButton = {
+            GhostButton(RecordDraftTexts.LEAVE, small = true, onClick = guard::leave)
+            GhostButton(RecordDraftTexts.DISCARD, small = true, danger = true, onClick = { onDiscard(); guard.leave() })
+        },
+    )
 }
