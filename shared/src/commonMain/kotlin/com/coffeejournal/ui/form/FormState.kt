@@ -46,6 +46,40 @@ data class StepForm(
 @Serializable
 data class BlendRowForm(val name: String = "", val grams: String = "")
 
+/**
+ * The green-coffee info of one bean, the fields that differ from bean to bean (web #bean-info-fields less the bag's
+ * 총량 · 입고 시기 · 노트 · 설명). Bean 1 is the flat [FormState] fields; beans 2.. of a café blend are
+ * [FormState.blendBeans]. In a later bean an empty [roastery], [roast] or [roastDate] is bean 1's (shown in grey).
+ */
+@Serializable
+data class BeanForm(
+    val roastery: String = "",
+    val selection: String = "",
+    val country: String = "",
+    val region: String = "",
+    val farmProducer: String = "",
+    val washingStation: String = "",
+    val altitude: String = "",
+    val variety: String = "",
+    val moisture: String = "",
+    val density: String = "",
+    val score: String = "",
+    val process: String = "",
+    val processOther: String = "",
+    val processSub: String = "",
+    val roast: String = "",
+    val roastDate: String = "",
+    /** The bean's share of the blend (%), asked once there are two beans or more. */
+    val percent: String = "",
+) {
+    /** Nothing entered: an added block left empty is not saved. */
+    val isBlank: Boolean
+        get() = listOf(
+            roastery, selection, country, region, farmProducer, washingStation, altitude, variety, moisture, density, score,
+            process, processOther, processSub, roast, roastDate, percent,
+        ).all { it.isBlank() }
+}
+
 /** One bean card of a cupping session (web .cupping-bean-card). */
 @Serializable
 data class CuppingBeanForm(
@@ -121,6 +155,10 @@ data class FormState(
     // 원두 구성·이름
     val beanMode: String = BeanMode.SINGLE,
     val blendRows: List<BlendRowForm> = emptyList(),
+    /** Beans 2.. of a café blend, one block each like bean 1's; "+ 원두 추가 (블렌드)" adds one. */
+    val blendBeans: List<BeanForm> = emptyList(),
+    /** Bean 1's share (%) of a café blend; bean 1's other fields are the flat ones under 원두 정보. */
+    val firstBeanPercent: String = "",
     val cafeName: String = "",
     val name: String = "",
     val price: String = "",
@@ -190,10 +228,32 @@ data class FormState(
      */
     val effectiveBeanMode: String get() = when {
         isCupping -> BeanMode.SINGLE
-        isCafe && beanMode == BeanMode.CUSTOM_BLEND -> BeanMode.SINGLE
-        else -> beanMode.ifBlank { BeanMode.SINGLE }
+        beanMode == BeanMode.CUSTOM_BLEND && !isCafe -> BeanMode.CUSTOM_BLEND
+        // a second bean block makes a café blend; an older café blend record may have none of its beans entered
+        blendBeans.isNotEmpty() || beanMode == BeanMode.COMMERCIAL_BLEND -> BeanMode.COMMERCIAL_BLEND
+        else -> BeanMode.SINGLE
     }
     val isCustomBlend: Boolean get() = effectiveBeanMode == BeanMode.CUSTOM_BLEND
+    /** Bean-info blocks shown: bean 1 and a café blend's other beans (a custom blend keeps one, its beans are its rows). */
+    val beanCount: Int get() = if (isCupping || isCustomBlend) 1 else 1 + blendBeans.size
+
+    /** Bean [index]'s block: bean 1 from the flat fields, the others from [blendBeans]. */
+    fun bean(index: Int): BeanForm = if (index == 0) {
+        BeanForm(
+            roastery, selection, country, region, farmProducer, washingStation, altitude, variety, moisture, density, score,
+            process, processOther, processSub, roast, roastDate, firstBeanPercent,
+        )
+    } else blendBeans[index - 1]
+
+    /** The form with bean [index]'s block replaced by [b]. */
+    fun withBean(index: Int, b: BeanForm): FormState = if (index == 0) {
+        copy(
+            roastery = b.roastery, selection = b.selection, country = b.country, region = b.region, farmProducer = b.farmProducer,
+            washingStation = b.washingStation, altitude = b.altitude, variety = b.variety, moisture = b.moisture, density = b.density,
+            score = b.score, process = b.process, processOther = b.processOther, processSub = b.processSub, roast = b.roast,
+            roastDate = b.roastDate, firstBeanPercent = b.percent,
+        )
+    } else copy(blendBeans = blendBeans.mapIndexed { i, old -> if (i == index - 1) b else old })
     /** The category segment is fixed to 원두 when the form was opened from the extract tab. */
     val showCategorySeg: Boolean get() = mode != FormMode.EXTRACT
 }

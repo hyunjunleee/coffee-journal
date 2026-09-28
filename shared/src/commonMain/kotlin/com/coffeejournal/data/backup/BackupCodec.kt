@@ -166,7 +166,22 @@ class BackupCodec {
     }
 
     private fun encodeStep(s: RecipeStep): JsonObject = buildJsonObject { put("time", s.time); put("water", s.water); put("note", s.note); put("wait", s.wait) }
-    private fun encodeBlendComponent(c: BlendComponent): JsonObject = buildJsonObject { put("name", c.name); put("grams", c.grams) }
+    /**
+     * The web's `{name, grams}`, plus — app extension, only when there is one — a café blend bean's share and its own
+     * bean info (an empty 로스터리 / 로스팅 정도 / 로스팅 날짜 stays empty: the same as bean 1). The web ignores keys it
+     * does not know.
+     */
+    private fun encodeBlendComponent(c: BlendComponent): JsonObject = buildJsonObject {
+        put("name", c.name); put("grams", c.grams)
+        for ((key, value) in blendBeanFields(c)) if (value.isNotBlank()) put(key, value)
+    }
+
+    private fun blendBeanFields(c: BlendComponent): List<Pair<String, String>> = listOf(
+        "percent" to c.percent, "roastery" to c.roastery, "selection" to c.selection, "country" to c.country, "region" to c.region,
+        "farmProducer" to c.farmProducer, "washingStation" to c.washingStation, "altitude" to c.altitude, "variety" to c.variety,
+        "moisture" to c.moisture, "density" to c.density, "score" to c.score, "process" to c.process, "processOther" to c.processOther,
+        "roast" to c.roast, "roastDate" to c.roastDate,
+    )
 
     private fun encodeMisc(m: MiscItem, s: BackupSnapshot): JsonObject = buildJsonObject {
         val urls = s.miscPhotosFor(m.id).map { dataUrl(it.bytes) }
@@ -321,12 +336,14 @@ class BackupCodec {
                 put(key, v)
             }
         }.takeIf { it.isNotEmpty() }
+        val beanMode = o.str("beanMode").ifBlank { BeanMode.SINGLE }
         return Entry(
             id = id,
             createdAt = o.createdAt(where),
             category = category,
-            beanMode = o.str("beanMode").ifBlank { BeanMode.SINGLE },
-            blendComponents = o.objects("blendComponents", "${where}의 blendComponents").mapNotNull { (c, _) -> decodeBlendComponent(c) },
+            beanMode = beanMode,
+            blendComponents = o.objects("blendComponents", "${where}의 blendComponents")
+                .mapNotNull { (c, _) -> decodeBlendComponent(c, keepBlank = beanMode == BeanMode.COMMERCIAL_BLEND) },
             name = o.str("name"),
             country = o.str("country"),
             region = o.str("region"),
@@ -407,7 +424,20 @@ class BackupCodec {
     }
 
     private fun decodeStep(o: JsonObject) = RecipeStep(time = o.str("time"), water = o.str("water"), wait = o.str("wait"), note = o.str("note"))
-    private fun decodeBlendComponent(o: JsonObject): BlendComponent? = o.str("name").takeIf { it.isNotBlank() || o.str("grams").isNotBlank() }?.let { BlendComponent(it, o.str("grams")) }
+    /**
+     * A component with anything in it (a café blend bean may have no name, only its origin and share). A café blend
+     * keeps every one, blank or not: its first is bean 1 and the order says which bean is which.
+     */
+    private fun decodeBlendComponent(o: JsonObject, keepBlank: Boolean = false): BlendComponent? {
+        val c = BlendComponent(
+            name = o.str("name"), grams = o.str("grams"), percent = o.str("percent"), roastery = o.str("roastery"),
+            selection = o.str("selection"), country = o.str("country"), region = o.str("region"), farmProducer = o.str("farmProducer"),
+            washingStation = o.str("washingStation"), altitude = o.str("altitude"), variety = o.str("variety"),
+            moisture = o.str("moisture"), density = o.str("density"), score = o.str("score"), process = o.str("process"),
+            processOther = o.str("processOther"), roast = o.str("roast"), roastDate = o.str("roastDate"),
+        )
+        return c.takeIf { keepBlank || it.name.isNotBlank() || it.grams.isNotBlank() || blendBeanFields(it).any { (_, v) -> v.isNotBlank() } }
+    }
 
     private fun decodeMisc(o: JsonObject, photosOut: MutableList<PhotoBlob>, where: String): MiscItem? {
         // web loadMiscItems (script3.js 5177-5178) shows legacy 'equipment' items as kettles; storage may still hold the old type

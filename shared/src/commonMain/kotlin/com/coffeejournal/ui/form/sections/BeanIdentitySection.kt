@@ -12,10 +12,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.BeanMode
 import com.coffeejournal.domain.reference.CoffeeCountries
+import com.coffeejournal.domain.rules.BlendBeans
 import com.coffeejournal.domain.rules.CountryLookup
 import com.coffeejournal.domain.rules.Prices
 import com.coffeejournal.ui.form.AutocompleteField
@@ -38,8 +41,9 @@ import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.SectionLabel
 import com.coffeejournal.ui.theme.Seg
+import com.coffeejournal.ui.theme.fontScaled
 
-/** 원두 구성 · 직접 블렌드 행 · 카페 이름 · 원두 이름(자동완성/자동 채움) · 가격 · 자동 채움 배너. */
+/** 원두 구성 · 직접 블렌드 행(무게 비율) · 카페 이름 · 원두 이름(자동완성/자동 채움) · 가격 · 자동 채움 배너. */
 @Composable
 internal fun BeanIdentitySection(
     state: FormState,
@@ -54,9 +58,12 @@ internal fun BeanIdentitySection(
     if (!state.isCafe) {
         FieldBlock {
             FieldLabel("원두 구성")
+            // A café blend is no choice of its own: "+ 원두 추가 (블렌드)" under the bean info makes one, and the first
+            // option says which it is. 직접 블렌드 mixes the user's own beans by weight instead.
+            val bag = if (state.blendBeans.isEmpty() && state.beanMode != BeanMode.COMMERCIAL_BLEND) BeanMode.SINGLE else BeanMode.COMMERCIAL_BLEND
             Seg(
-                options = listOf(BeanMode.SINGLE, BeanMode.COMMERCIAL_BLEND, BeanMode.CUSTOM_BLEND),
-                value = state.beanMode, allowClear = false,
+                options = listOf(bag, BeanMode.CUSTOM_BLEND),
+                value = if (state.isCustomBlend) BeanMode.CUSTOM_BLEND else bag, allowClear = false,
                 labels = mapOf(BeanMode.SINGLE to "단일 원두", BeanMode.COMMERCIAL_BLEND to "카페 블렌드", BeanMode.CUSTOM_BLEND to "직접 블렌드"),
                 onChange = { mode ->
                     update { s ->
@@ -98,6 +105,9 @@ internal fun BeanIdentitySection(
 
 @Composable
 private fun BlendRows(state: FormState, suggestions: FormSuggestions, blendFocus: FocusRequester, update: ((FormState) -> FormState) -> Unit) {
+    // each row's share of the weight, once grams are given (whole percents that add up to 100)
+    val shares = BlendBeans.sharesFromGrams(state.blendRows.map { it.grams })
+    val showShares = shares.any { it != null }
     FieldBlock {
         FieldLabel("섞은 원두와 사용량")
         state.blendRows.forEachIndexed { index, row ->
@@ -113,6 +123,12 @@ private fun BlendRows(state: FormState, suggestions: FormSuggestions, blendFocus
                     placeholder = "그램(g)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal,
                     modifier = Modifier.width(78.dp).padding(top = 4.dp),
                 )
+                if (showShares) {
+                    Text(
+                        shares[index]?.let { "$it%" } ?: "", style = AppType.monoValue.copy(color = Ink.textMuted), textAlign = TextAlign.End, softWrap = false,
+                        modifier = Modifier.width(40.dp.fontScaled()).padding(top = 14.dp).testTag("blend-share-$index"),
+                    )
+                }
                 RemoveButton(
                     onClick = { update { s -> val rest = s.blendRows.filterIndexed { i, _ -> i != index }; s.copy(blendRows = rest.ifEmpty { listOf(BlendRowForm()) }) } },
                     label = "원두 행 삭제",

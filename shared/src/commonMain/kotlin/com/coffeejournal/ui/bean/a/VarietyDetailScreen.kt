@@ -43,7 +43,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun VarietyDetailScreen(nav: NavHostController, varietyKey: String) {
     val vm = koinViewModel<BeanViewModel>()
     val data by vm.data.collectAsStateWithLifecycle()
-    val index = remember(data.records) { VarietyStats.index(data.records) }
+    val index = remember(data.originRecords) { VarietyStats.index(data.originRecords) }
     val group = index[varietyKey] ?: VarietyStats.Group(varietyKey, Varieties.displayNames[varietyKey] ?: varietyKey, emptyList())
     val info = remember(varietyKey) { VarietyStats.lineage(varietyKey) }
     val unique = remember(group) { VarietyStats.uniqueRecords(group) }

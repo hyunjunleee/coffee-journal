@@ -1,59 +1,77 @@
 package com.coffeejournal.ui.form.sections
 
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.reference.Processes
 import com.coffeejournal.domain.reference.RoastLevels
+import com.coffeejournal.domain.rules.BlendBeans
 import com.coffeejournal.ui.form.AutocompleteField
+import com.coffeejournal.ui.form.BeanForm
+import com.coffeejournal.ui.form.CompactField
 import com.coffeejournal.ui.form.FieldBlock
 import com.coffeejournal.ui.form.FormMapper
 import com.coffeejournal.ui.form.FormState
 import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
+import com.coffeejournal.ui.form.RemoveButton
 import com.coffeejournal.ui.form.TwoUp
-import com.coffeejournal.ui.theme.InputFilters
+import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.ChipInput
 import com.coffeejournal.ui.theme.FieldLabel
+import com.coffeejournal.ui.theme.GhostButton
+import com.coffeejournal.ui.theme.Hairline
+import com.coffeejournal.ui.theme.HintText
+import com.coffeejournal.ui.theme.InputFilters
+import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.Seg
+import com.coffeejournal.ui.theme.fontScaled
 
-/** 원두 정보 그리드 (web #bean-info-fields): 로스터리 … 로스팅 날짜, 예상 노트, 가게 설명. */
+/**
+ * 원두 정보 그리드 (web #bean-info-fields): one block of green-coffee fields per bean — "+ 원두 추가 (블렌드)" adds
+ * another block just like it, and two or more make a café blend, each bean with its share — then what belongs to the
+ * bag once: 원두 총량 · 입고 시기, 예상 노트, 가게 설명.
+ */
 @Composable
 internal fun BeanInfoSection(state: FormState, suggestions: FormSuggestions, update: ((FormState) -> FormState) -> Unit) {
-    TwoUp(
-        { m -> AutocompleteField(state.roastery, { v -> update { it.copy(roastery = v) } }, suggestions.roasteries, m, label = "로스터리", placeholder = "예: 커피정경") },
-        { m -> AutocompleteField(state.selection, { v -> update { it.copy(selection = v) } }, suggestions.selections, m, label = "생두 수입사", placeholder = "예: Nordic Approach") },
-    )
-    TwoUp(
-        { m -> FormTextField(state.country, { v -> update { it.copy(country = v) } }, m, label = "국가", placeholder = "브라질") },
-        { m -> AutocompleteField(state.region, { v -> update { it.copy(region = v) } }, regionOptions(state.country), m, label = "지역", placeholder = "Cerrado") },
-    )
-    TwoUp(
-        { m -> AutocompleteField(state.farmProducer, { v -> update { it.copy(farmProducer = v) } }, suggestions.farms, m, label = "농장(생산자)", placeholder = "예: 라 에스메랄다(페드로 가족)") },
-        { m -> FormTextField(state.washingStation, { v -> update { it.copy(washingStation = v) } }, m, label = "워싱 스테이션", placeholder = "예: 아리차") },
-    )
-    TwoUp(
-        { m -> FormTextField(state.altitude, { v -> update { it.copy(altitude = v) } }, m, label = "재배 고도", placeholder = "800~1,100m") },
-        { m -> FormTextField(state.variety, { v -> update { it.copy(variety = v) } }, m, label = "품종", placeholder = "예: Heirloom(74110), Mundo Novo") },
-    )
-    if (!state.isCafe) {
-        TwoUp(
-            { m -> FormTextField(state.moisture, { v -> update { it.copy(moisture = v) } }, m, label = "수분율 (%)", placeholder = "11.3", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
-            { m -> FormTextField(state.density, { v -> update { it.copy(density = v) } }, m, label = "밀도 (g/L)", placeholder = "850", keyboardType = KeyboardType.Number, inputFilter = InputFilters::decimal) },
+    val count = state.beanCount
+    val first = state.bean(0)
+    for (i in 0 until count) {
+        BeanBlock(
+            bean = state.bean(i), index = i, count = count, first = first, isCafe = state.isCafe, suggestions = suggestions,
+            // applied to the latest state, so a quick second edit of the same block is not lost
+            change = { f -> update { s -> if (i < s.beanCount) s.withBean(i, f(s.bean(i))) else s } },
+            onRemove = { update { FormMapper.removeBlendBean(it, i) } },
         )
-        TwoUp({ m -> FormTextField(state.score, { v -> update { it.copy(score = v) } }, m, label = "CoE 컵 점수", placeholder = "87.5", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) })
     }
-    ProcessAndRoast(state, update)
+    // a custom blend's beans are its rows above (the user's own beans, by weight)
+    if (!state.isCustomBlend) {
+        val sum = if (count > 1) FormMapper.blendPercentSum(state) else null
+        Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            GhostButton("+ 원두 추가 (블렌드)", small = true, onClick = { update(FormMapper::addBlendBean) })
+            Spacer(Modifier.weight(1f))
+            if (sum != null) Text("합계 ${BlendBeans.formatPercent(sum)}%", style = AppType.monoValue, modifier = Modifier.testTag("blend-percent-sum"))
+        }
+        if (sum != null && !BlendBeans.isWhole(sum)) {
+            HintText("비율을 더하면 100%가 아니에요. 모르는 비율이 있으면 그대로 저장해도 괜찮아요.", Modifier.padding(bottom = 10.dp))
+        }
+    }
     if (!state.isCafe) {
         TwoUp(
             { m -> FormTextField(state.bagWeight, { v -> update { it.copy(bagWeight = v) } }, m, label = "원두 총량 (g, 선택)", placeholder = "100", keyboardType = KeyboardType.Number, inputFilter = InputFilters::decimal) },
             { m -> FormTextField(state.arrival, { v -> update { it.copy(arrival = v) } }, m, label = "입고 시기", placeholder = "예: 2026.1") },
         )
-        TwoUp({ m -> FormTextField(state.roastDate, { v -> update { it.copy(roastDate = v) } }, m, label = "로스팅 날짜", placeholder = "예: 2026. 7. 11") })
     }
     FieldBlock {
         FieldLabel("이 원두의 예상 노트 (원두 봉투에 적힌 것)")
@@ -70,24 +88,111 @@ internal fun BeanInfoSection(state: FormState, suggestions: FormSuggestions, upd
     )
 }
 
+/** What a field shows in grey while it is empty: bean 1's value in a later bean ([fromFirst]), else the usual example. */
+private class Grey(val text: String, val fromFirst: Boolean)
+
+private fun grey(index: Int, own: String, firstValue: String, example: String): Grey =
+    if (index > 0 && own.isBlank() && firstValue.isNotBlank()) Grey(firstValue, true) else Grey(example, false)
+
+/**
+ * One bean's fields; the same block for every bean of a blend. With two or more it has a head ("원두 2 · 비율 %",
+ * ✕ on the later ones). A later bean's 로스터리, 로스팅 정도 and 로스팅 날짜 show bean 1's in grey until it gets its
+ * own (like the brew timer's estimated grams): typing replaces the grey value, emptying the field takes bean 1's again.
+ */
 @Composable
-private fun ProcessAndRoast(state: FormState, update: ((FormState) -> FormState) -> Unit) {
+private fun BeanBlock(
+    bean: BeanForm,
+    index: Int,
+    count: Int,
+    first: BeanForm,
+    isCafe: Boolean,
+    suggestions: FormSuggestions,
+    change: ((BeanForm) -> BeanForm) -> Unit,
+    onRemove: () -> Unit,
+) {
+    if (count > 1) BeanBlockHead(bean, index, first, change, onRemove)
+    val roastery = grey(index, bean.roastery, first.roastery, "예: 커피정경")
+    TwoUp(
+        { m ->
+            AutocompleteField(
+                bean.roastery, { v -> change { it.copy(roastery = v) } }, suggestions.roasteries, m, label = "로스터리",
+                placeholder = roastery.text, placeholderColor = if (roastery.fromFirst) Ink.textMuted else Ink.textFaint,
+            )
+        },
+        { m -> AutocompleteField(bean.selection, { v -> change { it.copy(selection = v) } }, suggestions.selections, m, label = "생두 수입사", placeholder = "예: Nordic Approach") },
+    )
+    TwoUp(
+        { m -> FormTextField(bean.country, { v -> change { it.copy(country = v) } }, m, label = "국가", placeholder = "브라질") },
+        { m -> AutocompleteField(bean.region, { v -> change { it.copy(region = v) } }, regionOptions(bean.country), m, label = "지역", placeholder = "Cerrado") },
+    )
+    TwoUp(
+        { m -> AutocompleteField(bean.farmProducer, { v -> change { it.copy(farmProducer = v) } }, suggestions.farms, m, label = "농장(생산자)", placeholder = "예: 라 에스메랄다(페드로 가족)") },
+        { m -> FormTextField(bean.washingStation, { v -> change { it.copy(washingStation = v) } }, m, label = "워싱 스테이션", placeholder = "예: 아리차") },
+    )
+    TwoUp(
+        { m -> FormTextField(bean.altitude, { v -> change { it.copy(altitude = v) } }, m, label = "재배 고도", placeholder = "800~1,100m") },
+        { m -> FormTextField(bean.variety, { v -> change { it.copy(variety = v) } }, m, label = "품종", placeholder = "예: Heirloom(74110), Mundo Novo") },
+    )
+    if (!isCafe) {
+        TwoUp(
+            { m -> FormTextField(bean.moisture, { v -> change { it.copy(moisture = v) } }, m, label = "수분율 (%)", placeholder = "11.3", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
+            { m -> FormTextField(bean.density, { v -> change { it.copy(density = v) } }, m, label = "밀도 (g/L)", placeholder = "850", keyboardType = KeyboardType.Number, inputFilter = InputFilters::decimal) },
+        )
+        TwoUp({ m -> FormTextField(bean.score, { v -> change { it.copy(score = v) } }, m, label = "CoE 컵 점수", placeholder = "87.5", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) })
+    }
+    ProcessAndRoast(bean, index, first, change)
+    if (!isCafe) {
+        val roastDate = grey(index, bean.roastDate, first.roastDate, "예: 2026. 7. 11")
+        TwoUp({ m ->
+            FormTextField(
+                bean.roastDate, { v -> change { it.copy(roastDate = v) } }, m, label = "로스팅 날짜",
+                placeholder = roastDate.text, placeholderColor = if (roastDate.fromFirst) Ink.textMuted else Ink.textFaint,
+            )
+        })
+    }
+}
+
+/** "원두 2" · its share (%) · ✕ (not on bean 1: a blend always keeps its first bean). */
+@Composable
+private fun BeanBlockHead(bean: BeanForm, index: Int, first: BeanForm, change: ((BeanForm) -> BeanForm) -> Unit, onRemove: () -> Unit) {
+    if (index > 0) Hairline(Modifier.padding(top = 4.dp, bottom = 6.dp))
+    Row(Modifier.fillMaxWidth().padding(bottom = 6.dp).testTag("bean-block-$index"), verticalAlignment = Alignment.CenterVertically) {
+        Text("원두 ${index + 1}", style = AppType.cardTitle, modifier = Modifier.weight(1f))
+        Text("비율", style = AppType.fieldLabel, modifier = Modifier.padding(end = 6.dp))
+        CompactField(
+            value = bean.percent, onValueChange = { v -> change { it.copy(percent = v) } }, placeholder = "%",
+            keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal, textAlign = TextAlign.End,
+            modifier = Modifier.width(64.dp.fontScaled()),
+        )
+        Text("%", style = AppType.small, modifier = Modifier.padding(start = 4.dp))
+        if (index > 0) RemoveButton(onClick = onRemove, label = "원두 ${index + 1} 삭제") else Spacer(Modifier.width(8.dp))
+    }
+    if (index > 0 && listOf(first.roastery, first.roast, first.roastDate).any { it.isNotBlank() }) {
+        HintText("회색 로스터리·로스팅은 원두 1과 같게 저장돼요. 다르면 새로 적어 주세요.", Modifier.padding(bottom = 6.dp))
+    }
+}
+
+@Composable
+private fun ProcessAndRoast(bean: BeanForm, index: Int, first: BeanForm, change: ((BeanForm) -> BeanForm) -> Unit) {
     FieldBlock {
         FieldLabel("가공 방식")
         Seg(
-            options = Processes.formSegments, value = state.process,
-            onChange = { v -> update { it.copy(process = v, processSub = if (v != it.process) "" else it.processSub) } },
+            options = Processes.formSegments, value = bean.process,
+            onChange = { v -> change { it.copy(process = v, processSub = if (v != it.process) "" else it.processSub) } },
         )
-        if (state.process == FormMapper.PROCESS_OTHER) {
+        if (bean.process == FormMapper.PROCESS_OTHER) {
             Spacer(Modifier.height(8.dp))
-            FormTextField(state.processOther, { v -> update { it.copy(processOther = v) } }, placeholder = "예: 카보닉 마세레이션, 웻헐드 등")
-        } else if (state.process in Processes.mainSegments) {
+            FormTextField(bean.processOther, { v -> change { it.copy(processOther = v) } }, placeholder = "예: 카보닉 마세레이션, 웻헐드 등")
+        } else if (bean.process in Processes.mainSegments) {
             Spacer(Modifier.height(8.dp))
-            FormTextField(state.processSub, { v -> update { it.copy(processSub = v) } }, placeholder = "세부 종류 (선택, 예: 드래곤 아이, 더블 퍼멘티드)")
+            FormTextField(bean.processSub, { v -> change { it.copy(processSub = v) } }, placeholder = "세부 종류 (선택, 예: 드래곤 아이, 더블 퍼멘티드)")
         }
     }
     FieldBlock {
         FieldLabel("로스팅 정도")
-        Seg(options = RoastLevels.all, value = state.roast, onChange = { v -> update { it.copy(roast = v) } })
+        Seg(
+            options = RoastLevels.all, value = bean.roast, onChange = { v -> change { it.copy(roast = v) } },
+            inherited = if (index > 0) first.roast.takeIf { it.isNotBlank() } else null, inheritedState = "원두 1과 같음",
+        )
     }
 }

@@ -81,6 +81,38 @@ class BackupCodecTest {
 
     // ───────────── (a) domain → encode → decode round trip ─────────────
 
+    // ───────────── café blend beans (app extension of blendComponents) ─────────────
+
+    @Test fun cafeBlendBeans_roundTrip_extraKeysOnlyWhenFilled_andWebComponentsStayTheirShape() {
+        val blend = Entry(
+            id = "cb", createdAt = 1_700_000_000_000, name = "하우스 블렌드", beanMode = BeanMode.COMMERCIAL_BLEND, country = "브라질",
+            blendComponents = listOf(
+                BlendComponent(),
+                BlendComponent(percent = "40", country = "에티오피아", region = "Yirgacheffe", process = "허니(화이트)", variety = "Heirloom"),
+                BlendComponent(percent = "33.3", roastery = "리브레", roast = "라이트", roastDate = "2026. 9. 1", processOther = "카보닉", process = "기타",
+                    selection = "Nordic Approach", farmProducer = "농장", washingStation = "워싱", altitude = "1,900m", moisture = "10.5", density = "830", score = "88"),
+            ),
+        )
+        val custom = Entry(id = "cu", createdAt = 1_700_000_000_001, name = "A + B", beanMode = BeanMode.CUSTOM_BLEND, blendComponents = listOf(BlendComponent("A", "10"), BlendComponent("B", "5")))
+        val snap = BackupSnapshot(entries = listOf(blend, custom), blends = listOf(Blend("bl", "모닝", "2026-09-01", listOf(BlendComponent("A", "10")), "", 1)))
+        val text = codec.encode(snap)
+        val entries = Json.parseToJsonElement(text).jsonObject["data"]!!.jsonObject["entries"]!!.jsonArray.map { it.jsonObject }
+        val beans = entries[0]["blendComponents"]!!.jsonArray.map { it.jsonObject }
+        assertEquals(listOf(setOf("name", "grams"), setOf("name", "grams", "percent", "country", "region", "process", "variety")), beans.take(2).map { it.keys })
+        assertEquals("40", beans[1]["percent"]!!.jsonPrimitive.content)
+        assertFalse("roastery" in beans[1], "an inherited 로스터리 stays empty: the same as bean 1")
+        assertEquals(listOf(setOf("name", "grams")), entries[1]["blendComponents"]!!.jsonArray.map { it.jsonObject.keys }.distinct(), "custom blends keep the web's shape")
+        val back = codec.decode(text)
+        assertEquals(snap.entries.map { it.blendComponents }, back.entries.map { it.blendComponents }, "bean 1 is kept even when blank: the order says which bean is which")
+        assertEquals(snap.blends, back.blends)
+        // a share typed as a number is read as its text; a blank component of a custom blend is still dropped (web)
+        val web = """{"data":{"entries":[{"id":"w","createdAt":1,"beanMode":"commercialBlend","blendComponents":[{"name":"","grams":""},{"percent":45,"country":"케냐"}]},
+            {"id":"v","createdAt":2,"beanMode":"customBlend","blendComponents":[{"name":"A","grams":10},{"name":"","grams":""}]}]}}"""
+        val read = codec.decode(web).entries
+        assertEquals(listOf(BlendComponent(), BlendComponent(percent = "45", country = "케냐")), read[0].blendComponents)
+        assertEquals(listOf(BlendComponent("A", "10")), read[1].blendComponents)
+    }
+
     @Test fun roundTripKeepsEveryCollectionAndPhotoBytes() {
         val brew = Entry(
             id = "e1", createdAt = 1_720_000_000_000L, category = Category.BEAN, beanMode = BeanMode.CUSTOM_BLEND,

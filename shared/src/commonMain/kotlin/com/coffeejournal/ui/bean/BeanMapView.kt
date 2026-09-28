@@ -78,8 +78,9 @@ fun BeanMapView(nav: NavHostController, data: BeanData) {
     val scroll = rememberScrollState()
     val scope = rememberCoroutineScope()
     val density = LocalDensity.current
-    val stats = remember(data.records) { MapStats.compute(data.records) }
-    val byCountry = remember(data.records) { MapStats.recordsByCountry(data.records) }
+    // a café blend counts for the country of each of its beans
+    val stats = remember(data.originRecords) { MapStats.compute(data.originRecords) }
+    val byCountry = remember(data.originRecords) { MapStats.recordsByCountry(data.originRecords) }
     val triedRegions = remember(stats) { stats.flatMap { (en, s) -> s.regions.keys.map { "$en|$it" } }.toSet() }
     val total = remember(data.entries) { MapStats.totalCups(data.entries) }
     val farms = data.miscItems.ofType(MiscType.FARM)
@@ -136,13 +137,13 @@ fun BeanMapView(nav: NavHostController, data: BeanData) {
             onRegionTap = { region -> mapState.selectedCountry?.let { mapState.selectRegion(it, region) } },
         )
         CountryList(
-            records = data.records, byCountry = byCountry, expanded = expanded.toSet(),
+            records = data.originRecords, byCountry = byCountry, expanded = expanded.toSet(),
             onToggle = { en -> expanded = if (en in expanded) expanded - en else expanded + en; mapState.selectCountry(en) },
             onOpenEntry = openEntry,
             onUntriedTap = { showCountry(it) },
         )
         FarmSection(
-            farms = farms, records = data.records, query = farmQuery, onQueryChange = { farmQuery = it },
+            farms = farms, records = data.originRecords, query = farmQuery, onQueryChange = { farmQuery = it },
             onAdd = { nav.navigate(Route.FlatItemForm(type = MiscType.FARM)) },
             onEdit = { nav.navigate(Route.FlatItemForm(type = MiscType.FARM, itemId = it.id)) },
             onDelete = { miscVm.delete(it.id) },

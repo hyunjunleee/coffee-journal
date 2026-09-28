@@ -79,7 +79,7 @@ internal fun FormTextField(
     modifier: Modifier = Modifier,
     label: String? = null,
     placeholder: String = "",
-    /** A placeholder that stands for a value the field already has (the brew timer's estimated grams) is darker. */
+    /** A placeholder that stands for a value the field already has (the brew timer's estimated grams, a blend bean's inherited roastery) is darker. */
     placeholderColor: Color = Ink.textFaint,
     singleLine: Boolean = true,
     minLines: Int = 1,
@@ -147,6 +147,8 @@ internal fun AutocompleteField(
     modifier: Modifier = Modifier,
     label: String? = null,
     placeholder: String = "",
+    /** See [FormTextField]: darker for a placeholder that stands for a value (a blend's bean 1 roastery). */
+    placeholderColor: Color = Ink.textFaint,
     keyboardType: KeyboardType = KeyboardType.Text,
     focusRequester: FocusRequester? = null,
     onFocusChanged: ((Boolean) -> Unit)? = null,
@@ -168,7 +170,7 @@ internal fun AutocompleteField(
     }
     Column(modifier) {
         FormTextField(
-            value = value, onValueChange = onValueChange, label = label, placeholder = placeholder, keyboardType = keyboardType,
+            value = value, onValueChange = onValueChange, label = label, placeholder = placeholder, placeholderColor = placeholderColor, keyboardType = keyboardType,
             focusRequester = focusRequester, error = error, hint = hint, inputFilter = inputFilter,
             onFocusChanged = { f -> focused = f; onFocusChanged?.invoke(f) },
         )

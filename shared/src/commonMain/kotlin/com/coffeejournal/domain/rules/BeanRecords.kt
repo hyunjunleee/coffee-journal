@@ -7,7 +7,53 @@ import com.coffeejournal.domain.model.Entry
 
 /** Web getAllBeanRecords: every bean actually tasted, with cupping sessions expanded per bean. */
 object BeanRecords {
-    fun flatten(entries: List<Entry>): List<BeanRecord> = entries.flatMap { en ->
+    /**
+     * One row per record, a cupping session's beans one by one. With [blendBeans] a café blend's beans 2.. follow its
+     * row too (bean 1 is the record's own row), for views that count origins — countries, regions, farms, varieties,
+     * processes. They carry the record's name and place but no notes, so nothing a record says is counted twice; they
+     * open their record ([BeanRecord.parentEntryId] is it).
+     */
+    fun flatten(entries: List<Entry>, blendBeans: Boolean = false): List<BeanRecord> {
+        val rows = flattenRecords(entries)
+        if (!blendBeans || entries.none { BlendBeans.hasBeans(it) }) return rows
+        val byEntry = entries.filter { BlendBeans.hasBeans(it) }.associateBy { it.id }
+        return rows.flatMap { r -> byEntry[r.entryId]?.takeIf { r.parentEntryId == null }?.let { listOf(r) + blendBeanRecords(it) } ?: listOf(r) }
+    }
+
+    /** Beans 2.. of a café blend as rows of their own ([flatten] with blend beans). */
+    fun blendBeanRecords(en: Entry): List<BeanRecord> = BlendBeans.beans(en).drop(1).map { b ->
+        BeanRecord(
+            entryId = en.id,
+            parentEntryId = en.id,
+            category = en.category.ifBlank { Category.BEAN },
+            createdAt = en.createdAt,
+            name = en.name,
+            country = b.country,
+            region = b.region,
+            farmProducer = b.farmProducer,
+            roastery = b.roastery,
+            selection = BeanNames.selectionShortName(b.selection),
+            altitude = b.altitude,
+            variety = b.variety,
+            process = b.process,
+            processOther = b.processOther,
+            roast = b.roast,
+            expectedNotes = "",
+            actualNotes = "",
+            notes = "",
+            beanMode = en.beanMode,
+            blendComponents = emptyList(),
+            blendComponentsText = "",
+            score = b.score,
+            cafeName = en.cafeName,
+            cuppingPlace = "",
+            cuppingType = "",
+            roasterDesc = "",
+            packageType = en.packageType,
+        )
+    }
+
+    private fun flattenRecords(entries: List<Entry>): List<BeanRecord> = entries.flatMap { en ->
         if (en.isCupping) {
             en.cuppingBeans.filter { it.name.isNotBlank() }.map { bean ->
                 BeanRecord(

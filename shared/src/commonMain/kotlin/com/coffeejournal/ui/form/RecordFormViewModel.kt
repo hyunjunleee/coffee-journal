@@ -241,7 +241,7 @@ class RecordFormViewModel(
         fun ownedFirst(type: String): List<String> = ownedFirstNames(miscItems, type)
 
         val farmSeen = HashSet<String>()
-        val farms = BeanRecords.flatten(ens).filter { it.farmProducer.isNotBlank() }.sortedByDescending { it.createdAt }
+        val farms = BeanRecords.flatten(ens, blendBeans = true).filter { it.farmProducer.isNotBlank() }.sortedByDescending { it.createdAt }
             .mapNotNull { r -> val v = r.farmProducer.trim(); if (farmSeen.add(v.lowercase())) v else null }
 
         val waterSeen = HashSet<String>()

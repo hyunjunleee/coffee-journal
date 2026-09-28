@@ -34,7 +34,10 @@ fun BlendItemCard(item: BlendItem, onEdit: (Blend) -> Unit, onDelete: (Blend) ->
                 Text(en.name.ifBlank { "이름 없는 블렌드" }, style = AppType.cardTitle)
                 Text("${if (custom) "내가 만든 블렌드" else "카페 블렌드"} · ${Dates.ymdCompact(en.createdAt)}", style = AppType.faint, modifier = Modifier.padding(bottom = 6.dp))
                 if (custom) BlendSources.componentLines(en.blendComponents).forEach { Text(it, style = AppType.small) }
-                else Text(BlendSources.commercialLine(en), style = AppType.small)
+                else {
+                    Text(BlendSources.commercialLine(en), style = AppType.small)
+                    BlendSources.cafeBlendLines(en).forEach { Text(it, style = AppType.small) }
+                }
                 if (en.notes.isNotBlank()) Text(en.notes, style = AppType.bodyMuted, modifier = Modifier.padding(top = 6.dp))
                 Row(Modifier.padding(top = 10.dp)) { GhostButton("추출 기록 열기", small = true, onClick = { onOpenEntry(en.id) }) }
             }
