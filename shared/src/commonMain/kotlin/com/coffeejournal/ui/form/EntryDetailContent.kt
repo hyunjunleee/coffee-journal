@@ -21,12 +21,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
+import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.PackageType
 import com.coffeejournal.domain.reference.ScaForm
 import com.coffeejournal.domain.rules.BeanNames
+import com.coffeejournal.domain.rules.BlendBeans
 import com.coffeejournal.domain.rules.CvaScoring
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.ScaScoring
@@ -60,9 +63,13 @@ internal fun EntryDetailContent(en: Entry, siblings: List<Entry>, isBest: Boolea
     }
     SectionLabel("정보")
     EntryDisplay.infoRows(en).let { rows ->
-        val split = rows.indexOfFirst { it.first == "가공" }.let { if (it < 0) rows.size else it }
+        val blendBeans = if (BlendBeans.hasBeans(en)) BlendBeans.beans(en) else emptyList()
+        // a café blend's beans come right after the price; the cupping beans where 가공 would be
+        val split = if (blendBeans.isNotEmpty()) rows.indexOfFirst { it.first !in EntryDisplay.leadLabels }.let { if (it < 0) rows.size else it }
+        else rows.indexOfFirst { it.first == "가공" }.let { if (it < 0) rows.size else it }
         rows.take(split).forEach { (k, v) -> KeyValueRow(k, v) }
         if (en.isCupping && en.cuppingBeans.isNotEmpty()) CuppingBeansList(en)
+        if (blendBeans.isNotEmpty()) BlendBeansList(blendBeans, en.createdAt)
         rows.drop(split).forEach { (k, v) -> KeyValueRow(k, v) }
     }
     if (en.roasterDesc.isNotBlank()) {
@@ -98,6 +105,22 @@ private fun DetailHeader(en: Entry, siblings: List<Entry>, isBest: Boolean) {
         Text(EntryDisplay.subtitle(en, siblings), style = AppType.small, modifier = Modifier.weight(1f))
         EntryDisplay.scaTotalText(en)?.let { Text(it, style = AppType.monoValue) }
     }
+}
+
+/** A café blend: one small group per bean, its share in the title ("원두 1 · 브라질 Cerrado · 60%"). */
+@Composable
+private fun BlendBeansList(beans: List<BlendComponent>, createdAt: Long) {
+    Text("BLEND · 원두 ${beans.size}개", style = AppType.monoSmall, modifier = Modifier.padding(top = 8.dp, bottom = 6.dp))
+    beans.forEachIndexed { i, bean ->
+        Column(
+            Modifier.fillMaxWidth().padding(bottom = 6.dp).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
+                .padding(horizontal = 12.dp, vertical = 10.dp).testTag("blend-bean-$i"),
+        ) {
+            Text(EntryDisplay.blendBeanTitle(i, bean), style = AppType.body)
+            EntryDisplay.blendBeanRows(bean, createdAt).forEach { (k, v) -> KeyValueRow(k, v) }
+        }
+    }
+    Spacer(Modifier.height(6.dp))
 }
 
 /**

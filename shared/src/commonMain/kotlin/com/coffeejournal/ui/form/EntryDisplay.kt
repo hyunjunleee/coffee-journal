@@ -4,7 +4,9 @@ import com.coffeejournal.domain.rules.CvaScoring
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.reference.ScaForm
+import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.rules.BeanNames
+import com.coffeejournal.domain.rules.BlendBeans
 import com.coffeejournal.domain.rules.CuppingTypes
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Prices
@@ -29,8 +31,18 @@ internal object EntryDisplay {
     fun effectiveRegion(en: Entry, siblings: List<Entry>): String =
         en.region.ifBlank { siblings.firstOrNull { it.region.isNotBlank() }?.region ?: "" }
 
-    /** Web beanInfoLinesHtml: roastery / importer / farm / washing station, completed from name parens and siblings. */
+    /**
+     * Web beanInfoLinesHtml: roastery / importer / farm / washing station, completed from name parens and siblings. A
+     * café blend shows those per bean ([blendBeanRows]); its head keeps only a roastery all its beans share.
+     */
     fun beanInfoLines(en: Entry, siblings: List<Entry>): List<InfoLine> {
+        val lines = singleBeanInfoLines(en, siblings)
+        if (!BlendBeans.hasBeans(en)) return lines
+        val shared = BlendBeans.beans(en).map { it.roastery.trim() }.distinct().size == 1
+        return if (shared) lines.filter { it.label == "로스터리" } else emptyList()
+    }
+
+    private fun singleBeanInfoLines(en: Entry, siblings: List<Entry>): List<InfoLine> {
         fun parens(e: Entry) = if (e.roastery.isBlank() && e.selection.isBlank() && e.name.isNotBlank()) BeanNames.parseNameParens(e.name) else null
         val own = parens(en)
         var roastery = en.roastery.ifBlank { own?.roastery ?: "" }
@@ -59,7 +71,8 @@ internal object EntryDisplay {
         if (en.category.isNotBlank() && en.category != Category.BEAN) parts += en.category
         if (en.isCupping) parts += CuppingTypes.effective(en)
         if (en.isCafe && en.cafeName.isNotBlank()) parts += en.cafeName
-        effectiveRegion(en, siblings).takeIf { it.isNotBlank() }?.let { parts += it }
+        // a café blend's regions are its beans'
+        if (!BlendBeans.hasBeans(en)) effectiveRegion(en, siblings).takeIf { it.isNotBlank() }?.let { parts += it }
         if (en.dripper.isNotBlank()) parts += en.dripper
         return parts.joinToString(" · ")
     }
@@ -94,22 +107,35 @@ internal object EntryDisplay {
 
     fun priceText(price: String): String? = Prices.normalize(price).takeIf { it.isNotEmpty() }?.let { Prices.format(it.toDouble()) + "원" }
 
-    /** Info grid rows in the web's order (the cupping bean accordion is rendered separately). */
+    /** "허니(더블 퍼멘티드)", or "기타 (카보닉)" with the other process named. */
+    private fun processText(process: String, other: String): String? =
+        process.takeIf { it.isNotBlank() }?.let { p -> if (p == FormMapper.PROCESS_OTHER && other.isNotBlank()) "$p ($other)" else p }
+
+    /** Rows of the head of the info grid; a café blend's beans are listed right after them. */
+    val leadLabels: Set<String> = setOf("카페", "한 잔 가격", "원두 가격", "장소")
+
+    /**
+     * Info grid rows in the web's order (the cupping bean accordion is rendered separately). A café blend's bean fields
+     * are not here: each bean has its own group ([blendBeanRows]).
+     */
     fun infoRows(en: Entry): List<Pair<String, String>> {
         val rows = mutableListOf<Pair<String, String>>()
         fun add(label: String, value: String?) { if (!value.isNullOrBlank()) rows += label to value }
+        val beansApart = BlendBeans.hasBeans(en)
         if (en.isCafe) add("카페", en.cafeName)
         add(if (en.isCafe) "한 잔 가격" else "원두 가격", priceText(en.price))
         if (en.isCupping) add("장소", en.cuppingPlace)
-        add("가공", en.process.takeIf { it.isNotBlank() }?.let { p -> if (p == FormMapper.PROCESS_OTHER && en.processOther.isNotBlank()) "$p (${en.processOther})" else p })
-        add("고도", en.altitude)
-        add("품종", en.variety)
-        add("로스팅", en.roast)
-        add("수분율", en.moisture.takeIf { it.isNotBlank() }?.let { "$it%" })
-        add("밀도", en.density.takeIf { it.isNotBlank() }?.let { "${it}g/L" })
-        add("CoE 컵 점수", en.score)
+        if (!beansApart) {
+            add("가공", processText(en.process, en.processOther))
+            add("고도", en.altitude)
+            add("품종", en.variety)
+            add("로스팅", en.roast)
+            add("수분율", en.moisture.takeIf { it.isNotBlank() }?.let { "$it%" })
+            add("밀도", en.density.takeIf { it.isNotBlank() }?.let { "${it}g/L" })
+            add("CoE 컵 점수", en.score)
+        }
         add("입고 시기", en.arrival)
-        add("로스팅 날짜", Dates.roastDateWithYear(en.roastDate, en.createdAt))
+        if (!beansApart) add("로스팅 날짜", Dates.roastDateWithYear(en.roastDate, en.createdAt))
         add("비율", en.dose.takeIf { it.isNotBlank() }?.let { "${it}g : ${en.water.ifBlank { "?" }}g" })
         add("물 온도", en.temp.takeIf { it.isNotBlank() }?.let { "$it°C" })
         add("분쇄도", en.grind)
@@ -121,6 +147,30 @@ internal object EntryDisplay {
         add("내가 느낀 노트", en.actualNotes)
         return rows
     }
+
+    /** A café blend bean's group title: "원두 1 · 브라질 Cerrado · 60%". */
+    fun blendBeanTitle(index: Int, bean: BlendComponent): String {
+        val label = BlendBeans.label(bean, index).takeIf { it != "원두 ${index + 1}" }
+        return listOfNotNull("원두 ${index + 1}", label, BlendBeans.percentText(bean.percent)).joinToString(" · ")
+    }
+
+    /** One café blend bean's facts (resolved: a later bean's 로스터리 / 로스팅 are bean 1's unless it has its own). */
+    fun blendBeanRows(bean: BlendComponent, createdAt: Long): List<Pair<String, String>> = listOf(
+        "로스터리" to bean.roastery,
+        "생두 수입사" to bean.selection,
+        "국가" to bean.country,
+        "지역" to bean.region,
+        "농장" to bean.farmProducer,
+        "워싱 스테이션" to bean.washingStation,
+        "고도" to bean.altitude,
+        "품종" to bean.variety,
+        "가공" to (processText(bean.process, bean.processOther) ?: ""),
+        "로스팅" to bean.roast,
+        "로스팅 날짜" to Dates.roastDateWithYear(bean.roastDate, createdAt),
+        "수분율" to (bean.moisture.takeIf { it.isNotBlank() }?.let { "$it%" } ?: ""),
+        "밀도" to (bean.density.takeIf { it.isNotBlank() }?.let { "${it}g/L" } ?: ""),
+        "CoE 컵 점수" to bean.score,
+    ).filter { it.second.isNotBlank() }
 
     fun formModeFor(category: String): String = when (category) {
         Category.CAFE -> FormMode.CAFE

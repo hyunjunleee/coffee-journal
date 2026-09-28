@@ -46,6 +46,14 @@ class BlendSourcesTest {
         assertEquals(listOf(BlendComponent("A", "1")), BlendSources.validRows(listOf(BlendComponent(" A ", " 1 "), BlendComponent("  ", "5"))))
     }
 
+    @Test fun sharesAddUpTo100_andACafeBlendCardListsItsBeans() {
+        assertEquals(listOf("A 1g (34%)", "B 1g (33%)", "C 1g (33%)"), BlendSources.componentLines(listOf(BlendComponent("A", "1"), BlendComponent("B", "1"), BlendComponent("C", "1"))))
+        assertEquals(listOf("A 10g (100%)", "B (0%)"), BlendSources.componentLines(listOf(BlendComponent("A", "10"), BlendComponent("B"))))
+        val shop = entries[1].copy(country = "브라질", blendComponents = listOf(BlendComponent(percent = "70"), BlendComponent(percent = "30", country = "에티오피아")))
+        assertEquals(listOf("브라질 70%", "에티오피아 30%"), BlendSources.cafeBlendLines(shop))
+        assertTrue(BlendSources.cafeBlendLines(entries[1]).isEmpty(), "beans never entered: the roastery line only")
+    }
+
     @Test fun recentBeanNamesAreDistinctAndNewestFirst() {
         val names = BlendSources.recentBeanNames(BeanRecords.flatten(entries + Entry(id = "dup", createdAt = 100 * day, name = "싱글 오리진 (리브레)")))
         assertEquals(listOf("커핑 블렌드", "싱글", "내 블렌드", "하우스 블렌드", "싱글 오리진"), names)

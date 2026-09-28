@@ -204,6 +204,115 @@ class BrewTimerEngineTest {
         assertEquals(listOf(0 to RecipeStep("0:00", "60", "10", "1차 푸어"), 1 to RecipeStep("0:10", "", "20", "드로우다운")), E.stepRows(left.s.rows, left.s.endMs!!))
     }
 
+    @Test fun removePour_aMistakenPourJoinsTheWaitAroundIt_andEverythingFromTheRowsFollows() {
+        val r = Run()
+        r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(10.0); r.s = E.endPour(r.s, r.mono); r.s = E.setGrams(r.s, "50")
+        r.at(12.0); r.s = E.note(r.s, E.BLOOM, r.mono, r.wall)
+        r.at(20.0); r.s = E.startPour(r.s, r.mono, r.wall) // tapped by mistake
+        r.at(22.0); r.s = E.endPour(r.s, r.mono)
+        assertEquals(2, r.s.gramsFor)
+        r.at(40.0); r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(60.0); r.s = E.endPour(r.s, r.mono); r.s = E.setGrams(r.s, "190")
+        assertEquals(4, r.s.gramsFor)
+        val before = r.s
+        r.s = E.removePour(r.s, 2)
+        // the 뜸 goes on until the real second pour; the pour's own wait is gone with it
+        assertEquals(
+            listOf(TimerRow(0, pour = true, grams = "50"), TimerRow(10_000, pour = false, notes = listOf(E.BLOOM)), TimerRow(40_000, pour = true, grams = "190"), TimerRow(60_000, pour = false)),
+            r.s.rows,
+        )
+        assertEquals(2, r.s.gramsFor, "the panel stays on the pour it was on")
+        assertEquals(TimerStatus.RUNNING, r.s.status, "the clock is not touched")
+        assertEquals(60_000L, r.elapsed())
+        assertEquals(RemovedPour(pourNumber = 2, at = 2, rows = before.rows, pouring = false, gramsFor = 4, after = r.s.rows), r.s.removed)
+        r.at(90.0); r.s = E.finish(r.s, r.mono)
+        val steps = E.toSteps(r.s.rows, r.s.endMs!!)
+        assertEquals(
+            listOf(RecipeStep("0:00", "50", "10", "1차 푸어"), RecipeStep("0:10", "", "30", "뜸"), RecipeStep("0:40", "190", "20", "2차 푸어"), RecipeStep("1:00", "", "30", "드로우다운")),
+            steps,
+        )
+        assertEquals(240.0, RecipeSteps.summary(steps).totalWater)
+        // after 추출 끝 the removal can no longer be undone
+        assertFalse(E.canUndoRemove(r.s))
+        assertEquals(r.s, E.undoRemove(r.s))
+    }
+
+    @Test fun removePour_thePourStillGoingIsCancelled_andTheNextPourStartsAfresh() {
+        val r = Run()
+        r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(10.0); r.s = E.endPour(r.s, r.mono)
+        r.at(15.0); r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(17.0); r.s = E.removePour(r.s, 2)
+        assertFalse(r.s.pouring)
+        assertEquals(listOf(TimerRow(0, pour = true, grams = "60", estimated = true), TimerRow(10_000, pour = false)), r.s.rows)
+        assertEquals(TimerStatus.RUNNING, r.s.status)
+        r.at(30.0); r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(40.0); r.s = E.endPour(r.s, r.mono)
+        assertEquals(TimerRow(30_000, pour = true, grams = "60", estimated = true), r.s.rows[2])
+        assertNull(r.s.removed?.takeIf { E.canUndoRemove(r.s) }, "the log changed since: no 되돌리기")
+
+        // the only pour, still going: the log is empty again, the clock runs on
+        val only = Run()
+        only.s = E.startPour(only.s, only.mono, only.wall)
+        only.at(3.0); only.s = E.removePour(only.s, 0)
+        assertTrue(only.s.rows.isEmpty())
+        assertFalse(only.s.pouring)
+        assertEquals(TimerStatus.RUNNING, only.s.status)
+        assertTrue(E.canUndoRemove(only.s))
+        val back = E.undoRemove(only.s)
+        assertEquals(listOf(TimerRow(0, pour = true)), back.rows)
+        assertTrue(back.pouring, "the pour goes on")
+        assertNull(back.removed)
+    }
+
+    @Test fun removePour_theFirstPour_theNextOneBecomesTheFirst_andIsEstimatedAsTheRecipesFirst() {
+        val r = Run()
+        r.s = E.startPour(r.s, r.mono, r.wall) // tapped before the kettle was ready
+        r.at(2.0); r.s = E.endPour(r.s, r.mono, yourHome)
+        r.at(5.0); r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(15.0); r.s = E.endPour(r.s, r.mono, yourHome)
+        assertEquals("190", r.s.rows[2].grams, "the recipe's 2nd pour")
+        r.s = E.removePour(r.s, 0, yourHome)
+        // the wait at the top is dropped, as if the timer had been started with 시작
+        assertEquals(listOf(TimerRow(5_000, pour = true, grams = "50", estimated = true), TimerRow(15_000, pour = false)), r.s.rows)
+        assertEquals(0, r.s.gramsFor)
+        assertTrue(E.canKeepPouring(r.s), "붓기 계속 still applies to the pour just ended")
+        assertEquals(listOf(RecipeStep("0:05", "50", "10", "1차 푸어"), RecipeStep("0:15", "", "5", "드로우다운")), E.toSteps(r.s.rows, 20_000))
+        // typed grams are the user's: they do not move with the number
+        val typed = Run()
+        typed.s = E.startPour(typed.s, typed.mono, typed.wall)
+        typed.at(2.0); typed.s = E.endPour(typed.s, typed.mono, yourHome)
+        typed.at(5.0); typed.s = E.startPour(typed.s, typed.mono, typed.wall)
+        typed.at(15.0); typed.s = E.endPour(typed.s, typed.mono, yourHome); typed.s = E.setGrams(typed.s, "180", yourHome)
+        assertEquals("180", E.removePour(typed.s, 0, yourHome).rows[0].grams)
+    }
+
+    @Test fun removePour_aNoteOnThePourStays_andTheLogOtherwiseIsUntouched() {
+        val r = Run()
+        r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(10.0); r.s = E.endPour(r.s, r.mono)
+        r.at(20.0); r.s = E.startPour(r.s, r.mono, r.wall)
+        r.at(22.0); r.s = E.note(r.s, E.SWIRL, r.mono, r.wall)
+        r.at(25.0); r.s = E.endPour(r.s, r.mono)
+        r.at(30.0); r.s = E.note(r.s, E.DRAWDOWN, r.mono, r.wall)
+        r.s = E.removePour(r.s, 2)
+        assertEquals(
+            listOf(TimerRow(0, pour = true, grams = "60", estimated = true), TimerRow(10_000, pour = false), TimerRow(20_000, pour = false, notes = listOf(E.SWIRL)), TimerRow(25_000, pour = false, notes = listOf(E.DRAWDOWN))),
+            r.s.rows,
+        )
+        assertEquals(RemovedPour(2, 2, r.s.removed!!.rows, false, 2, r.s.rows), r.s.removed)
+        // not a pour, or no such row: nothing happens
+        assertEquals(r.s, E.removePour(r.s, 1))
+        assertEquals(r.s, E.removePour(r.s, 9))
+        // 되돌리기 brings back the log as it was, grams panel included
+        val back = E.undoRemove(r.s)
+        assertEquals(r.s.removed!!.rows, back.rows)
+        assertEquals(2, back.gramsFor)
+        assertNull(back.removed)
+        assertEquals(back, E.undoRemove(back))
+    }
+
     @Test fun restoredTimerCountsTheTimeTheProcessWasGone() {
         val r = Run()
         r.s = E.start(r.s, r.mono, r.wall)

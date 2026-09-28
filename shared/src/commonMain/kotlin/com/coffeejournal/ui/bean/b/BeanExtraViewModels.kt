@@ -39,7 +39,7 @@ class BlendsViewModel(private val blends: BlendRepository) : ViewModel() {
 /** Live BeanData for the stand-alone detail routes (country / roastery) that are opened outside the tab. */
 class BeanExtraDataViewModel(entries: EntryRepository, misc: MiscRepository, blends: BlendRepository) : ViewModel() {
     val data: StateFlow<BeanData> = combine(entries.observeAll(), misc.observeAll(), blends.observeAll()) { e, m, b -> BeanData(loaded = true, entries = e, miscItems = m, blends = b) }
-        .deriveOffMain { it.copy(records = BeanRecords.flatten(it.entries)) }
+        .deriveOffMain { it.copy(records = BeanRecords.flatten(it.entries), originRecords = BeanRecords.flatten(it.entries, blendBeans = true)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BeanData())
 }
 

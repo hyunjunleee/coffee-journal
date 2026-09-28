@@ -39,7 +39,7 @@ import org.koin.compose.viewmodel.koinViewModel
 fun ProcessDetailScreen(nav: NavHostController, name: String, seg: String?) {
     val vm = koinViewModel<BeanViewModel>()
     val data by vm.data.collectAsStateWithLifecycle()
-    val breakdown = remember(data.records, name, seg) { ProcessStats.breakdown(data.records, name, seg) }
+    val breakdown = remember(data.originRecords, name, seg) { ProcessStats.breakdown(data.originRecords, name, seg) }
     val open: (String) -> Unit = { id -> nav.navigate(Route.EntryDetail(id)) }
 
     Column(Modifier.fillMaxSize()) {

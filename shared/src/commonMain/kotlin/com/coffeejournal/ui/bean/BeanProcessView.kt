@@ -49,7 +49,7 @@ fun BeanProcessView(nav: NavHostController, data: BeanData) {
     val miscVm = koinViewModel<ProcessMiscViewModel>()
     var query by rememberSaveable { mutableStateOf("") }
     var etcOpen by rememberSaveable { mutableStateOf(false) }
-    val results = remember(data.records, query) { ProcessStats.search(data.records, query) }
+    val results = remember(data.originRecords, query) { ProcessStats.search(data.originRecords, query) }
     val openEntry: (String) -> Unit = { id -> nav.navigate(Route.EntryDetail(id)) }
     val openProcess: (Processes.Process) -> Unit = { p -> nav.navigate(Route.ProcessDetail(name = p.name, seg = p.seg)) }
 
@@ -81,7 +81,7 @@ fun BeanProcessView(nav: NavHostController, data: BeanData) {
                         // both cards of a row as tall as the taller one (web CSS grid rows stretch)
                         Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             pair.forEach { p ->
-                                val tried = remember(data.records) { ProcessStats.isTried(data.records, p) }
+                                val tried = remember(data.originRecords) { ProcessStats.isTried(data.originRecords, p) }
                                 SelectCard(selected = tried, onClick = { openProcess(p) }, modifier = Modifier.weight(1f).fillMaxHeight()) {
                                     Text(p.name, style = AppType.cardTitle)
                                     Text(p.en ?: "", style = AppType.faint)
@@ -99,7 +99,7 @@ fun BeanProcessView(nav: NavHostController, data: BeanData) {
                 if (etcOpen) {
                     HairlineCard(padding = PaddingValues(horizontal = Dimens.cardPadding, vertical = 4.dp)) {
                         Processes.etc.forEach { p ->
-                            val tried = remember(data.records) { ProcessStats.isTried(data.records, p) }
+                            val tried = remember(data.originRecords) { ProcessStats.isTried(data.originRecords, p) }
                             CountRow(
                                 name = p.rowLabel() + if (tried) " ✓" else "",
                                 trailing = "",
@@ -114,7 +114,7 @@ fun BeanProcessView(nav: NavHostController, data: BeanData) {
         item {
             ProcessMiscSection(
                 miscItems = data.miscItems,
-                records = data.records,
+                records = data.originRecords,
                 onSave = { id, name, notes -> miscVm.save(id, data.miscItems, name, notes) },
                 onDelete = miscVm::delete,
                 onOpen = openEntry,

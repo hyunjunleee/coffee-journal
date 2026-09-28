@@ -377,6 +377,63 @@ class RouteScreenshotTest {
         search.complete(Unit)
     }
 
+    // ───────── lane J: the timer's ✕ for a mistaken pour, a café blend's bean blocks, the café record's folded recipe ─────────
+
+    private fun type(placeholder: String, text: String, index: Int = 0) {
+        compose.onAllNodes(hasSetTextAction() and hasText(placeholder))[index].performScrollTo().performTextInput(text)
+        settle()
+    }
+
+    /** 붓기 시작·끝 tapped by mistake during the bloom, removed with its ✕: "2차 푸어를 지웠어요 · 되돌리기" where it was. */
+    @Test fun brewTimer_removedPour() {
+        val clock = FakeBrewClock()
+        loadKoinModules(module { single<BrewClock> { clock } })
+        show(Route.BrewTimer(recipe = null, hasLog = false), "80-brew-timer-remove.png") {
+            click("💧 붓기 시작")
+            clock.advance(10_000); settle()
+            click("붓기 끝")
+            click("확인")
+            clock.advance(2_000); settle()
+            click("뜸")
+            clock.advance(8_000); settle()
+            click("💧 붓기 시작")
+            clock.advance(2_000); settle()
+            click("붓기 끝")
+            compose.onNode(hasContentDescription("2차 푸어 삭제") and hasClickAction()).performScrollTo().performClick()
+            settle()
+            bringToTop(hasText("붓기 시작·끝으로", substring = true))
+        }
+    }
+
+    /**
+     * A café blend: "+ 원두 추가 (블렌드)" gave bean 2 the same block, without example placeholders; its 로스터리 and
+     * 로스팅 show bean 1's in grey, and the shares add up to 90% (the gentle hint).
+     */
+    @Test fun recordForm_cafeBlend() = show(Route.RecordForm(mode = FormMode.EXTRACT), "81-form-cafe-blend.png") {
+        type("예: 콜롬비아 라 플라타 게이샤 워시드", "하우스 블렌드")
+        type("예: 커피정경", "프릳츠")
+        type("브라질", "콜롬비아")
+        click("미디엄")
+        click("+ 원두 추가 (블렌드)")
+        compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-block-0")))[0].performTextInput("60")
+        compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-block-1")))[0].performTextInput("30")
+        // bean 2's 국가 (its block shows no example placeholders): 비율, 로스터리, 생두 수입사, 국가
+        compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-1")))[3].performScrollTo().performTextInput("에티오피아")
+        settle()
+        bringToTop(hasTestTag("bean-block-1"))
+    }
+
+    /** The detail of a café blend: each bean its own group with its share. */
+    @Test fun entryDetail_cafeBlend() {
+        runBlocking { GlobalContext.get().get<EntryRepository>().upsert(SampleBlend.house) }
+        show(Route.EntryDetail(SampleBlend.house.id), "82-detail-cafe-blend.png")
+    }
+
+    /** A café record: the recipe is folded away behind one row until the café tells it. */
+    @Test fun recordForm_cafeRecipeFolded() = show(Route.RecordForm(mode = FormMode.CAFE), "83-form-cafe-recipe.png") {
+        bringToTop(hasText("가게에 적힌 원두 설명", substring = true))
+    }
+
     /** Claude with web search: ✓ from the cited excerpt, the uncited search result listed after the cited one. */
     @Test fun noteHelper_claude() {
         AiSetup.ready(AiProvider.CLAUDE)

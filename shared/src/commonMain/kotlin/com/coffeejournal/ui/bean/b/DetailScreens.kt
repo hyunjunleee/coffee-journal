@@ -34,8 +34,8 @@ import org.koin.compose.viewmodel.koinViewModel
 fun CountryDetailScreen(nav: NavHostController, en: String) {
     val vm = koinViewModel<BeanExtraDataViewModel>()
     val data by vm.data.collectAsStateWithLifecycle()
-    val stats = remember(data.records) { MapStats.compute(data.records) }
-    val byCountry = remember(data.records) { MapStats.recordsByCountry(data.records) }
+    val stats = remember(data.originRecords) { MapStats.compute(data.originRecords) }
+    val byCountry = remember(data.originRecords) { MapStats.recordsByCountry(data.originRecords) }
     val country = CoffeeCountries.byEn[en]
     Column(Modifier.fillMaxSize().background(Ink.bg)) {
         ScreenTitleBar(country?.let { "${it.flag} ${it.ko}" } ?: en, onBack = { nav.popBackStack() })

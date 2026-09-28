@@ -33,7 +33,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * Critic gap #7, record form part: recipe launchers, the steps log and its recipe diff, the flavor wheel and the
- * bag-note suggestions, 카페 블렌드 / 직접 블렌드 modes, editing a cupping's bean list and the 허니 detail.
+ * bag-note suggestions, 카페 블렌드 (+ 원두 추가) / 직접 블렌드, editing a cupping's bean list and the 허니 detail.
  * Expected values come from the web handlers in script3.js (line numbers in each test).
  */
 @RunWith(AndroidJUnit4::class)
@@ -237,15 +237,17 @@ class CoverageFlowTest : CoverageFlowBase() {
         assertTrue("detail row", has(hasText("Peach, 자스민")))
     }
 
-    // ───────────── web 649 / 7428-7446: 원두 구성 = 카페 블렌드 ─────────────
+    // ───────────── web 649 / 7428-7446: 원두 구성 = 카페 블렌드 (a second bean block makes one) ─────────────
 
     @Test
     fun cov05_commercialBlendRecord_listedUnderCafeBlendsAndOpensTheRecord() {
         launchApp()
         openNewForm()
-        clickText("카페 블렌드")
+        assertFalse("no separate choice: the bean blocks make a café blend", has(button("카페 블렌드")))
+        tap(button("+ 원두 추가 (블렌드)"))
+        waitFor(button("카페 블렌드"))
         assertTrue("the name keeps its single-bean label", has(hasText("원두 이름")))
-        assertFalse("no component rows for a cafe blend", has(field("원두 선택")))
+        assertFalse("no custom-blend rows for a cafe blend", has(field("원두 선택")))
         typeInto(namePlaceholder, "모모스 에스쇼콜라 테스트")
         typeInto("예: 커피정경", "모모스 테스트")
         saveForm("모모스 에스쇼콜라 테스트")

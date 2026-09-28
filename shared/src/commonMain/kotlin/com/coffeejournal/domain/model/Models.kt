@@ -54,10 +54,33 @@ data class RecipeRef(
     val steps: List<RecipeStep> = emptyList(),
 )
 
+/**
+ * One bean of a blend. A custom blend (직접 블렌드, and the 원두 tab's blend log) mixes the user's own beans: [name] and
+ * [grams]. A café blend (카페 블렌드, the roaster's) keeps each bean's own green-coffee info and its share ([percent],
+ * "60"); its bean 1 repeats the record's own fields. In beans 2.., an empty [roastery], [roast] or [roastDate] means
+ * "the same as bean 1" (see [com.coffeejournal.domain.rules.BlendBeans]). Every field has a default, so the web's and
+ * older records' `{name, grams}` still read.
+ */
 @Serializable
 data class BlendComponent(
-    val name: String,
+    val name: String = "",
     val grams: String = "",
+    val percent: String = "",
+    val roastery: String = "",
+    val selection: String = "",
+    val country: String = "",
+    val region: String = "",
+    val farmProducer: String = "",
+    val washingStation: String = "",
+    val altitude: String = "",
+    val variety: String = "",
+    val moisture: String = "",
+    val density: String = "",
+    val score: String = "",
+    val process: String = "",
+    val processOther: String = "",
+    val roast: String = "",
+    val roastDate: String = "",
 )
 
 /** One bean inside a cupping session (web cuppingBeanDetails[]). */
