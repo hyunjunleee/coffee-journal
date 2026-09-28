@@ -1,6 +1,7 @@
-# Coffee Journal 모바일 앱 설계서 (Android 1차, iOS 확장 대비)
+# Coffee Journal 모바일 앱 설계서 (Android · iOS)
 
 - 근거 문서: `docs/coffee-journal-site-analysis.md` (웹 원본 전수 분석)
+- 현재 상태(2026-09-28, v1.2.0): Android와 iOS 앱이 같은 공유 코드로 동작하고 GitHub 릴리스로 배포된다(설치는 루트 `README.md`, iOS 빌드·플랫폼 구현은 `iosApp/README.md`). 1차는 Android로 시작했고(§1.1), iOS는 §9대로 이어 붙였다. iOS에 없는 것은 홈 화면 위젯뿐이다.
 - 결정 사항(사용자 확인): 1차 범위 = 웹 동등 전체(AI·숨김·죽은 기능 제외), 폰트 = 시스템 폰트, 테마 = 라이트 고정, 기술 스택 = 확장성·유지보수·안정성·데이터 관리·난이도를 고려해 아래와 같이 결정.
 
 ---
@@ -113,19 +114,19 @@ coffee-journal/
 │     │  ├─ ui/ai/               # AI 노트 도우미: 제공자별 요청·응답(Gemini·Tavily·OpenAI·Claude), 출처 번호·원문 확인, 설정 절, 답 화면
 │     │  └─ di/                  # Koin 모듈
 │     ├─ androidMain/kotlin/     # Room 드라이버/DB 빌더, PhotoStore·ImagePicker·ImageResizer·BackupFileIo 실제 구현, WorkManager 알림(ReminderWorker·ReminderNotifier)
-│     ├─ iosMain/kotlin/         # 동일 expect의 iOS 실제 구현 자리(1차: 파일 저장·리사이즈 스텁, 선택기 TODO)
+│     ├─ iosMain/kotlin/         # 같은 expect의 iOS 구현: Room 경로, PhotoStore(Documents/photos), PHPicker·카메라, UIDocumentPicker·공유 시트, 알림 미리 예약, NSURLSession·Keychain, MapLibre 상세 지도, MKLocalSearch·CLLocationManager
 │     └─ commonTest/kotlin/      # 도메인 규칙·백업 코덱·DB 마이그레이션 테스트
 ├─ androidApp/                   # Android 애플리케이션 (MainActivity → App()), 홈 화면 위젯(Glance, widget/)
-└─ iosApp/                       # SwiftUI 진입점 스켈레톤(이 환경에서는 미빌드)
+└─ iosApp/                       # SwiftUI 호스트 + XcodeGen project.yml(MapLibre Swift 패키지), CI(ios.yml)가 빌드
 ```
 
 - 패턴: 단방향 데이터 흐름(UDF). 화면당 `ViewModel`(공유 모듈, `lifecycle-viewmodel`)이 `StateFlow<UiState>`를 노출하고 Repository(Flow)를 구독.
 - 데이터 접근은 Repository만 통과. 도메인 규칙은 순수 Kotlin 함수(테스트 대상).
 - DI: Koin. `initKoin(platformModule)`를 각 플랫폼 진입점에서 호출.
-- iOS 타깃 게이팅: `gradle.properties`의 `coffeejournal.enableIos`가 true이고 호스트가 macOS일 때만 `iosArm64/iosSimulatorArm64` 타깃을 선언 → Linux CI/이 환경에서는 Android만 빌드.
+- iOS 타깃 게이팅: `coffeejournal.enableIos=true`이고 호스트가 macOS일 때(Xcode 빌드, CI의 macOS 작업), 또는 어느 호스트에서든 `coffeejournal.iosKlibs=true`일 때(Kotlin/Native 크로스 컴파일로 klib까지만, Linux CI의 `klibs` 작업) `iosArm64/iosSimulatorArm64` 타깃을 선언한다. 둘 다 없으면 Android만 빌드한다.
 
 ### 3.1 플랫폼 경계(expect/actual)
-| 인터페이스 | Android | iOS(추후) |
+| 인터페이스 | Android | iOS |
 |---|---|---|
 | `DatabaseBuilder` | `Room.databaseBuilder(context, path)` + BundledSQLiteDriver | `NSDocumentDirectory` 경로 + BundledSQLiteDriver |
 | `PhotoStore` | `filesDir/photos/*.jpg` | Documents/photos |
@@ -136,8 +137,8 @@ coffee-journal/
 | `ReminderPlatform`(platformModule) | WorkManager 고유 주기 작업(24시간, 첫 실행 = 정한 시각) + 종류별 알림 채널, 알림을 누르면 보관함/홈 | 미리 예약(`IosReminderPlatform` + 공통 `ReminderScheduleAhead`): 다음 30번의 알림 시각에 보낼 알림을 `UNCalendarNotificationTrigger`로 예약(가까운 것부터 최대 64개), 앱 시작·포그라운드 복귀·데이터/설정 변경 때 다시 계산, 시각이 지난 것은 보낸 것으로 기록. 권한 상태는 캐시(`canNotifyChanges`로 화면 갱신), 앱을 쓰는 중에도 배너, 누르면 앱이 열림 |
 | `rememberNotificationPermissionRequest` | Android 13+ `POST_NOTIFICATIONS` 요청(그 전은 앱 알림 켜짐 여부) | `requestAuthorizationWithOptions`(알림·소리·배지), 결과는 캐시를 갱신한 뒤 메인 스레드로 |
 | `openMapUri(uri, fallback)` | 암시적 VIEW 인텐트(BROWSABLE), `ActivityNotFoundException`이면 웹 대체 URL | `canOpenURL`(Info.plist `LSApplicationQueriesSchemes`: nmap) 후 `openURL`, 안 되면 웹 대체 URL |
-| `AiHttp`(platformModule) | `AndroidAiHttp`: `HttpURLConnection`(연결 15초·읽기 120초, IO 디스패처, 4xx/5xx는 오류 스트림) | 미연결(`IosAiHttp`, 지원 안 함으로 보고) — NSURLSession 자리 |
-| `SecretStore`(platformModule) | `AndroidSecretStore`: Android Keystore의 내보낼 수 없는 AES-256/GCM 키(`coffeejournal.ai`)로 암호화한 파일을 `noBackupFilesDir/ai-keys/`에 | 미연결(`IosSecretStore`, 저장 불가로 보고) — Keychain 자리 |
+| `AiHttp`(platformModule) | `AndroidAiHttp`: `HttpURLConnection`(연결 15초·읽기 120초, IO 디스패처, 4xx/5xx는 오류 스트림) | `IosAiHttp`: `NSURLSession`(임시 세션, 응답 120초, 4xx/5xx 본문도 전달) |
+| `SecretStore`(platformModule) | `AndroidSecretStore`: Android Keystore의 내보낼 수 없는 AES-256/GCM 키(`coffeejournal.ai`)로 암호화한 파일을 `noBackupFilesDir/ai-keys/`에 | `IosSecretStore`: Keychain 일반 암호, `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`(iCloud 키체인·다른 기기 백업 제외) |
 | `normalizeNfc` · `SearchSuggestions` | `java.text.Normalizer` · WebView(`loadDataWithBaseURL`, 스크립트 끔, 누르면 브라우저) | `precomposedStringWithCanonicalMapping` · 표시 없음 |
 | `DetailMapRenderer`(Koin) | `MapLibreDetailMapRenderer`: 공용 `MapLibreDetailMap`(MapLibre Compose + MapLibre Native Android), `ConnectivityManager`로 온라인 확인, 네이티브 라이브러리를 못 올리면 실패 보고 | `MapLibreDetailMapRenderer`: 같은 `MapLibreDetailMap`(MapLibre Native iOS, Swift 패키지), Network 프레임워크 경로 모니터(`nw_path_monitor`)로 온라인 확인 |
 | `DevicePlaceSearch`(platformModule) | `AndroidPlaceSearch`: `android.location.Geocoder`(한국어, `isPresent()`가 거짓이면 지원 안 함; API 33+ `GeocodeListener`, 그 전은 IO 디스패처의 `getFromLocationName`; 국내는 한국 상자 33.0–38.7°N, 124.5–131.9°E) | `IosPlaceSearch`: `MKLocalSearch`(자연어 질의, 주소 + 관심 지점; 국내는 한국 영역, 현재 위치가 있으면 그 주변 20 km로 치우침; "찾지 못함" 오류는 결과 없음) |
@@ -302,10 +303,12 @@ coffee-journal/
 - 접근성: 최소 터치 48dp, 대비 4.5:1(잉크/아이보리), 콘텐츠 설명, 토글·펼침 상태 노출.
 - 네트워크(상세 지도, §1.7): 앱에서 네트워크를 쓰는 곳은 상세 지도, 사용자가 키를 넣고 질문했을 때의 AI 노트 도우미(§2.3 29), 위치 지정에서 "검색"을 눌렀을 때의 장소 검색(§2.3 32: 휴대폰의 지도 서비스 — Android `Geocoder`, iOS `MKLocalSearch` — 또는 사용자가 자기 키를 넣은 경우 국내만 카카오 로컬 `dapi.kakao.com`; 보내는 것은 적은 말과, 현재 위치를 정한 뒤면 카카오·Apple 지도에는 그 좌표)뿐이다(INTERNET·ACCESS_NETWORK_STATE). 위치 권한(ACCESS_FINE_LOCATION·ACCESS_COARSE_LOCATION)은 "현재 위치" 버튼을 누를 때만 묻고 한 번 읽는 데만 쓴다(백그라운드 위치 없음, 원래 MapLibre가 선언한 것을 제거했다가 이 버튼을 위해 직접 선언); MapLibre가 선언한 Wi-Fi 상태 권한은 계속 제거. iOS는 `NSLocationWhenInUseUsageDescription`("카페·로스터리 위치를 현재 위치로 정할 때만 사용해요."). 요청은 OpenFreeMap(tiles.openfreemap.org)의 보이는 지역 타일·글리프뿐, 미리 받기 없음, MapLibre 앰비언트 캐시만. 흐름 테스트는 MapLibre 네이티브 렌더러가 JVM에서 돌지 않으므로 `DetailMapRenderer`를 가짜로 바꿔(Koin) 핀·카메라·오프라인·실패·느린 로딩을 검증하고, 실제 렌더러는 네이티브 라이브러리를 못 올릴 때 안전하게 안내로 떨어지는지 확인한다. iOS도 같은 렌더링 코드(`MapLibreDetailMap`)를 쓰고, Linux에서는 klib 컴파일까지만 확인한다(앱 링크·Swift 패키지 해석은 macOS CI). 스타일은 단위 테스트(구조·출처·팔레트)와 MapLibre style-spec 검증기(개발 중 수동)로 확인했다.
 
-## 9. iOS 확장 경로 (2차)
-1. macOS에서 `coffeejournal.enableIos=true`로 iOS 타깃 활성화 → `shared` 프레임워크 생성.
-2. `iosMain` actual 구현(PHPicker, UIImage 리사이즈, Documents 경로, UIDocumentPicker/ShareSheet).
-3. `iosApp/` SwiftUI 앱에서 `MainViewController()` 호스팅. 하단 탭·내비게이션은 Compose 공용 코드 그대로.
+## 9. iOS (완료)
+1. macOS에서 `coffeejournal.enableIos=true`로 iOS 타깃을 켜 `Shared` 정적 프레임워크를 만든다(Xcode 빌드 단계 `embedAndSignAppleFrameworkForXcode`). Linux에서는 `coffeejournal.iosKlibs=true`로 klib까지 컴파일해 iOS에서만 깨지는 변경을 잡는다.
+2. `iosMain`의 actual 구현(§3.1 표의 iOS 열): 사진(PHPicker·카메라, Documents/photos), 백업 파일(UIDocumentPicker·공유 시트), 알림(미리 예약), AI(NSURLSession·Keychain), 상세 지도(MapLibre Native iOS, Swift 패키지), 장소 검색·현재 위치(MKLocalSearch·CLLocationManager).
+3. `iosApp/` SwiftUI 앱이 `MainViewController()`를 띄운다. 하단 탭·내비게이션은 Compose 공용 코드 그대로다. Xcode 프로젝트는 `project.yml`에서 XcodeGen으로 만든다.
+4. CI(`.github/workflows/ios.yml`): klib 컴파일(모든 관련 푸시), 서명 없는 .ipa(직접 실행·태그·release 입력), 시뮬레이터에서 공유 테스트와 Debug 앱 실행 확인(직접 실행). 설치는 사이드로딩 도구로 사용자의 Apple ID 서명(루트 `README.md`).
+5. 남은 것: 홈 화면 위젯(WidgetKit 확장과 앱 그룹이 필요하고, 무료 Apple ID 서명에서는 앱 그룹이 제대로 되지 않을 수 있어 미룸).
 
 ## 10. 구현 마일스톤
 | 단계 | 산출물 | 검증 |
@@ -318,4 +321,4 @@ coffee-journal/
 | M5 | 백업/복원(웹 호환), 사진 파이프라인 | 코덱 테스트 |
 | M6 | 마무리(빈 상태·접근성·성능), 문서 갱신 | 전체 테스트 |
 
-진행 상황: M0–M6 완료. 이후 웹 원본 대비 전수 감사(확정 결함 105건)를 거쳐, 사용자 스타일 결정으로 제외한 5건을 뺀 100건을 수정하고 흐름 테스트로 고정했다. iOS(§9)는 공유 코드·`iosMain` 구현까지 준비되어 있고 macOS에서의 빌드·실행 확인이 남았다.
+진행 상황: M0–M6 완료. 이후 웹 원본 대비 전수 감사(확정 결함 105건)를 거쳐, 사용자 스타일 결정으로 제외한 5건을 뺀 100건을 수정하고 흐름 테스트로 고정했다. 이어서 2차 기능(`docs/feature-plan-v2.md`), 설정·AI 노트 도우미, iOS 앱(§9, v1.1.0), 사용자 요청 기능(§2.3 30–33: 블렌드 원두 블록, 카페 레시피 접기, 위치 검색·현재 위치, 임시 저장, 카페·로스터리 바로 추가, v1.2.0)을 더했다.

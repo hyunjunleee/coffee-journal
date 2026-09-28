@@ -8,6 +8,7 @@ export ANDROID_HOME=/opt/android-sdk
 ./gradlew :androidApp:assembleDebug :shared:testDebugUnitTest :androidApp:testDebugUnitTest --no-daemon -q
 ```
 - 커밋 전 반드시 위 명령이 exit 0 이어야 한다. 경고는 허용, 오류는 불가.
+- 공통 코드(`commonMain`)나 `iosMain`을 바꿨다면 iOS 컴파일도 확인한다(Linux에서도 됨): `./gradlew :shared:compileKotlinIosArm64 :shared:compileKotlinIosSimulatorArm64 :shared:checkThirdPartyNotices -Pcoffeejournal.iosKlibs=true`. JVM 전용 API(`String.format`, `java.*`, `putIfAbsent` 등)는 여기서 걸린다. 앱 링크·시뮬레이터 테스트·Debug 실행은 macOS CI(`ios.yml`을 app·tests로 직접 실행)에서 확인한다.
 - 단위 테스트는 `shared/src/commonTest/kotlin/com/coffeejournal/<패키지>/`에 둔다(kotlin-test). 화면 흐름·스크린샷 테스트는 `androidApp/src/test/kotlin/com/coffeejournal/android/`(Robolectric + Roborazzi, 인메모리 Room)에 둔다.
 - git 커밋: `git -c user.name=Claude -c user.email=noreply@anthropic.com commit -m "..."`.
 - 의존성 추가·버전 변경 시(2차 §3에서 androidx.work·androidx.glance 추가 때 이 순서로 진행): ① `./gradlew :androidApp:updateThirdPartyNotices`(앱 내 라이브러리 목록 갱신, 안 하면 빌드가 실패) ② `./gradlew --write-verification-metadata sha256 help :androidApp:assembleRelease :shared:testDebugUnitTest :androidApp:testDebugUnitTest`(체크섬 기록) ③ 새로 생긴 `verification-metadata.xml` 항목의 그룹이 공식 배포처인지 확인 후 커밋. POM에 라이선스가 없거나 목록에 없는 라이선스면 ①이 실패하므로 `gradle/third-party-notices.gradle.kts`의 `spdx()`와 `LicenseTexts`에 추가한다.
@@ -83,6 +84,15 @@ export ANDROID_HOME=/opt/android-sdk
 - 위젯 데이터: `WidgetSnapshots.build(...)`(D-day 알약과 마시는 중 카드의 문구 그대로, 빈 상태 문구 포함), `HomeWidgetFeed.current()/snapshots()/changes()`(Room 무효화 추적, 데이터는 들고 있지 않음), 갱신 훅 `HomeWidgets`(앱이 Glance 구현을 등록), `HomeWidgetSync.run`(앱 프로세스가 사는 동안 저장·자정마다 갱신). 위젯 화면 자체는 `androidApp/.../widget/`(Glance).
 - 흐름 테스트: WorkManager는 `ReminderFixtures.initWorkManager`(WorkManagerTestInitHelper), 권한은 `grantNotifications/denyNotifications`, 권한 창 응답은 `ReminderSettingsFlowTest.answerPermission` 참고. 위젯은 `runGlanceAppWidgetUnitTest`로 `CoffeeWidgetContent`를 검사하고 `GlanceRemoteViews`로 PNG를 남긴다.
 
+## 기록 폼 헬퍼 (v1.2.0, 재사용)
+- 블렌드 원두: 원두 1은 `FormState`의 기존 칸, 원두 2부터는 `FormState.blendBeans`(`BeanForm`). 블록은 `state.bean(i)` / `state.withBean(i, bean)` / `state.beanCount`로 다루고, 추가·삭제·비율 합계는 `FormMapper.addBlendBean` / `removeBlendBean` / `blendPercentSum`. 저장된 기록에서 원두별 값(원두 2부터 비워 둔 로스터리·로스팅 정도·로스팅 날짜는 원두 1 값)을 쓸 때는 반드시 `BlendBeans.beans`/`resolve`를 거친다. 원두별로 세는 보기·통계는 `BeanRecords.flatten(…, blendBeans = true)`. 직접 블렌드의 무게 비율은 `BlendBeans.sharesFromGrams`(합이 100이 되게 반올림)를 쓴다.
+- 카페 레시피 접기: `FormState.cafeRecipeOpen`(지금 펼침)·`cafeRecipeUsed`(펼친 적 있음 → 저장), 저장 여부는 `savesRecipe`.
+- 새 로스터리 표시: `FormMapper.isNewRoastery(name, registered)`(저장 때 자동 등록과 같은 대조).
+- 추출 타이머의 푸어 지우기: 순수 함수 `BrewTimerEngine.removePour` / `undoRemove` / `canUndoRemove`.
+- 임시 저장: `RecordDrafts`(키 `RecordDrafts.keyFor(args)` = `device.draft.record.new.<모드>` / `…edit.<id>`, 앱 전역 스코프에서 요청 순서대로 쓰기, 30일 만료). 입력이 바뀌었는지는 `FormDrafts.changed(opened, state)`(펼친 패널·계산기·배너·오류·카페 레시피 펼침은 입력이 아님). 새 화면 상태 필드를 `FormState`에 더하면 `FormDrafts.content`에서 빼야 한다.
+- 떠나기 확인: 입력 폼은 `rememberLeaveGuard(hasChanges, busy, leave)` + `LeaveDialog(guard)`를 쓰고, 제목줄 ←·"취소"는 `guard::request`로 보낸다(시스템 뒤로는 가드가 받음). `hasChanges`는 폼을 연 상태와 비교한다(새 폼의 시작값·불러온 항목, 프로세스 종료 뒤에도 같은 기준). 문구는 `LeaveTexts`.
+- 카페 추가: `Route.CafeAdd`(`CafeAddScreen`), 저장소는 `CafePlaceRepository.add`(위치 없이) / `set(name, point, address)` / `clear`(좌표·주소만) / `delete`(방문 없는 카페만 화면에서 허용, `CafeSpot.deletable`).
+
 ## 디자인 규약 (`ui/theme`)
 - 접근성: 글리프·체크박스·지도·휠처럼 그림만 있는 요소는 동작 이름이나 아래 목록을 가리키는 content description을 달고, 접이식 헤더·토글은 펼침/선택 상태를 노출한다. 달력 칸은 "9월 21일, 오늘, 기록 2개"처럼 읽힌다.
 - 색·타이포: `Ink.*`, `AppType.*`, 간격 `Dimens.*`. 입력 상자 안의 글(값·placeholder)은 `AppType.input` / `AppType.inputSmall`(줄 상자를 자르지 않아 한글·영문 필드 높이가 같음). 모서리 반경 0, 헤어라인 0.5dp, 그림자 없음.
@@ -98,8 +108,8 @@ export ANDROID_HOME=/opt/android-sdk
 - 웹의 AI 기능·숨김 기능은 구현하지 않는다(데이터 필드는 백업 호환용으로 보존). 앱 고유의 AI 노트 도우미는 아래 절과 `docs/ai-note-helper-plan.md` 12장을 따른다.
 
 ## AI 노트 도우미 헬퍼 (`ui/ai`, 재사용)
-- 키는 앱에 넣지 않는다. 사용자의 키는 `SecretStore`(platformModule: Android `AndroidSecretStore` = Android Keystore AES-256/GCM + `noBackupFilesDir/ai-keys`, iOS 미연결)로만 읽고 쓴다. DB·로그·SavedStateHandle·`rememberSaveable`에 두지 않는다(`AiHttpRequest.toString()`은 헤더 값을 찍지 않음). 키 이름은 `NoteHelperService.secretName(slot)`.
-- HTTP는 `AiHttp`(platformModule: Android `AndroidAiHttp` = `HttpURLConnection`, 연결 15초·읽기 120초; iOS 미연결). 새 HTTP 라이브러리를 넣지 않는다. 요청 본문은 kotlinx.serialization `buildJsonObject`, 응답은 `AiJson`(느슨한 `JsonElement` 읽기).
+- 키는 앱에 넣지 않는다. 사용자의 키는 `SecretStore`(platformModule: Android `AndroidSecretStore` = Android Keystore AES-256/GCM + `noBackupFilesDir/ai-keys`, iOS `IosSecretStore` = Keychain 일반 암호, 이 기기 전용)로만 읽고 쓴다. DB·로그·SavedStateHandle·`rememberSaveable`에 두지 않는다(`AiHttpRequest.toString()`은 헤더 값을 찍지 않음). 키 이름은 `NoteHelperService.secretName(slot)`.
+- HTTP는 `AiHttp`(platformModule: Android `AndroidAiHttp` = `HttpURLConnection`, 연결 15초·읽기 120초; iOS `IosAiHttp` = `NSURLSession`, 응답 120초). 새 HTTP 라이브러리를 넣지 않는다. 요청 본문은 kotlinx.serialization `buildJsonObject`, 응답은 `AiJson`(느슨한 `JsonElement` 읽기).
 - 방식별 요청·응답: `GeminiApi`(generateContent, 그라운딩 `groundedAnswer`, 위치는 세그먼트 글 먼저 찾고 없으면 UTF-8 바이트; 검색어 쓰기 `queryRequest` + `SearchQueries.parse`), `TavilyApi`(검색 한 번의 본문 `TavilySearch`, 결과 합치기 `merge`, 키 확인은 basic) + `TavilyPlan`(설정의 검색 깊이 `SearchDepth`와 사람들 의견으로 보낼 검색 목록·순서, 한국어 블로그 검색어, Gemini에 넘길 출처 순서, 크레딧·월 횟수) + `SourcedAnswer`([n] 표시 해석, 인용 대조), `OpenAiApi`(Responses, url_citation → 문장 끝 번호, 글 속 마크다운 링크 제거), `ClaudeApi`(Messages, 웹 검색 도구 버전은 모델별, `claude-opus-5`만 fallbacks, pause_turn 재요청은 `NoteHelperService`). 모두 `GroundedAnswer`(문단 → 문장·간격 `AnswerRun`, 번호, 출처, 인용 확인, 실제 검색어 `queries`)로 바꾼다. 번호 붙이기는 `AnswerComposer.compose(text, citations)` 하나로.
 - 오류는 `AiErrors.gemini/tavily/openAi/claude(status, body)` → `AiError`(한국어 안내, 힌트, 서비스 원문, 설정 링크, 키 확인 한 단어). 새 상태 코드는 여기에 더하고 `AiErrorsTest`에 고정한다.
 - 프롬프트는 `NoteHelperPrompts` 한 곳. 시스템 지시는 `tools/ai-eval/system_prompt_ko.txt`·`sources_prompt_ko.txt`·`query_prompt_ko.txt`와 글자까지 같아야 하고 질문 틀은 `eval.py question()`과, 사람들 줄은 `PEOPLE_NOTE`·`PEOPLE_DESCRIBE`와, 블로그 도메인은 `CROWD_KO`와 같아야 한다(`AiPlatformTest`). 한쪽을 고치면 둘 다 고친다.

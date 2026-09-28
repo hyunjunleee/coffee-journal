@@ -2,6 +2,7 @@
 
 - 대상: https://coffee-journal-empty-template.divine-pear-1472.chatgpt.site/
 - 분석일: 2026-09-25
+- 이 문서는 원본 웹앱의 기록이다(앱 구현 전 그대로 둠). 앱이 웹과 다르게 동작하는 곳(수정한 결함, 앱에만 있는 기능)은 `docs/android-app-design.md` §2.3에 있다.
 - 방법: 원본 HTML 전량 수집 → CSS/JS/마크업 분리 → 8,374행 JS 전 구간 정독(7개 구간 병렬 분석) → Chromium(Playwright) 실제 렌더링·클릭·다운로드 검증
 - 스크린샷: `docs/screenshots/` (홈, 달력, 지도, 품종, 노트, 기타, 보관함, 기록 폼, 커핑 폼, 백업)
 
