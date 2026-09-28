@@ -13,6 +13,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.coffeejournal.domain.model.BeanMode
 import com.coffeejournal.domain.model.BlendComponent
+import com.coffeejournal.domain.model.Category
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -23,7 +24,7 @@ import org.robolectric.annotation.GraphicsMode
 
 /**
  * A café blend entered as one bean-info block per bean ("+ 원두 추가 (블렌드)", shares, bean 1's roastery and roast
- * in grey on the later beans) and the shares of a custom blend, through the real app.
+ * in grey on the later beans), the shares of a custom blend, and the café record's folded recipe — through the real app.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -112,5 +113,50 @@ class BlendBeansFlowTest : CoverageFlowBase() {
         typeInto("그램(g)", "5")
         waitFor(hasTestTag("blend-share-0") and hasText("67%"))
         waitFor(hasTestTag("blend-share-1") and hasText("33%"))
+    }
+
+    @Test
+    fun cafeRecord_recipeFoldedAway_opensWhenTold_andSavedOnlyThen_homeBrewShowsItDirectly() {
+        launchApp()
+        // a home brew shows the recipe straight away
+        openNewForm()
+        waitFor(field("칼리타 웨이브"))
+        assertFalse(has(hasText("레시피 입력 (카페에서 알려준 경우)")))
+        back()
+
+        tab("tab-calendar")
+        clickText("카페")
+        clickText("+ 카페 기록 추가")
+        waitForText("새 기록")
+        typeInto(namePlaceholder, "카페 레시피 없음")
+        waitFor(hasText("레시피 입력 (카페에서 알려준 경우)"))
+        assertFalse("folded away", has(field("칼리타 웨이브")))
+        saveForm("카페 레시피 없음")
+        val plain = entries().single()
+        assertEquals(Category.CAFE, plain.category)
+        assertEquals(listOf("", "", "", "", ""), listOf(plain.dripper, plain.filter, plain.dose, plain.water, plain.time))
+        assertTrue(plain.steps.isEmpty())
+        back()
+
+        clickText("+ 카페 기록 추가")
+        waitForText("새 기록")
+        typeInto(namePlaceholder, "카페 레시피 있음")
+        tap(hasText("레시피 입력 (카페에서 알려준 경우)") and hasClickAction())
+        typeInto("칼리타 웨이브", "V60")
+        typeInto("20", "15")
+        typeInto("320", "250")
+        // folding it again keeps what was typed, and it is saved
+        tap(hasText("레시피 입력 (카페에서 알려준 경우)") and hasClickAction())
+        waitGone(field("V60"))
+        tap(hasText("레시피 입력 (카페에서 알려준 경우)") and hasClickAction())
+        waitFor(field("V60"))
+        saveForm("카페 레시피 있음")
+        val told = entries().single { it.name == "카페 레시피 있음" }
+        assertEquals(listOf("V60", "15", "250"), listOf(told.dripper, told.dose, told.water))
+        waitForText("15g : 250g")
+        // editing it: the recipe is unfolded
+        clickText("수정")
+        waitForText("기록 수정")
+        waitFor(field("V60"))
     }
 }

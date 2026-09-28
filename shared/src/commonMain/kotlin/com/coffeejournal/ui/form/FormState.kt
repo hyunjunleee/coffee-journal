@@ -197,6 +197,10 @@ data class FormState(
     val waterType: String = "",
     val steps: List<StepForm> = emptyList(),
     val appliedRecipeRef: RecipeRef? = null,
+    /** 카페: the recipe part is folded away until the café told the recipe; this is whether it is unfolded now. */
+    val cafeRecipeOpen: Boolean = false,
+    /** 카페: the recipe part was unfolded in this form (or the record had a recipe), so what it holds is saved. */
+    val cafeRecipeUsed: Boolean = false,
     // 계산기 (저장하지 않음)
     val calcOpen: Boolean = false,
     val calc: CalcForm = CalcForm(),
@@ -236,6 +240,8 @@ data class FormState(
     val isCustomBlend: Boolean get() = effectiveBeanMode == BeanMode.CUSTOM_BLEND
     /** Bean-info blocks shown: bean 1 and a café blend's other beans (a custom blend keeps one, its beans are its rows). */
     val beanCount: Int get() = if (isCupping || isCustomBlend) 1 else 1 + blendBeans.size
+    /** Whether the recipe part is saved: always for 원두, for 카페 once it was unfolded. */
+    val savesRecipe: Boolean get() = isBrew || (isCafe && cafeRecipeUsed)
 
     /** Bean [index]'s block: bean 1 from the flat fields, the others from [blendBeans]. */
     fun bean(index: Int): BeanForm = if (index == 0) {

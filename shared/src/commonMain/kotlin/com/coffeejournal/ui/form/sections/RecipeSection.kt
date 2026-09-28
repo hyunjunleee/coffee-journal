@@ -3,12 +3,15 @@ package com.coffeejournal.ui.form.sections
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.RecipeRef
@@ -16,6 +19,7 @@ import com.coffeejournal.domain.model.RecipeStep
 import com.coffeejournal.domain.reference.GenericSteps
 import com.coffeejournal.domain.rules.RecipeSteps
 import com.coffeejournal.ui.form.AutocompleteField
+import com.coffeejournal.ui.form.Collapsible
 import com.coffeejournal.ui.form.FormMapper
 import com.coffeejournal.ui.form.FormNumbers
 import com.coffeejournal.ui.form.FormState
@@ -29,15 +33,35 @@ import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.fontScaled
 import com.coffeejournal.ui.theme.SectionLabel
 
-/** 레시피 필드 + 추출 예시(읽기 전용) + 추출 단계 로그. */
+/**
+ * 레시피 필드 + 추출 예시(읽기 전용) + 추출 단계 로그. A 카페 record folds it all away: coffee had at a café usually
+ * comes without a recipe, so it opens only when the café told one (and opens by itself on a record that has one).
+ * Folding it again keeps what was typed, and it is saved.
+ */
 @Composable
 internal fun RecipeSection(state: FormState, suggestions: FormSuggestions, update: ((FormState) -> FormState) -> Unit, onOpenTimer: () -> Unit) {
     SectionLabel("레시피")
+    if (!state.isCafe) {
+        RecipeFields(state, suggestions, update, onOpenTimer)
+        return
+    }
+    Collapsible(
+        title = "레시피 입력 (카페에서 알려준 경우)", open = state.cafeRecipeOpen,
+        onToggle = { update { it.copy(cafeRecipeOpen = !it.cafeRecipeOpen, cafeRecipeUsed = true) } },
+        modifier = Modifier.padding(bottom = 10.dp).testTag("cafe-recipe"),
+    ) {
+        Spacer(Modifier.height(4.dp))
+        RecipeFields(state, suggestions, update, onOpenTimer)
+    }
+}
+
+/** The recipe itself; the calculator and the example steps only for a brew of one's own. */
+@Composable
+private fun RecipeFields(state: FormState, suggestions: FormSuggestions, update: ((FormState) -> FormState) -> Unit, onOpenTimer: () -> Unit) {
     TwoUp(
         { m -> AutocompleteField(state.dripper, { v -> update { it.copy(dripper = v) } }, suggestions.drippers, m, label = "드리퍼", placeholder = "칼리타 웨이브") },
         { m -> AutocompleteField(state.filter, { v -> update { it.copy(filter = v) } }, suggestions.filters, m, label = "필터", placeholder = "칼리타 웨이브 필터 / 표백") },
     )
-    if (state.isCafe) return
     TwoUp(
         { m -> FormTextField(state.grind, { v -> update { it.copy(grind = v) } }, m, label = "분쇄도", placeholder = "중간 / 클릭수 등") },
         { m -> FormTextField(state.dose, { v -> update { it.copy(dose = v) } }, m, label = "원두량 (g)", placeholder = "20", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
@@ -61,8 +85,10 @@ internal fun RecipeSection(state: FormState, suggestions: FormSuggestions, updat
         },
         { m -> AutocompleteField(state.waterType, { v -> update { it.copy(waterType = v) } }, suggestions.waters, m, label = "사용한 물", placeholder = "예: 정수기 물, 스파클 정수") },
     )
-    BrewCalculatorSection(state, update)
-    RecipeRefSteps(state.appliedRecipeRef)
+    if (state.isBrew) {
+        BrewCalculatorSection(state, update)
+        RecipeRefSteps(state.appliedRecipeRef)
+    }
     StepsLog(state, update, onOpenTimer)
 }
 

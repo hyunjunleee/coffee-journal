@@ -71,6 +71,7 @@ internal object FormMapper {
         val beanMode = entry.beanMode.ifBlank { if (entry.blendComponents.isNotEmpty()) BeanMode.CUSTOM_BLEND else BeanMode.SINGLE }
         val rows = if (beanMode == BeanMode.CUSTOM_BLEND) entry.blendComponents.map { BlendRowForm(it.name, it.grams) } else emptyList()
         val cafeBlend = beanMode == BeanMode.COMMERCIAL_BLEND && !isCupping
+        val cafeRecipe = entry.isCafe && hasRecipe(entry)
         return FormState(
             mode = mode,
             editingId = entry.id,
@@ -120,6 +121,8 @@ internal object FormMapper {
             waterType = entry.waterType,
             steps = entry.steps.map(StepForm::from),
             appliedRecipeRef = entry.recipeRef,
+            cafeRecipeOpen = cafeRecipe,
+            cafeRecipeUsed = cafeRecipe,
             // one form per tasting: the SCA 2004 attributes and a CVA assessment (its `cva.` keys) are kept apart
             scoreForm = if (CvaScoring.present(entry.attributes, entry.attributeNotes)) ScoreForm.CVA else ScoreForm.SCA2004,
             attributes = FormNumbers.finiteAttributes(entry.attributes).filterKeys { !CvaScoring.isCvaKey(it) }
@@ -183,6 +186,7 @@ internal object FormMapper {
             BeanMode.COMMERCIAL_BLEND -> cafeBlendComponents(s)
             else -> emptyList()
         }
+        val recipe = s.savesRecipe
         val cuppingBeans = if (isCupping) s.cuppingBeans.filter { it.name.isNotBlank() }.map(::cuppingBeanModel) else existing?.cuppingBeans ?: emptyList()
         val name = if (isCupping) {
             s.cuppingPlace.trim().ifBlank { cuppingBeans.firstOrNull()?.name ?: "" }
@@ -224,23 +228,23 @@ internal object FormMapper {
             cafeName = if (isCafe) s.cafeName.trim() else existing?.cafeName ?: "",
             expectedNotes = NoteCanon.joinChips(s.expectedNotes),
             actualNotes = NoteCanon.joinChips(s.actualNotes),
-            // Recipe fields are saved only where the form shows them: all of them for 원두, 드리퍼/필터 also for 카페,
-            // none for 커핑. Hidden ones would otherwise store invented values, such as the 2:10 총 추출시간 computed
-            // from the example steps every fresh form is seeded with.
-            dripper = if (isCupping) "" else s.dripper.trim(),
-            filter = if (isCupping) "" else s.filter.trim(),
-            dose = if (isBrew) dose else "",
-            water = if (isBrew) FormNumbers.finiteText(s.water.trim()) else "",
-            temp = if (isBrew) FormNumbers.finiteText(s.temp.trim()) else "",
-            grind = if (isBrew) s.grind.trim() else "",
-            waterType = if (isBrew) s.waterType.trim() else "",
-            time = if (isBrew) FormNumbers.safeTime(s.time.trim()) else "",
+            // Recipe fields are saved only where the form shows them: always for 원두, for 카페 once its folded recipe
+            // part was opened, never for 커핑. Hidden ones would otherwise store invented values, such as the 2:10 총
+            // 추출시간 computed from the example steps every fresh brew form is seeded with.
+            dripper = if (recipe) s.dripper.trim() else "",
+            filter = if (recipe) s.filter.trim() else "",
+            dose = if (recipe) dose else "",
+            water = if (recipe) FormNumbers.finiteText(s.water.trim()) else "",
+            temp = if (recipe) FormNumbers.finiteText(s.temp.trim()) else "",
+            grind = if (recipe) s.grind.trim() else "",
+            waterType = if (recipe) s.waterType.trim() else "",
+            time = if (recipe) FormNumbers.safeTime(s.time.trim()) else "",
             notes = if (isCupping) s.cuppingNotes.trim() else s.notes.trim(),
             cuppingType = if (isCupping) s.cuppingType.ifBlank { CuppingType.PUBLIC } else existing?.cuppingType ?: "",
             cuppingPlace = if (isCupping) s.cuppingPlace.trim() else existing?.cuppingPlace ?: "",
             cuppingBeans = cuppingBeans,
-            steps = if (isBrew) s.steps.map { it.toStep() }.filter { !it.isEmpty } else emptyList(),
-            recipeRef = if (isBrew) s.appliedRecipeRef else null,
+            steps = if (recipe) s.steps.map { it.toStep() }.filter { !it.isEmpty } else emptyList(),
+            recipeRef = if (recipe) s.appliedRecipeRef else null,
             // only the chosen form is saved (a CVA tasting has no 2004 score and the other way round)
             attributes = when {
                 isCupping -> existing?.attributes ?: emptyMap()
@@ -486,6 +490,10 @@ internal object FormMapper {
             appliedRecipeRef = RecipeRef(r.name, r.steps), openLauncher = null,
         )
     )
+
+    /** A record with any recipe value: a café record with one opens with its folded recipe part unfolded. */
+    fun hasRecipe(en: Entry): Boolean =
+        listOf(en.dripper, en.filter, en.grind, en.dose, en.water, en.temp, en.time, en.waterType).any { it.isNotBlank() } || en.steps.isNotEmpty()
 
     // ---------- steps ----------
 

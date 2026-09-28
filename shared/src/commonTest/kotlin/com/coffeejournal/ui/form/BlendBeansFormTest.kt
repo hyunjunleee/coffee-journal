@@ -4,6 +4,7 @@ import com.coffeejournal.domain.model.BeanMode
 import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.Entry
+import com.coffeejournal.domain.model.RecipeStep
 import com.coffeejournal.domain.rules.BlendBeans
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.ui.nav.FormMode
@@ -14,7 +15,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
-/** The record form's café blend: a bean-info block per bean, with shares. */
+/** The record form's café blend (a bean-info block per bean, with shares) and the café record's folded recipe. */
 class BlendBeansFormTest {
     private val now = Dates.toMillis(LocalDate(2026, 9, 25), 12, 0)
 
@@ -122,6 +123,31 @@ class BlendBeansFormTest {
         assertEquals(Category.CAFE, en.category)
         assertEquals(BeanMode.COMMERCIAL_BLEND, en.beanMode)
         assertEquals(listOf("", "과테말라"), en.blendComponents.map { it.country })
+    }
+
+    @Test fun cafeRecipe_foldedAndUntouched_savesNothing_unfoldedSavesWhatItHolds() {
+        val cafe = FormMapper.newState(FormMode.CAFE, null, now).copy(name = "케냐")
+        assertFalse(cafe.cafeRecipeOpen)
+        assertFalse(cafe.savesRecipe)
+        // values that came along from another form (the cupping form seeds the example steps) stay unsaved while folded
+        val seeded = FormMapper.newState(FormMode.CUPPING, null, now).copy(category = Category.CAFE, name = "케냐", dripper = "V60", grind = "20")
+        val untouched = entryOf(seeded)
+        assertEquals(listOf("", "", "", ""), listOf(untouched.dripper, untouched.grind, untouched.time, untouched.dose))
+        assertTrue(untouched.steps.isEmpty())
+        // unfolded once: saved, also after folding it again
+        val told = cafe.copy(cafeRecipeOpen = false, cafeRecipeUsed = true, dripper = "V60", dose = "15", water = "250", temp = "92", steps = listOf(StepForm("0:00", "30", true, "40", "뜸")))
+        val en = entryOf(told)
+        assertEquals(listOf("V60", "15", "250", "92"), listOf(en.dripper, en.dose, en.water, en.temp))
+        assertEquals(listOf(RecipeStep("0:00", "40", "30", "뜸")), en.steps)
+        // editing: a café record with a recipe opens it unfolded; one without keeps it folded
+        val reopened = FormMapper.fromEntry(en, FormMode.CAFE)
+        assertTrue(reopened.cafeRecipeOpen && reopened.cafeRecipeUsed)
+        val plain = FormMapper.fromEntry(entryOf(cafe), FormMode.CAFE)
+        assertFalse(plain.cafeRecipeOpen || plain.cafeRecipeUsed)
+        assertTrue(FormMapper.hasRecipe(en))
+        assertFalse(FormMapper.hasRecipe(entryOf(cafe)))
+        // a brew record always saves its recipe
+        assertTrue(FormMapper.newState(FormMode.EXTRACT, null, now).savesRecipe)
     }
 
     @Test fun detail_eachBeanOfACafeBlendIsItsOwnGroup_withItsShare() {
