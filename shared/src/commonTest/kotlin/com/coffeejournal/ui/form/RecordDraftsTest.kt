@@ -125,6 +125,9 @@ class RecordDraftsTest {
         assertFalse(changed(opened.copy(autofillBanner = true, repeatBean = true, tempHint = "권장 범위: 88–92", draftId = "other")))
         assertFalse(changed(opened.copy(error = FormError(FormField.NAME, "원두 이름을 입력해주세요."), saving = true)))
         assertFalse(changed(opened.copy(cuppingBeans = opened.cuppingBeans.map { it.copy(evaluationOpen = true) })))
+        // unfolding a café's recipe is not input; what is typed into it is
+        assertFalse(changed(opened.copy(cafeRecipeOpen = true, cafeRecipeUsed = true)), "unfolding the café recipe")
+        assertTrue(changed(opened.copy(cafeRecipeOpen = true, cafeRecipeUsed = true, dripper = "V60")))
         // what the user wrote or picked
         assertTrue(changed(opened.copy(name = "케냐")))
         assertTrue(changed(opened.copy(createdAt = now - Dates.DAY_MS)), "a changed date counts")

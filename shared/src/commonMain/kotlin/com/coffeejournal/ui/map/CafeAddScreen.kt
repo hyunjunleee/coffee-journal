@@ -31,10 +31,12 @@ import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.LeaveDialog
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
 import com.coffeejournal.ui.theme.deriveOffMain
 import com.coffeejournal.ui.theme.imeOverlapPadding
+import com.coffeejournal.ui.theme.rememberLeaveGuard
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -60,6 +62,9 @@ class CafeAddViewModel(entries: EntryRepository, private val cafes: CafePlaceRep
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setName(v: String) = _state.update { if (it.saving) it else it.copy(name = v) }
+
+    /** A name has been typed: leaving asks first (the screen opens empty). */
+    fun hasChanges(): Boolean = _state.value.name.isNotBlank()
 
     /**
      * Keeps the café, then [onDone] with its name. A name that is already a café (any spelling) adds nothing and
@@ -97,11 +102,13 @@ fun CafeAddScreen(nav: NavHostController, vm: CafeAddViewModel) {
     val spots by vm.spots.collectAsStateWithLifecycle()
     val leave = dropUnlessResumed { nav.popBackStack() }
     BlockBackWhile(s.saving)
+    val guard = rememberLeaveGuard(vm::hasChanges, busy = s.saving, leave = leave)
+    LeaveDialog(guard)
     val existing = remember(spots, s.name) { CafeMapLogic.find(spots, s.name) }
     val names = remember(spots) { spots.map { it.name } }
     val canSave = s.name.isNotBlank() && !s.saving
     Column(Modifier.fillMaxSize().background(Ink.bg)) {
-        ScreenTitleBar("카페 추가", onBack = { if (!s.saving) leave() })
+        ScreenTitleBar("카페 추가", onBack = guard::request)
         Column(Modifier.weight(1f).imeOverlapPadding().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             Spacer(Modifier.height(16.dp))
             AutocompleteField(
@@ -124,7 +131,7 @@ fun CafeAddScreen(nav: NavHostController, vm: CafeAddViewModel) {
                     },
                 )
                 if (existing == null) GhostButton("위치 없이 저장", enabled = canSave, onClick = { vm.save { leave() } })
-                GhostButton("취소", enabled = !s.saving, onClick = leave)
+                GhostButton("취소", enabled = !s.saving, onClick = guard::request)
             }
             Spacer(Modifier.height(96.dp))
         }

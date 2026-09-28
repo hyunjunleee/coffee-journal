@@ -94,12 +94,14 @@ class RecordDrafts(private val settings: SettingsRepository, private val scope: 
 internal object FormDrafts {
     /**
      * [state] without what only the screen uses: open panels and banners, the calculator (never saved), the id a new
-     * record will get, errors and the saving flag.
+     * record will get, errors and the saving flag. Unfolding a café's recipe is not input either: its values are.
      */
     fun content(state: FormState): FormState = state.copy(
         draftId = "",
         cuppingBeans = state.cuppingBeans.map { it.copy(evaluationOpen = false) },
         tempHint = "",
+        cafeRecipeOpen = false,
+        cafeRecipeUsed = false,
         calcOpen = false,
         calc = CalcForm(),
         autofillBanner = false,

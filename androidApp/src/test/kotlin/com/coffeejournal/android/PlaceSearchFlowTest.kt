@@ -54,7 +54,7 @@ class PlaceSearchFlowTest : CoverageFlowBase() {
         tab("tab-bean")
         tapText("로스터리")
         waitForText("한국 로스터리 지도")
-        clickText("+ 추가")
+        clickText("+ 로스터리 추가")
         waitForText("로스터리 추가")
         typeInto("예: 영천카페 듀잇", name)
         tapText("지도에서 위치 지정")

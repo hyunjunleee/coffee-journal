@@ -14,6 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.coffeejournal.data.repo.BlendRepository
+import com.coffeejournal.data.repo.CafePlaceRepository
 import com.coffeejournal.data.repo.EntryRepository
 import com.coffeejournal.data.repo.MiscRepository
 import com.coffeejournal.data.repo.PantryRepository
@@ -403,6 +404,31 @@ class DraftFlowTest : FlowTestBase() {
         waitGone(field("저장할 원두"))
         assertFalse(has(isDialog()))
         assertEquals(listOf("저장할 원두"), runBlocking { koinGet<PantryRepository>().getAll() }.map { it.name })
+    }
+
+    @Test
+    fun cafeAdd_leavesUntouched_asksOnceANameIsTyped() {
+        startNav(Route.Misc)
+        go(Route.CafeAdd)
+        val placeholder = "예: OO카페 (서울 성수동)"
+        // nothing typed: back leaves at once
+        systemBack()
+        waitGone(hasText(placeholder))
+        assertFalse(has(isDialog()))
+
+        go(Route.CafeAdd)
+        typeInto(placeholder, "가 볼 카페")
+        systemBack()
+        waitFor(leaveDialog(LeaveTexts.DISCARD_TITLE))
+        clickNode(dialogButton(LeaveTexts.STAY))
+        waitGone(isDialog())
+        assertTrue(has(field("가 볼 카페")))
+
+        clickText("취소")
+        waitFor(leaveDialog(LeaveTexts.DISCARD_TITLE))
+        clickNode(dialogButton(LeaveTexts.LEAVE))
+        waitGone(field("가 볼 카페"))
+        assertTrue(runBlocking { koinGet<CafePlaceRepository>().getAll() }.isEmpty())
     }
 
     @Test
