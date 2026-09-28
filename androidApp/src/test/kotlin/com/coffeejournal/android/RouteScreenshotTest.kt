@@ -182,11 +182,33 @@ class RouteScreenshotTest {
     }
     @Test fun cafeMap() {
         seedMapPlaces()
+        // a café added by hand, without a position yet: listed under the map with its picker and 삭제
+        runBlocking { GlobalContext.get().get<CafePlaceRepository>().add("가 볼 카페 연남") }
         show(Route.Bean, "50-cafe-map.png") {
             beanView("로스터리", "한국 로스터리 지도")
-            compose.onNode(hasText("방문 카페 지도") and hasClickAction()).performClick()
+            compose.onNode(hasText("카페 지도") and hasClickAction()).performClick()
             settle()
             compose.onNode(hasContentDescription("FELT 청계천, 방문 1회")).performClick()
+            settle()
+        }
+    }
+    /** "+ 카페 추가": a name that already is a café says which one, instead of making a second. */
+    @Test fun cafeAdd() {
+        seedMapPlaces()
+        show(Route.CafeAdd, "76-cafe-add.png") {
+            compose.onNode(hasSetTextAction() and hasText("예: OO카페 (서울 성수동)")).performTextInput("felt 청계천")
+            settle()
+            compose.onNode(hasText("이미 있는 카페예요", substring = true)).assertExists()
+        }
+    }
+    /** Calendar › 카페: the cafés of the list and one added by hand, each with its position, and "+ 카페 추가". */
+    @Test fun calendar_cafes() {
+        seedMapPlaces()
+        runBlocking { GlobalContext.get().get<CafePlaceRepository>().add("가 볼 카페 연남") }
+        show(Route.Calendar, "77-calendar-cafes.png") {
+            click("카페")
+            click("전체 보기")
+            compose.onNode(hasText("+ 카페 추가") and hasClickAction()).performScrollTo()
             settle()
         }
     }

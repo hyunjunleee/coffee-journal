@@ -162,7 +162,7 @@ class DetailMapFlowTest : CoverageFlowBase() {
         assertEquals("커피 리브레", fake.selected)
         back()
         // the café map: the café's panel has the button too, and the detail map shows cafés
-        tapText("방문 카페 지도")
+        tapText("카페 지도")
         val cafePin = described("FELT 청계천, 방문 1회") and hasClickAction()
         tap(cafePin)
         tapText("상세 지도에서 보기")
@@ -228,7 +228,7 @@ class DetailMapFlowTest : CoverageFlowBase() {
         val fake = installFakeDetailMap()
         launchApp()
         openRoasteries()
-        clickText("+ 추가")
+        clickText("+ 로스터리 추가")
         waitForText("로스터리 추가")
         typeInto("예: 영천카페 듀잇", "테스트 로스터리")
         tapText("지도에서 위치 지정")

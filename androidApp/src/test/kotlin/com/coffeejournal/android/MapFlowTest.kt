@@ -109,7 +109,7 @@ class MapFlowTest : CoverageFlowBase() {
     fun roastery_locationSetByTappingTheMap_pinsIt_andOpensTheMapApps() {
         launchApp()
         openRoasteries()
-        clickText("+ 추가")
+        clickText("+ 로스터리 추가")
         waitForText("로스터리 추가")
         typeInto("예: 영천카페 듀잇", "테스트 로스터리")
         waitForText("지정하지 않았어요. 지도에는 지역 이름으로 찾은 곳에 표시돼요.")
@@ -201,7 +201,7 @@ class MapFlowTest : CoverageFlowBase() {
     fun overseasRoastery_pickedOnTheWorldMap_getsTheCountryAndGoogleMaps() {
         launchApp()
         openRoasteries()
-        clickText("+ 추가")
+        clickText("+ 로스터리 추가")
         waitForText("로스터리 추가")
         typeInto("예: 영천카페 듀잇", "Kyoto Roaster")
         clickText("해외")
@@ -246,11 +246,11 @@ class MapFlowTest : CoverageFlowBase() {
         val place = runBlocking { koinGet<CafePlaceRepository>().get("felt 청계천") }!!
         assertEquals("서울특별시 중구", KoreaRegions.locate(place.lat!!, place.lng!!)?.label)
 
-        // 원두 › 로스터리 › 방문 카페 지도: the café with its visit count; its visit opens the record
+        // 원두 › 로스터리 › 카페 지도: the café with its visit count; its visit opens the record
         tab("tab-bean")
         tapText("로스터리")
-        tapText("방문 카페 지도")
-        waitForText("방문 카페 지도", substring = false)
+        tapText("카페 지도")
+        waitForText("카페 지도", substring = false)
         val cafePin = described("FELT 청계천, 방문 1회") and hasClickAction()
         waitFor(cafePin)
         tap(cafePin)
@@ -265,9 +265,10 @@ class MapFlowTest : CoverageFlowBase() {
         tapText("위치 지우기")
         waitForText("아직 위치를 정하지 않았어요.")
         tapText("저장")
-        waitUntil("café position removed") { runBlocking { koinGet<CafePlaceRepository>().get("FELT 청계천") } == null }
+        // the position goes; the café stays a café of its visits
+        waitUntil("café position removed") { runBlocking { koinGet<CafePlaceRepository>().get("FELT 청계천") }?.point == null }
         waitForText("위치 미지정")
-        assertNull(runBlocking { koinGet<CafePlaceRepository>().get("FELT 청계천") })
+        assertNull(runBlocking { koinGet<CafePlaceRepository>().get("FELT 청계천") }?.point)
     }
 
     @Test

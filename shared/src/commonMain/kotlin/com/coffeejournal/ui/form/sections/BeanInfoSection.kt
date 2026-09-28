@@ -21,11 +21,20 @@ import com.coffeejournal.ui.theme.ChipInput
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.Seg
 
-/** 원두 정보 그리드 (web #bean-info-fields): 로스터리 … 로스팅 날짜, 예상 노트, 가게 설명. */
+/**
+ * 원두 정보 그리드 (web #bean-info-fields): 로스터리 … 로스팅 날짜, 예상 노트, 가게 설명. A roastery not registered yet
+ * says that saving adds it to 로스터리.
+ */
 @Composable
 internal fun BeanInfoSection(state: FormState, suggestions: FormSuggestions, update: ((FormState) -> FormState) -> Unit) {
+    val newRoastery = suggestions.loaded && FormMapper.isNewRoastery(state.roastery, suggestions.roasteries)
     TwoUp(
-        { m -> AutocompleteField(state.roastery, { v -> update { it.copy(roastery = v) } }, suggestions.roasteries, m, label = "로스터리", placeholder = "예: 커피정경") },
+        { m ->
+            AutocompleteField(
+                state.roastery, { v -> update { it.copy(roastery = v) } }, suggestions.roasteries, m, label = "로스터리", placeholder = "예: 커피정경",
+                hint = if (newRoastery) "새 로스터리예요. 저장하면 로스터리 목록에도 추가돼요." else null,
+            )
+        },
         { m -> AutocompleteField(state.selection, { v -> update { it.copy(selection = v) } }, suggestions.selections, m, label = "생두 수입사", placeholder = "예: Nordic Approach") },
     )
     TwoUp(

@@ -85,7 +85,10 @@ class MiscRepository(private val dao: MiscDao, private val photos: PhotoStore) {
     suspend fun deleteAllRows() = dao.deleteAll()
 }
 
-/** Positions of visited cafés by name (cafe_places); names match trimmed and case-insensitively. */
+/**
+ * Cafés by name (cafe_places): the position of a visited café, or a café added by hand ("+ 카페 추가") that may have
+ * no position and no visit yet. Names match trimmed and case-insensitively.
+ */
 class CafePlaceRepository(private val dao: CafePlaceDao) {
     fun observeAll(): Flow<List<CafePlace>> = dao.observeAll().map { l -> l.map { it.toDomain() } }
     suspend fun getAll(): List<CafePlace> = dao.getAll().map { it.toDomain() }
@@ -103,7 +106,23 @@ class CafePlaceRepository(private val dao: CafePlaceDao) {
         dao.upsert(CafePlace(existing?.name ?: trimmed, point.lat, point.lng, existing?.createdAt ?: Dates.nowMillis()).toEntity())
     }
 
+    /** Removes the café's position; the row stays, so a café added by hand (without visits) is still listed. */
     suspend fun clear(name: String) {
+        get(name)?.takeIf { it.lat != null || it.lng != null }?.let { dao.upsert(it.copy(lat = null, lng = null).toEntity()) }
+    }
+
+    /**
+     * "+ 카페 추가": keeps a café by name without a position. A café already kept under any spelling of the name stays
+     * as it is, so adding twice never makes two cafés.
+     */
+    suspend fun add(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || get(trimmed) != null) return
+        dao.upsert(CafePlace(trimmed, null, null, Dates.nowMillis()).toEntity())
+    }
+
+    /** Deletes the café's row: a café added by hand disappears, one with visits only loses its position. */
+    suspend fun delete(name: String) {
         get(name)?.let { dao.delete(it.name) }
     }
 

@@ -43,8 +43,11 @@ class BeanExtraDataViewModel(entries: EntryRepository, misc: MiscRepository, ble
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BeanData())
 }
 
-/** Shared add/edit form for source / selection / farm / process misc items (web makeFlatListTab form). */
-class FlatItemFormViewModel(val type: String, private val itemId: String?, private val misc: MiscRepository) : ViewModel() {
+/**
+ * Shared add/edit form for source / selection / farm / process misc items (web makeFlatListTab form). [newScope] is a
+ * new roastery's 국내/해외 when it is added from that tab of a map.
+ */
+class FlatItemFormViewModel(val type: String, private val itemId: String?, private val misc: MiscRepository, newScope: String? = null) : ViewModel() {
     data class State(
         val name: String = "", val status: String = "", val scope: String = Scope.DOMESTIC, val location: String = "",
         val notes: String = "", val existing: MiscItem? = null, val loaded: Boolean = false,
@@ -54,7 +57,7 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
         val point: GeoPoint? = null,
     )
 
-    private val _state = MutableStateFlow(State(loaded = itemId == null))
+    private val _state = MutableStateFlow(State(loaded = itemId == null, scope = newScope?.takeIf { it == Scope.OVERSEAS } ?: Scope.DOMESTIC))
     /** A new item's id, fixed for this form, so a repeated save could only upsert the same row. */
     private val newId = Ids.newId()
     val state: StateFlow<State> = _state

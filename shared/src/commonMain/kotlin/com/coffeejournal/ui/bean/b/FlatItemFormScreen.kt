@@ -44,10 +44,13 @@ import com.coffeejournal.ui.theme.Seg
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
-/** Route.FlatItemForm: add / edit a roastery, importer, farm or process item (web *-form-panel). */
+/**
+ * Route.FlatItemForm: add / edit a roastery, importer, farm or process item (web *-form-panel). [scope] starts a new
+ * roastery in 국내 or 해외 (the map tab it is added from).
+ */
 @Composable
-fun FlatItemFormScreen(nav: NavHostController, type: String, itemId: String?, results: SavedStateHandle? = null) {
-    val vm = koinViewModel<FlatItemFormViewModel> { parametersOf(type, itemId) }
+fun FlatItemFormScreen(nav: NavHostController, type: String, itemId: String?, results: SavedStateHandle? = null, scope: String? = null) {
+    val vm = koinViewModel<FlatItemFormViewModel> { parametersOf(type, itemId, scope) }
     val s by vm.state.collectAsStateWithLifecycle()
     // the location picker answers through this destination's SavedStateHandle
     if (results != null) {

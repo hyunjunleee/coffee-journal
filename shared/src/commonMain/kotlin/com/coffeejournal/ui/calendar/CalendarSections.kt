@@ -52,9 +52,9 @@ internal fun CafeCuppingSection(state: CalendarUiState, vm: CalendarViewModel, n
             state.cafeCuppingList.forEach { en ->
                 EntryListRow(en, onClick = { nav.navigate(Route.EntryDetail(en.id)) }, modifier = Modifier.padding(bottom = 8.dp))
             }
-            // the cafés of this list once each, with "지도에서 위치 지정" (design v2 §1.4)
-            if (!isCupping) CafeLocationsBlock(nav, state.cafeCuppingList, Modifier.padding(top = 10.dp))
         }
+        // the cafés of this list once each and those without visits, with "지도에서 위치 지정" and "+ 카페 추가" (design v2 §1.4)
+        if (!isCupping) CafeLocationsBlock(nav, state.cafeCuppingList, Modifier.padding(top = 10.dp))
     }
 }
 

@@ -19,7 +19,8 @@ sealed interface Route {
     @Serializable data class VideoForm(val videoId: String? = null) : Route
     @Serializable data class ClassForm(val classId: String? = null) : Route
     @Serializable data class MiscForm(val type: String, val itemId: String? = null) : Route
-    @Serializable data class FlatItemForm(val type: String, val itemId: String? = null) : Route
+    /** scope: a new roastery's 국내/해외 (the map tab it was added from); null keeps the form's default. */
+    @Serializable data class FlatItemForm(val type: String, val itemId: String? = null, val scope: String? = null) : Route
     @Serializable data object MyRecipes : Route
     @Serializable data object Backup : Route
     @Serializable data class CountryDetail(val en: String) : Route
@@ -27,6 +28,8 @@ sealed interface Route {
     @Serializable data class VarietyDetail(val varietyKey: String) : Route
     @Serializable data class ProcessDetail(val name: String, val seg: String? = null) : Route
     @Serializable data class RoasteryDetail(val name: String) : Route
+    /** 카페 추가: a café by name without a visit; its position is set in the café picker next, or later. */
+    @Serializable data object CafeAdd : Route
     @Serializable data object About : Route
     /** "지도에서 위치 지정": target "roastery" (point handed back to the form) or "cafe" (saved); point = "lat,lng". */
     @Serializable data class MapPicker(val target: String, val name: String = "", val scope: String = "국내", val point: String? = null) : Route
