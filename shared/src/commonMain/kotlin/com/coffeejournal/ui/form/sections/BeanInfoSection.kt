@@ -136,11 +136,14 @@ private fun BeanBlockFields(
     fun example(text: String): String = if (index == 0) text else ""
     if (count > 1) BeanBlockHead(bean, index, first, change, onRemove)
     val roastery = grey(index, bean.roastery, first.roastery, "예: 커피정경")
+    // a roastery typed for this bean that is not registered yet (an inherited one is bean 1's, hinted there)
+    val newRoastery = suggestions.loaded && FormMapper.isNewRoastery(bean.roastery, suggestions.roasteries)
     TwoUp(
         { m ->
             AutocompleteField(
                 bean.roastery, { v -> change { it.copy(roastery = v) } }, suggestions.roasteries, m, label = "로스터리",
                 placeholder = roastery.text, placeholderColor = if (roastery.fromFirst) Ink.textMuted else Ink.textFaint,
+                hint = if (newRoastery) "새 로스터리예요. 저장하면 로스터리 목록에도 추가돼요." else null,
             )
         },
         { m -> AutocompleteField(bean.selection, { v -> change { it.copy(selection = v) } }, suggestions.selections, m, label = "생두 수입사", placeholder = example("예: Nordic Approach")) },

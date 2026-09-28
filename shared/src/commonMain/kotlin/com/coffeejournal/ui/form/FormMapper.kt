@@ -1,11 +1,13 @@
 package com.coffeejournal.ui.form
 
+import com.coffeejournal.data.repo.miscNameKey
 import com.coffeejournal.domain.model.BeanMode
 import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.model.CuppingType
 import com.coffeejournal.domain.model.Entry
+import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.domain.model.PackageType
 import com.coffeejournal.domain.model.RecipeRef
@@ -407,6 +409,16 @@ internal object FormMapper {
             p.producer.takeIf { it.isNotBlank() }?.let { "생산자: $it" },
         )
         return if (hints.isEmpty()) null else "괄호에서 인식: ${hints.joinToString(" · ")}"
+    }
+
+    /**
+     * The 로스터리 typed is not among the registered roasteries ([known]), so saving adds it to 원두 › 로스터리
+     * (SaveEntryPipeline's auto-registration, which matches names the same way: case and spaces ignored).
+     */
+    fun isNewRoastery(roastery: String, known: List<String>): Boolean {
+        if (roastery.isBlank()) return false
+        val key = miscNameKey(MiscType.SOURCE, roastery)
+        return known.none { miscNameKey(MiscType.SOURCE, it) == key }
     }
 
     /** Typing a name: the parenthesised farm/producer fills 농장(생산자) only while that field is empty. */

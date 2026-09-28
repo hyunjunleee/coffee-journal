@@ -60,6 +60,8 @@ data class FormSuggestions(
     val filters: List<String> = emptyList(),
     val waters: List<String> = emptyList(),
     val myRecipes: List<MyRecipe> = emptyList(),
+    /** Built from the database (the empty defaults are not "nothing registered"). */
+    val loaded: Boolean = false,
 )
 
 sealed interface FormEvent {
@@ -260,6 +262,7 @@ class RecordFormViewModel(
             filters = ownedFirst(MiscType.FILTER),
             waters = waters,
             myRecipes = recipes.sortedByDescending { it.createdAt },
+            loaded = true,
         )
     }
 

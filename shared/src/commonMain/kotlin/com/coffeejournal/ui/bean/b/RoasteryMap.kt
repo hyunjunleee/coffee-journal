@@ -2,16 +2,20 @@ package com.coffeejournal.ui.bean.b
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.BeanRecord
@@ -35,11 +39,12 @@ import com.coffeejournal.ui.theme.EmptyNote
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.HairlineCard
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.PrimaryButton
 
 /**
  * Web .roastery-map-shell: title + count, the map with pins (국내: the SGIS Korea map, tap a 시·도 to zoom into its
- * 시·군·구; 해외: the world map), the selected roastery with its records and map-app links, and the roasteries the map
- * could not place.
+ * 시·군·구; 해외: the world map), the selected roastery with its records and map-app links, the roasteries the map
+ * could not place (each opens its form, [onEdit]), and "+ 로스터리 추가" ([onAdd]).
  */
 @Composable
 fun RoasteryMapCard(
@@ -53,6 +58,8 @@ fun RoasteryMapCard(
     worldState: WorldPinMapState,
     modifier: Modifier = Modifier,
     onOpenDetailMap: ((Route.DetailMap) -> Unit)? = null,
+    onEdit: ((MiscItem) -> Unit)? = null,
+    onAdd: (() -> Unit)? = null,
 ) {
     val domestic = scope == Scope.DOMESTIC
     val pins = remember(model) { model.pins.map { MapPin(it.item.name, it.item.name, it.at, it.count, "${it.item.name}, ${it.count}잔") } }
@@ -95,14 +102,19 @@ fun RoasteryMapCard(
             )
         }
         if (model.unlocated.isNotEmpty()) {
-            NoteBox("위치 미입력 ${model.unlocated.size}곳", model.unlocated.joinToString(" · ") { it.name }, "아래 목록에서 지역을 입력하면 지도에 표시돼요.")
+            NoteBox(
+                "위치 미입력 ${model.unlocated.size}곳", model.unlocated, { it.name },
+                "‘위치 입력’에서 지역을 적거나 지도에서 위치를 찍으면 바로 표시돼요.", "위치 입력", onEdit,
+            )
         }
         if (model.unmatched.isNotEmpty()) {
             NoteBox(
-                "지도에서 찾지 못한 곳 ${model.unmatched.size}곳", model.unmatched.joinToString(" · ") { "${it.name}(${it.location.trim()})" },
-                "로스터리를 수정해 지역을 ${if (domestic) "“서울 성동구”처럼" else "나라 이름으로"} 적거나 ‘지도에서 위치 지정’으로 찍으면 표시돼요.",
+                "지도에서 찾지 못한 곳 ${model.unmatched.size}곳", model.unmatched, { "${it.name}(${it.location.trim()})" },
+                "‘위치 수정’에서 지역을 ${if (domestic) "“서울 성동구”처럼" else "나라 이름으로"} 적거나 지도에서 위치를 찍으면 표시돼요.",
+                "위치 수정", onEdit,
             )
         }
+        if (onAdd != null) PrimaryButton("+ 로스터리 추가", onClick = onAdd, modifier = Modifier.padding(top = 18.dp))
     }
 }
 
@@ -137,12 +149,26 @@ fun RoasteryPanel(
     }
 }
 
+/**
+ * Roasteries the map cannot show: each a row that opens its form right here ([action], the whole row taps), or one
+ * line of names without [onEdit].
+ */
 @Composable
-private fun NoteBox(title: String, names: String, hint: String) {
+private fun NoteBox(title: String, items: List<MiscItem>, label: (MiscItem) -> String, hint: String, action: String, onEdit: ((MiscItem) -> Unit)?) {
     Column(Modifier.fillMaxWidth().padding(top = 10.dp).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape).padding(12.dp)) {
         Text(title, style = AppType.small.copy(color = Ink.text, fontWeight = FontWeight.SemiBold))
-        Text(names, style = AppType.small, modifier = Modifier.padding(top = 5.dp))
+        if (onEdit == null) Text(items.joinToString(" · ", transform = label), style = AppType.small, modifier = Modifier.padding(top = 5.dp))
         Text(hint, style = AppType.faint, modifier = Modifier.padding(top = 5.dp))
+        if (onEdit != null) items.forEach { m ->
+            Row(
+                Modifier.fillMaxWidth().padding(top = 8.dp).clickable(role = Role.Button, onClickLabel = action, onClick = { onEdit(m) }),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(label(m), style = AppType.body, modifier = Modifier.weight(1f))
+                Spacer(Modifier.width(8.dp))
+                GhostButton(action, small = true, onClick = { onEdit(m) })
+            }
+        }
     }
 }
 

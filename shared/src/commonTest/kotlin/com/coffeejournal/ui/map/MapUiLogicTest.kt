@@ -12,6 +12,7 @@ import com.coffeejournal.ui.bean.b.WorldMapGeometry
 import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -154,15 +155,70 @@ class CafeMapLogicTest {
             Entry(id = "d", createdAt = 4, category = Category.BEAN, name = "원두", cafeName = "FELT 청계천"),
             cafe("e", " ", 5),
         )
-        val places = listOf(CafePlace("FELT 청계천", 37.5663, 126.9910, 9), CafePlace("없어진 카페", 1.0, 1.0, 1))
+        val places = listOf(CafePlace("FELT 청계천", 37.5663, 126.9910, 9))
         val spots = CafeMapLogic.spots(entries, places)
         assertEquals(listOf("felt 청계천" to 2, "프릳츠" to 1), spots.map { it.name to it.visits.size })
         assertEquals(listOf("b", "a"), spots[0].visits.map { it.id }, "newest visit first; its spelling names the café")
         assertEquals(GeoPoint(37.5663, 126.9910), spots[0].point)
         assertNull(spots[1].place)
+        assertEquals(listOf("방문 2회", "방문 1회"), spots.map { it.visitText })
         assertEquals("서울특별시 중구", CafeMapLogic.placeLabel(spots[0].point!!))
         assertEquals("37.5663, 126.9910", CafeMapLogic.coords(spots[0].point!!))
-        assertEquals("방문 카페 지도. 카페 1곳 표시, 위치 미지정 1곳. 시·도를 누르면 시·군·구 지도로 확대돼요.", CafeMapLogic.mapDescription(spots))
+        assertEquals("카페 지도. 카페 1곳 표시, 위치 미지정 1곳. 시·도를 누르면 시·군·구 지도로 확대돼요.", CafeMapLogic.mapDescription(spots))
+    }
+
+    @Test fun spots_includeTheCafesAddedByHand_onePerName() {
+        val entries = listOf(cafe("a", "FELT 청계천", 1), cafe("b", "프릳츠", 2))
+        val places = listOf(
+            // the visited café's position, spelt differently: still one café, named by its visit
+            CafePlace("felt 청계천", 37.5663, 126.9910, 9),
+            // added by hand: one with a position, one without; the same name twice (any spelling) is one café
+            CafePlace("가 볼 카페", 37.5446, 127.0557, 3),
+            CafePlace("미정 카페", null, null, 4),
+            CafePlace("미정 카페 ", null, null, 5),
+            CafePlace("  ", null, null, 6),
+        )
+        val spots = CafeMapLogic.spots(entries, places)
+        assertEquals(listOf("FELT 청계천", "프릳츠", "가 볼 카페", "미정 카페"), spots.map { it.name }, "visited first, then by name")
+        assertEquals(spots.map { CafePlace.key(it.name) }, spots.map { it.key })
+        val byName = spots.associateBy { it.name }
+        assertEquals(GeoPoint(37.5663, 126.9910), byName.getValue("FELT 청계천").point)
+        assertEquals("방문 기록 없음", byName.getValue("가 볼 카페").visitText)
+        assertTrue(byName.getValue("가 볼 카페").at != null, "a café added with a position is pinned")
+        assertNull(byName.getValue("미정 카페").point)
+        assertEquals("카페 지도. 카페 2곳 표시, 위치 미지정 2곳. 시·도를 누르면 시·군·구 지도로 확대돼요.", CafeMapLogic.mapDescription(spots))
+    }
+
+    @Test fun onlyACafeWithoutVisits_canBeDeleted() {
+        val spots = CafeMapLogic.spots(
+            listOf(cafe("a", "FELT 청계천", 1), cafe("b", "프릳츠", 2)),
+            listOf(CafePlace("FELT 청계천", 37.5663, 126.9910, 9), CafePlace("가 볼 카페", null, null, 3)),
+        ).associateBy { it.name }
+        assertFalse(spots.getValue("FELT 청계천").deletable, "a visited café comes from its records; only its position can go")
+        assertFalse(spots.getValue("프릳츠").deletable, "visited, no row")
+        assertTrue(spots.getValue("가 볼 카페").deletable)
+        // once its last visit is gone, a café with a row is a café without visits: listed, and deletable
+        val after = CafeMapLogic.spots(listOf(cafe("b", "프릳츠", 2)), listOf(CafePlace("FELT 청계천", 37.5663, 126.9910, 9)))
+        assertEquals(listOf("프릳츠" to false, "FELT 청계천" to true), after.map { it.name to it.deletable })
+    }
+
+    @Test fun listed_theCafesOfTheRecordsShown_thenTheCafesWithoutVisits() {
+        val all = listOf(cafe("a", "FELT 청계천", 1), cafe("b", "프릳츠", 2), cafe("c", "프릳츠", 3))
+        val places = listOf(CafePlace("FELT 청계천", 37.5663, 126.9910, 9), CafePlace("가 볼 카페", null, null, 3))
+        val every = CafeMapLogic.spots(all, places)
+        // a month with one visit of 프릳츠: FELT (visited in another month) is not listed, the café without visits is
+        val month = CafeMapLogic.listed(listOf(all[2]), places, every)
+        assertEquals(listOf("프릳츠" to "방문 1회", "가 볼 카페" to "방문 기록 없음"), month.map { it.name to it.visitText })
+        assertEquals(listOf("가 볼 카페"), CafeMapLogic.listed(emptyList(), places, every).map { it.name })
+        assertEquals(listOf("프릳츠", "FELT 청계천", "가 볼 카페"), CafeMapLogic.listed(all, places, every).map { it.name })
+    }
+
+    @Test fun find_matchesAnySpellingOfTheName() {
+        val spots = CafeMapLogic.spots(listOf(cafe("a", "FELT 청계천", 1)), listOf(CafePlace("가 볼 카페", null, null, 3)))
+        assertEquals("FELT 청계천", CafeMapLogic.find(spots, "  felt 청계천 ")?.name)
+        assertEquals("가 볼 카페", CafeMapLogic.find(spots, "가 볼 카페")?.name)
+        assertNull(CafeMapLogic.find(spots, "새 카페"))
+        assertNull(CafeMapLogic.find(spots, "  "))
     }
 
     @Test fun pickResult_roundTrips_andNamesTheArea() {

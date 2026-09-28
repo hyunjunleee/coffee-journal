@@ -57,7 +57,7 @@ object DetailMapPick {
     const val KEY = "detail-map-pick"
 }
 
-/** The pins and panel data of the detail map, derived like the SGIS maps' (roasteries, or visited cafés). */
+/** The pins and panel data of the detail map, derived like the SGIS maps' (roasteries, or every café). */
 data class DetailMapContent(
     val loaded: Boolean = false,
     val pins: List<DetailPin> = emptyList(),

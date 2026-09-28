@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -33,6 +34,8 @@ import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
 import com.coffeejournal.ui.form.RemoveButton
 import com.coffeejournal.ui.form.TextLink
+import com.coffeejournal.ui.map.CafeMapLogic
+import com.coffeejournal.ui.map.CafeSpot
 import com.coffeejournal.ui.theme.InputFilters
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.FieldLabel
@@ -43,7 +46,10 @@ import com.coffeejournal.ui.theme.SectionLabel
 import com.coffeejournal.ui.theme.Seg
 import com.coffeejournal.ui.theme.fontScaled
 
-/** 원두 구성 · 직접 블렌드 행(무게 비율) · 카페 이름 · 원두 이름(자동완성/자동 채움) · 가격 · 자동 채움 배너. */
+/**
+ * 원두 구성 · 직접 블렌드 행(무게 비율) · 카페 이름(아는 카페 자동완성, 위치 지정) · 원두 이름(자동완성/자동 채움) · 가격 ·
+ * 자동 채움 배너. [cafes] are every café there is; [onPickCafePlace] opens the café picker for the name typed.
+ */
 @Composable
 internal fun BeanIdentitySection(
     state: FormState,
@@ -53,6 +59,8 @@ internal fun BeanIdentitySection(
     onNameTyped: (String) -> Unit,
     onNameBlur: () -> Unit,
     update: ((FormState) -> FormState) -> Unit,
+    cafes: List<CafeSpot> = emptyList(),
+    onPickCafePlace: (() -> Unit)? = null,
 ) {
     SectionLabel("원두 정보")
     if (!state.isCafe) {
@@ -76,10 +84,11 @@ internal fun BeanIdentitySection(
         if (state.isCustomBlend) BlendRows(state, suggestions, blendFocus, update)
     }
     if (state.isCafe) {
-        FormTextField(
-            value = state.cafeName, onValueChange = { v -> update { it.copy(cafeName = v) } }, label = "카페 이름",
-            placeholder = "예: OO카페 (서울 성수동)", modifier = Modifier.padding(bottom = 10.dp),
+        AutocompleteField(
+            value = state.cafeName, onValueChange = { v -> update { it.copy(cafeName = v) } }, options = cafes.map { it.name },
+            label = "카페 이름", placeholder = "예: OO카페 (서울 성수동)", modifier = Modifier.padding(bottom = 10.dp),
         )
+        if (onPickCafePlace != null && state.cafeName.isNotBlank()) CafePlaceLine(state.cafeName, cafes, onPickCafePlace)
     }
     AutocompleteField(
         value = state.name, onValueChange = onNameTyped, options = suggestions.beanNames,
@@ -139,6 +148,18 @@ private fun BlendRows(state: FormState, suggestions: FormSuggestions, blendFocus
         GhostButton("+ 원두 추가", small = true, onClick = { update { it.copy(blendRows = it.blendRows + BlendRowForm()) } })
         if (state.error?.field == FormField.BLEND_ROWS) ErrorText(state.error.message)
         HintText("각 원두의 기존 기록에도 이번 추출이 함께 표시돼요.")
+    }
+}
+
+/** Under 카페 이름: where the café is, and "위치 지정" (saved at once for the café, shared by all its visits). */
+@Composable
+private fun CafePlaceLine(cafeName: String, cafes: List<CafeSpot>, onPick: () -> Unit) {
+    val point = CafeMapLogic.find(cafes, cafeName)?.point
+    val where = remember(point) { point?.let { "📍 ${CafeMapLogic.placeLabel(it)}" } ?: "카페 위치 미지정" }
+    Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(where, style = AppType.faint, modifier = Modifier.weight(1f))
+        Spacer(Modifier.width(8.dp))
+        GhostButton(if (point == null) "위치 지정" else "위치 변경", small = true, onClick = onPick)
     }
 }
 

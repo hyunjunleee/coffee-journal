@@ -266,4 +266,14 @@ class FormMapperTest {
         assertEquals("직접", kept.farmProducer)
         assertNull(FormMapper.nameParenHint("괄호 없음"))
     }
+
+    @Test fun newRoastery_isOneTheSaveWouldRegister() {
+        val known = listOf("커피 리브레", "Momos Coffee")
+        assertTrue(FormMapper.isNewRoastery("프릳츠", known))
+        // matched like the save's auto-registration: case and spaces do not make a new roastery
+        assertFalse(FormMapper.isNewRoastery(" 커피리브레 ", known))
+        assertFalse(FormMapper.isNewRoastery("momos coffee", known))
+        assertFalse(FormMapper.isNewRoastery("  ", known))
+        assertTrue(FormMapper.isNewRoastery("모모스", emptyList()))
+    }
 }

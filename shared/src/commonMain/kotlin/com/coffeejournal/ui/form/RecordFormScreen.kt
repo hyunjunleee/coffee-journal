@@ -39,6 +39,8 @@ import com.coffeejournal.ui.form.sections.RecipeLauncherSection
 import com.coffeejournal.ui.form.sections.RecipeSection
 import com.coffeejournal.ui.form.sections.TastingSection
 import com.coffeejournal.ui.form.timer.BrewTimerResult
+import com.coffeejournal.ui.map.CafeMapViewModel
+import com.coffeejournal.ui.map.MapPickTarget
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.BlockBackWhile
 import com.coffeejournal.ui.theme.Dimens
@@ -145,7 +147,12 @@ private fun RecordFormBody(
         CuppingSection(state, suggestions, cuppingFocus, update)
         return
     }
-    BeanIdentitySection(state, suggestions, nameFocus, blendFocus, vm::onNameTyped, vm::onNameBlur, update)
+    // a café record: the cafés there are (added by hand too) for 카페 이름, whose "위치 지정" saves the position at once
+    val cafes = if (state.isCafe) koinViewModel<CafeMapViewModel>().spots.collectAsStateWithLifecycle().value.orEmpty() else emptyList()
+    BeanIdentitySection(
+        state, suggestions, nameFocus, blendFocus, vm::onNameTyped, vm::onNameBlur, update, cafes = cafes,
+        onPickCafePlace = dropUnlessResumed { nav.navigate(Route.MapPicker(target = MapPickTarget.CAFE, name = state.cafeName.trim())) },
+    )
     BeanInfoSection(state, suggestions, update)
     // Web hideBagPhotoSection: a repeat brew of a known bean has no bag photos of its own (photos it already has stay).
     val bagPhotosHidden = state.repeatBean && state.bagPhotos.none { it.hasImage }

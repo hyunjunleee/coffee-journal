@@ -21,7 +21,8 @@ import org.koin.dsl.module
 
 /**
  * Korea / world maps shared by the roastery map, the café map and the location picker, the detail map (design v2 §1),
- * and the picker's place search and current location (their platform parts come from the platform module).
+ * the picker's place search and current location (their platform parts come from the platform module), and the café
+ * name screen of "+ 카페 추가".
  */
 object MapFeature : Feature {
     override val module: Module = module {
@@ -30,6 +31,7 @@ object MapFeature : Feature {
         single { PlaceSearchService(get(), get(), get()) }
         viewModelOf(::PlaceSearchSettingsViewModel)
         viewModel { (r: Route.DetailMap) -> DetailMapViewModel(r, get(), get(), get()) }
+        viewModelOf(::CafeAddViewModel)
         // the detail map's renderer (MapLibre Native on Android and iOS); the flow tests put a fake in its place
         single<DetailMapRenderer> { platformDetailMapRenderer() }
     }
@@ -43,5 +45,6 @@ object MapFeature : Feature {
             val route = back.toRoute<Route.DetailMap>()
             DetailMapScreen(nav, koinViewModel<DetailMapViewModel> { parametersOf(route) })
         }
+        composable<Route.CafeAdd> { CafeAddScreen(nav, koinViewModel<CafeAddViewModel>()) }
     }
 }

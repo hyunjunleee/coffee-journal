@@ -134,7 +134,10 @@ class DatabaseMigrationTest {
         cafes.set("FELT 청계천", GeoPoint(37.5663, 126.991))
         cafes.set("felt 청계천", GeoPoint(37.57, 126.99))
         assertEquals(listOf("FELT 청계천" to GeoPoint(37.57, 126.99)), cafes.getAll().map { it.name to it.point })
+        // 위치 지우기 keeps the café's row without a position; deleting the café removes it
         cafes.clear("Felt 청계천 ")
+        assertEquals(listOf("FELT 청계천" to null), cafes.getAll().map { it.name to it.point })
+        cafes.delete("Felt 청계천 ")
         assertEquals(0, cafes.getAll().size)
         Unit
     }

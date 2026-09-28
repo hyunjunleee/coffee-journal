@@ -649,7 +649,7 @@ class MoreFlowTest : FlowTestBase() {
         launchApp()
         tab("tab-bean")
         clickText("로스터리")
-        clickText("+ 추가")
+        clickText("+ 로스터리 추가")
         typeInto("예: 영천카페 듀잇", "테스트 로스터스 성수")
         clickText("저장")
         waitFor(hasText("테스트 로스터스 성수", substring = true), "roastery listed")
