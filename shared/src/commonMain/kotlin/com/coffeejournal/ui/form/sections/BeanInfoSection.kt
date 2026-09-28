@@ -1,5 +1,6 @@
 package com.coffeejournal.ui.form.sections
 
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -88,16 +89,23 @@ internal fun BeanInfoSection(state: FormState, suggestions: FormSuggestions, upd
     )
 }
 
-/** What a field shows in grey while it is empty: bean 1's value in a later bean ([fromFirst]), else the usual example. */
+/**
+ * What a field shows in grey while it is empty: in bean 1 the usual example; in a later bean only bean 1's value where
+ * it takes it over ([fromFirst]), so the grey there always is a value that will be saved, never an example.
+ */
 private class Grey(val text: String, val fromFirst: Boolean)
 
-private fun grey(index: Int, own: String, firstValue: String, example: String): Grey =
-    if (index > 0 && own.isBlank() && firstValue.isNotBlank()) Grey(firstValue, true) else Grey(example, false)
+private fun grey(index: Int, own: String, firstValue: String, example: String): Grey = when {
+    index == 0 -> Grey(example, false)
+    own.isBlank() && firstValue.isNotBlank() -> Grey(firstValue, true)
+    else -> Grey("", false)
+}
 
 /**
  * One bean's fields; the same block for every bean of a blend. With two or more it has a head ("원두 2 · 비율 %",
  * ✕ on the later ones). A later bean's 로스터리, 로스팅 정도 and 로스팅 날짜 show bean 1's in grey until it gets its
  * own (like the brew timer's estimated grams): typing replaces the grey value, emptying the field takes bean 1's again.
+ * A later bean shows no example placeholders, so nothing grey there could be taken for a value it would get.
  */
 @Composable
 private fun BeanBlock(
@@ -110,6 +118,22 @@ private fun BeanBlock(
     change: ((BeanForm) -> BeanForm) -> Unit,
     onRemove: () -> Unit,
 ) {
+    // the block as one node, so a later bean's fields can be told apart (tests)
+    Column(Modifier.fillMaxWidth().testTag("bean-$index")) { BeanBlockFields(bean, index, count, first, isCafe, suggestions, change, onRemove) }
+}
+
+@Composable
+private fun BeanBlockFields(
+    bean: BeanForm,
+    index: Int,
+    count: Int,
+    first: BeanForm,
+    isCafe: Boolean,
+    suggestions: FormSuggestions,
+    change: ((BeanForm) -> BeanForm) -> Unit,
+    onRemove: () -> Unit,
+) {
+    fun example(text: String): String = if (index == 0) text else ""
     if (count > 1) BeanBlockHead(bean, index, first, change, onRemove)
     val roastery = grey(index, bean.roastery, first.roastery, "예: 커피정경")
     TwoUp(
@@ -119,26 +143,26 @@ private fun BeanBlock(
                 placeholder = roastery.text, placeholderColor = if (roastery.fromFirst) Ink.textMuted else Ink.textFaint,
             )
         },
-        { m -> AutocompleteField(bean.selection, { v -> change { it.copy(selection = v) } }, suggestions.selections, m, label = "생두 수입사", placeholder = "예: Nordic Approach") },
+        { m -> AutocompleteField(bean.selection, { v -> change { it.copy(selection = v) } }, suggestions.selections, m, label = "생두 수입사", placeholder = example("예: Nordic Approach")) },
     )
     TwoUp(
-        { m -> FormTextField(bean.country, { v -> change { it.copy(country = v) } }, m, label = "국가", placeholder = "브라질") },
-        { m -> AutocompleteField(bean.region, { v -> change { it.copy(region = v) } }, regionOptions(bean.country), m, label = "지역", placeholder = "Cerrado") },
+        { m -> FormTextField(bean.country, { v -> change { it.copy(country = v) } }, m, label = "국가", placeholder = example("브라질")) },
+        { m -> AutocompleteField(bean.region, { v -> change { it.copy(region = v) } }, regionOptions(bean.country), m, label = "지역", placeholder = example("Cerrado")) },
     )
     TwoUp(
-        { m -> AutocompleteField(bean.farmProducer, { v -> change { it.copy(farmProducer = v) } }, suggestions.farms, m, label = "농장(생산자)", placeholder = "예: 라 에스메랄다(페드로 가족)") },
-        { m -> FormTextField(bean.washingStation, { v -> change { it.copy(washingStation = v) } }, m, label = "워싱 스테이션", placeholder = "예: 아리차") },
+        { m -> AutocompleteField(bean.farmProducer, { v -> change { it.copy(farmProducer = v) } }, suggestions.farms, m, label = "농장(생산자)", placeholder = example("예: 라 에스메랄다(페드로 가족)")) },
+        { m -> FormTextField(bean.washingStation, { v -> change { it.copy(washingStation = v) } }, m, label = "워싱 스테이션", placeholder = example("예: 아리차")) },
     )
     TwoUp(
-        { m -> FormTextField(bean.altitude, { v -> change { it.copy(altitude = v) } }, m, label = "재배 고도", placeholder = "800~1,100m") },
-        { m -> FormTextField(bean.variety, { v -> change { it.copy(variety = v) } }, m, label = "품종", placeholder = "예: Heirloom(74110), Mundo Novo") },
+        { m -> FormTextField(bean.altitude, { v -> change { it.copy(altitude = v) } }, m, label = "재배 고도", placeholder = example("800~1,100m")) },
+        { m -> FormTextField(bean.variety, { v -> change { it.copy(variety = v) } }, m, label = "품종", placeholder = example("예: Heirloom(74110), Mundo Novo")) },
     )
     if (!isCafe) {
         TwoUp(
-            { m -> FormTextField(bean.moisture, { v -> change { it.copy(moisture = v) } }, m, label = "수분율 (%)", placeholder = "11.3", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
-            { m -> FormTextField(bean.density, { v -> change { it.copy(density = v) } }, m, label = "밀도 (g/L)", placeholder = "850", keyboardType = KeyboardType.Number, inputFilter = InputFilters::decimal) },
+            { m -> FormTextField(bean.moisture, { v -> change { it.copy(moisture = v) } }, m, label = "수분율 (%)", placeholder = example("11.3"), keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
+            { m -> FormTextField(bean.density, { v -> change { it.copy(density = v) } }, m, label = "밀도 (g/L)", placeholder = example("850"), keyboardType = KeyboardType.Number, inputFilter = InputFilters::decimal) },
         )
-        TwoUp({ m -> FormTextField(bean.score, { v -> change { it.copy(score = v) } }, m, label = "CoE 컵 점수", placeholder = "87.5", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) })
+        TwoUp({ m -> FormTextField(bean.score, { v -> change { it.copy(score = v) } }, m, label = "CoE 컵 점수", placeholder = example("87.5"), keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) })
     }
     ProcessAndRoast(bean, index, first, change)
     if (!isCafe) {
@@ -160,7 +184,7 @@ private fun BeanBlockHead(bean: BeanForm, index: Int, first: BeanForm, change: (
         Text("원두 ${index + 1}", style = AppType.cardTitle, modifier = Modifier.weight(1f))
         Text("비율", style = AppType.fieldLabel, modifier = Modifier.padding(end = 6.dp))
         CompactField(
-            value = bean.percent, onValueChange = { v -> change { it.copy(percent = v) } }, placeholder = "%",
+            value = bean.percent, onValueChange = { v -> change { it.copy(percent = v) } }, placeholder = if (index == 0) "%" else "",
             keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal, textAlign = TextAlign.End,
             modifier = Modifier.width(64.dp.fontScaled()),
         )
@@ -168,7 +192,7 @@ private fun BeanBlockHead(bean: BeanForm, index: Int, first: BeanForm, change: (
         if (index > 0) RemoveButton(onClick = onRemove, label = "원두 ${index + 1} 삭제") else Spacer(Modifier.width(8.dp))
     }
     if (index > 0 && listOf(first.roastery, first.roast, first.roastDate).any { it.isNotBlank() }) {
-        HintText("회색 로스터리·로스팅은 원두 1과 같게 저장돼요. 다르면 새로 적어 주세요.", Modifier.padding(bottom = 6.dp))
+        HintText("회색 글자는 원두 1의 로스터리·로스팅이에요. 그대로 두면 같게 저장되고, 다르면 새로 적어 주세요.", Modifier.padding(bottom = 6.dp))
     }
 }
 
@@ -180,12 +204,15 @@ private fun ProcessAndRoast(bean: BeanForm, index: Int, first: BeanForm, change:
             options = Processes.formSegments, value = bean.process,
             onChange = { v -> change { it.copy(process = v, processSub = if (v != it.process) "" else it.processSub) } },
         )
+        // a later bean has no examples: its field says what it is in a label instead
         if (bean.process == FormMapper.PROCESS_OTHER) {
             Spacer(Modifier.height(8.dp))
-            FormTextField(bean.processOther, { v -> change { it.copy(processOther = v) } }, placeholder = "예: 카보닉 마세레이션, 웻헐드 등")
+            if (index == 0) FormTextField(bean.processOther, { v -> change { it.copy(processOther = v) } }, placeholder = "예: 카보닉 마세레이션, 웻헐드 등")
+            else FormTextField(bean.processOther, { v -> change { it.copy(processOther = v) } }, label = "기타 가공 방식")
         } else if (bean.process in Processes.mainSegments) {
             Spacer(Modifier.height(8.dp))
-            FormTextField(bean.processSub, { v -> change { it.copy(processSub = v) } }, placeholder = "세부 종류 (선택, 예: 드래곤 아이, 더블 퍼멘티드)")
+            if (index == 0) FormTextField(bean.processSub, { v -> change { it.copy(processSub = v) } }, placeholder = "세부 종류 (선택, 예: 드래곤 아이, 더블 퍼멘티드)")
+            else FormTextField(bean.processSub, { v -> change { it.copy(processSub = v) } }, label = "세부 종류 (선택)")
         }
     }
     FieldBlock {

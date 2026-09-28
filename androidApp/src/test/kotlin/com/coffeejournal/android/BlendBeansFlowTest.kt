@@ -8,6 +8,7 @@ import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTextReplacement
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -36,6 +37,16 @@ class BlendBeansFlowTest : CoverageFlowBase() {
     /** Bean [i]'s share field, in its block head. */
     private fun percentField(i: Int) = hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-block-$i"))
 
+    /** The text fields of a later bean's block in screen order (it shows no placeholders to find them by). */
+    private val laterBeanFields = listOf("비율", "로스터리", "생두 수입사", "국가", "지역", "농장(생산자)", "워싱 스테이션", "재배 고도", "품종", "수분율", "밀도", "CoE")
+
+    private fun typeInBean(i: Int, field: String, text: String) {
+        val n = node(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-$i")), laterBeanFields.indexOf(field))
+        n.performScrollTo()
+        n.performTextInput(text)
+        settle(1)
+    }
+
     /** Text inside bean [i]'s group of the detail. */
     private fun inBeanGroup(i: Int, text: String) = hasText(text) and hasAnyAncestor(hasTestTag("blend-bean-$i"))
 
@@ -52,7 +63,8 @@ class BlendBeansFlowTest : CoverageFlowBase() {
         waitFor(hasTestTag("bean-block-1"))
         // the same fields again, and the segment says what the record now is
         assertTrue(has(button("카페 블렌드")) && !has(button("단일 원두")))
-        assertEquals(2, count(field("Cerrado")))
+        assertEquals("a later bean shows no examples", 1, count(field("Cerrado")))
+        assertEquals(1, count(field("800~1,100m")))
         assertEquals("bean 2 shows bean 1's roastery in grey", 2, count(field("프릳츠 테스트")))
         assertTrue("and its roast", has(button("미디엄") and inheritedRoast))
         node(percentField(0)).performTextInput("60")
@@ -63,8 +75,8 @@ class BlendBeansFlowTest : CoverageFlowBase() {
         node(percentField(1)).performTextReplacement("40")
         waitFor(sumTag and hasText("합계 100%"))
         waitGone(hasText("비율을 더하면 100%가 아니에요. 모르는 비율이 있으면 그대로 저장해도 괜찮아요."))
-        typeInto("브라질", "에티오피아")
-        typeInto("Cerrado", "Yirgacheffe", index = 1)
+        typeInBean(1, "국가", "에티오피아")
+        typeInBean(1, "지역", "Yirgacheffe")
         clickNode(button("워시드"), 1)
 
         saveForm("하우스 블렌드 테스트")

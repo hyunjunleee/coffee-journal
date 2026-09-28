@@ -406,8 +406,8 @@ class RouteScreenshotTest {
     }
 
     /**
-     * A café blend: "+ 원두 추가 (블렌드)" gave bean 2 the same block; its 로스터리 and 로스팅 show bean 1's in grey, and
-     * the shares add up to 90% (the gentle hint).
+     * A café blend: "+ 원두 추가 (블렌드)" gave bean 2 the same block, without example placeholders; its 로스터리 and
+     * 로스팅 show bean 1's in grey, and the shares add up to 90% (the gentle hint).
      */
     @Test fun recordForm_cafeBlend() = show(Route.RecordForm(mode = FormMode.EXTRACT), "81-form-cafe-blend.png") {
         type("예: 콜롬비아 라 플라타 게이샤 워시드", "하우스 블렌드")
@@ -417,7 +417,8 @@ class RouteScreenshotTest {
         click("+ 원두 추가 (블렌드)")
         compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-block-0")))[0].performTextInput("60")
         compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-block-1")))[0].performTextInput("30")
-        type("브라질", "에티오피아")
+        // bean 2's 국가 (its block shows no example placeholders): 비율, 로스터리, 생두 수입사, 국가
+        compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-1")))[3].performScrollTo().performTextInput("에티오피아")
         settle()
         bringToTop(hasTestTag("bean-block-1"))
     }
