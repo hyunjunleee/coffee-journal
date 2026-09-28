@@ -24,14 +24,14 @@ val beanExtraModule: Module = module {
     viewModelOf(::MiscItemsViewModel)
     viewModelOf(::BlendsViewModel)
     viewModelOf(::BeanExtraDataViewModel)
-    viewModel { (type: String, itemId: String?) -> FlatItemFormViewModel(type, itemId, get()) }
+    viewModel { (type: String, itemId: String?, scope: String?) -> FlatItemFormViewModel(type, itemId, get(), scope) }
     viewModel { (blendId: String?) -> BlendFormViewModel(blendId, get(), get()) }
 }
 
 fun NavGraphBuilder.beanExtraRoutes(nav: NavHostController) {
     composable<Route.FlatItemForm> { back ->
         val r = back.toRoute<Route.FlatItemForm>()
-        FlatItemFormScreen(nav, r.type, r.itemId, results = back.savedStateHandle)
+        FlatItemFormScreen(nav, r.type, r.itemId, results = back.savedStateHandle, scope = r.scope)
     }
     composable<Route.BlendForm> { back -> BlendFormScreen(nav, back.toRoute<Route.BlendForm>().blendId) }
     composable<Route.CountryDetail> { back -> CountryDetailScreen(nav, back.toRoute<Route.CountryDetail>().en) }

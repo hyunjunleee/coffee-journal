@@ -8,6 +8,7 @@ import com.coffeejournal.domain.model.PantryItem
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.BeanRecords
+import com.coffeejournal.domain.rules.BlendBeans
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.domain.rules.Packages
@@ -78,6 +79,14 @@ class SaveEntryPipeline(
             pairs += MiscType.FARM to entry.farmProducer
             pairs += MiscType.SELECTION to BeanNames.entrySelection(entry)
             BeanNames.splitVarietyValues(entry.variety).forEach { pairs += MiscType.VARIETY to BeanNames.varietyPrimary(it) }
+            // a café blend's other beans register theirs too
+            for (b in BlendBeans.beans(entry).drop(1)) {
+                pairs += MiscType.SOURCE to b.roastery
+                pairs += MiscType.PROCESS to processMain(b.process, b.processOther)
+                pairs += MiscType.FARM to b.farmProducer
+                pairs += MiscType.SELECTION to BeanNames.selectionShortName(b.selection)
+                BeanNames.splitVarietyValues(b.variety).forEach { pairs += MiscType.VARIETY to BeanNames.varietyPrimary(it) }
+            }
         }
         registerMany(pairs)
     }
@@ -90,7 +99,7 @@ class SaveEntryPipeline(
      */
     suspend fun backfill(records: List<Entry>) {
         val pairs = mutableListOf<Pair<String, String>>()
-        for (r in BeanRecords.flatten(records)) {
+        for (r in BeanRecords.flatten(records, blendBeans = true)) {
             pairs += MiscType.FARM to r.farmProducer
             BeanNames.splitVarietyValues(r.variety).forEach { pairs += MiscType.VARIETY to BeanNames.varietyPrimary(it) }
             pairs += MiscType.SOURCE to r.roastery.ifBlank { if (r.parentEntryId == null) BeanNames.parseNameRoastery(r.name) else "" }

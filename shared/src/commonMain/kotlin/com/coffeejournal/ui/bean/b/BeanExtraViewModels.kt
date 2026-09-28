@@ -39,12 +39,15 @@ class BlendsViewModel(private val blends: BlendRepository) : ViewModel() {
 /** Live BeanData for the stand-alone detail routes (country / roastery) that are opened outside the tab. */
 class BeanExtraDataViewModel(entries: EntryRepository, misc: MiscRepository, blends: BlendRepository) : ViewModel() {
     val data: StateFlow<BeanData> = combine(entries.observeAll(), misc.observeAll(), blends.observeAll()) { e, m, b -> BeanData(loaded = true, entries = e, miscItems = m, blends = b) }
-        .deriveOffMain { it.copy(records = BeanRecords.flatten(it.entries)) }
+        .deriveOffMain { it.copy(records = BeanRecords.flatten(it.entries), originRecords = BeanRecords.flatten(it.entries, blendBeans = true)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), BeanData())
 }
 
-/** Shared add/edit form for source / selection / farm / process misc items (web makeFlatListTab form). */
-class FlatItemFormViewModel(val type: String, private val itemId: String?, private val misc: MiscRepository) : ViewModel() {
+/**
+ * Shared add/edit form for source / selection / farm / process misc items (web makeFlatListTab form). [newScope] is a
+ * new roastery's 국내/해외 when it is added from that tab of a map.
+ */
+class FlatItemFormViewModel(val type: String, private val itemId: String?, private val misc: MiscRepository, newScope: String? = null) : ViewModel() {
     data class State(
         val name: String = "", val status: String = "", val scope: String = Scope.DOMESTIC, val location: String = "",
         val notes: String = "", val existing: MiscItem? = null, val loaded: Boolean = false,
@@ -54,11 +57,13 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
         val point: GeoPoint? = null,
     )
 
-    private val _state = MutableStateFlow(State(loaded = itemId == null))
+    private val _state = MutableStateFlow(State(loaded = itemId == null, scope = newScope?.takeIf { it == Scope.OVERSEAS } ?: Scope.DOMESTIC))
     /** A new item's id, fixed for this form, so a repeated save could only upsert the same row. */
     private val newId = Ids.newId()
     val state: StateFlow<State> = _state
     val spec: FlatItemLogic.Spec = FlatItemLogic.spec(type)
+    /** The form as it was opened (blank, or the stored item): leaving asks only when the input differs from it. */
+    private var opened: State? = _state.value.takeIf { itemId == null }
 
     init {
         if (itemId != null) viewModelScope.launch {
@@ -67,8 +72,11 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
                 if (m == null) s.copy(loaded = true)
                 else s.copy(name = m.name, status = m.status, scope = m.scope.ifBlank { Scope.DOMESTIC }, location = m.location, notes = m.notes, existing = m, loaded = true, point = m.point)
             }
+            opened = _state.value
         }
     }
+
+    fun hasChanges(): Boolean = opened?.let { it != _state.value.copy(saving = false) } ?: false
 
     fun setName(v: String) = _state.update { it.copy(name = v) }
     fun setStatus(v: String) = _state.update { it.copy(status = v) }
@@ -81,12 +89,13 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
 
     /**
      * The location picker's answer ([MapPickResult]): sets or clears the position; an empty 지역 field is filled with
-     * the area found there ("서울특별시 성동구", or the country abroad).
+     * the searched place's address, else the area found there ("서울특별시 성동구", or the country abroad). What the
+     * user typed there stays.
      */
     fun applyPick(result: String) = _state.update { s ->
         if (s.saving) return@update s
         val p = MapPickResult.decode(result) ?: return@update s.copy(point = null)
-        val fill = if (s.location.isBlank()) MapPickResult.placeName(p, overseas = s.scope == Scope.OVERSEAS) else null
+        val fill = if (s.location.isBlank()) MapPickResult.address(result) ?: MapPickResult.placeName(p, overseas = s.scope == Scope.OVERSEAS) else null
         s.copy(point = p, location = fill ?: s.location)
     }
 
@@ -139,6 +148,8 @@ class BlendFormViewModel(private val blendId: String?, private val blends: Blend
     val suggestions: StateFlow<List<String>> = entries.observeAll()
         .deriveOffMain { e -> BlendSources.recentBeanNames(BeanRecords.flatten(e)) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** The form as it was opened (blank, or the stored blend): leaving asks only when the input differs from it. */
+    private var opened: State? = _state.value.takeIf { blendId == null }
 
     init {
         if (blendId != null) viewModelScope.launch {
@@ -147,8 +158,11 @@ class BlendFormViewModel(private val blendId: String?, private val blends: Blend
                 if (b == null) s.copy(loaded = true)
                 else s.copy(name = b.name, date = b.date.ifBlank { s.date }, rows = b.beans.ifEmpty { listOf(BlendComponent("")) }, notes = b.notes, existing = b, loaded = true)
             }
+            opened = _state.value
         }
     }
+
+    fun hasChanges(): Boolean = opened?.let { it != _state.value.copy(saving = false) } ?: false
 
     fun setName(v: String) = _state.update { it.copy(name = v) }
     fun setDate(v: String) = _state.update { it.copy(date = v) }

@@ -12,9 +12,10 @@ data class GeoPoint(val lat: Double, val lng: Double) {
 
 /**
  * Where a visited café is (table cafe_places, backup key `cafePlaces`): café records only carry the café's name, so
- * its position is kept once per name and shared by every visit.
+ * its position is kept once per name and shared by every visit. [address] is the address of the place picked from a
+ * search (schema v3); a position tapped on a map or taken from the phone's location has none.
  */
-data class CafePlace(val name: String, val lat: Double?, val lng: Double?, val createdAt: Long) {
+data class CafePlace(val name: String, val lat: Double?, val lng: Double?, val createdAt: Long, val address: String? = null) {
     val point: GeoPoint? get() = GeoPoint.of(lat, lng)
 
     companion object {

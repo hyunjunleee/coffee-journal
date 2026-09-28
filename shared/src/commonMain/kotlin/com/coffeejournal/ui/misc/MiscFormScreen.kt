@@ -40,9 +40,11 @@ import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.LeaveDialog
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
 import com.coffeejournal.ui.theme.Seg
+import com.coffeejournal.ui.theme.rememberLeaveGuard
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -58,8 +60,11 @@ fun MiscFormScreen(nav: NavHostController, type: String, itemId: String?) {
 
     val saving = state.saving && !state.done
     BlockBackWhile(saving)
+    // back and 취소 ask before typed input or a picked photo is lost
+    val guard = rememberLeaveGuard(vm::hasChanges, busy = state.saving, leave = leave)
+    LeaveDialog(guard)
     Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar(if (state.isEdit) "$title 수정" else "$title 추가", onBack = { if (!saving) leave() })
+        ScreenTitleBar(if (state.isEdit) "$title 수정" else "$title 추가", onBack = guard::request)
         Column(
             Modifier.fillMaxSize().imeOverlapPadding().verticalScroll(rememberScrollState())
                 .padding(horizontal = Dimens.gutter).padding(top = 14.dp, bottom = 96.dp),
@@ -89,7 +94,7 @@ fun MiscFormScreen(nav: NavHostController, type: String, itemId: String?) {
             Spacer(Modifier.height(22.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 PrimaryButton(if (state.isEdit) "수정 저장" else "저장", enabled = state.canSave, onClick = vm::save)
-                GhostButton("취소", onClick = leave, enabled = !saving)
+                GhostButton("취소", onClick = guard::request, enabled = !saving)
             }
         }
     }

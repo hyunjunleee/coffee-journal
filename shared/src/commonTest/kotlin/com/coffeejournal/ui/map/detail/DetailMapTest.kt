@@ -254,6 +254,14 @@ class DetailMapPinsTest {
         assertEquals("FELT 청계천 2", DetailMapPins.labelOf(pins[0]))
     }
 
+    @Test fun cafeAddedByHand_isPinnedWithoutACount() {
+        val spots = CafeMapLogic.spots(emptyList(), listOf(CafePlace("가 볼 카페", 37.5446, 127.0557, 1), CafePlace("미정 카페", null, null, 2)))
+        val pin = DetailMapPins.cafes(spots).single()
+        assertEquals("가 볼 카페", DetailMapPins.labelOf(pin))
+        assertEquals("가 볼 카페, 방문 기록 없음", pin.description)
+        assertEquals(PinPrecision.EXACT, pin.precision)
+    }
+
     @Test fun featureCollection_isGeoJson_lngLat_withTheSelectedPinLast() {
         val a = DetailPin("a", "모모스", GeoPoint(35.2270, 129.0880), PinPrecision.EXACT, 3)
         val b = DetailPin("b", "리브레", GeoPoint(37.5446, 127.0557), PinPrecision.DISTRICT)

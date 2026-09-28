@@ -63,6 +63,23 @@ data class BrewTimerState(
     val endMs: Long? = null,
     /** How many recipe step changes were already announced (so a restored timer does not buzz for old ones). */
     val announced: Int = 0,
+    /** The pour last removed with ✕, kept so 되돌리기 can bring it back while the log is still as the removal left it. */
+    val removed: RemovedPour? = null,
+)
+
+/**
+ * A pour taken out of the log ([BrewTimerEngine.removePour]): the log as it was before ([rows], [pouring],
+ * [gramsFor]) and as the removal left it ([after]; 되돌리기 is offered only while the log still is that). [at] is where
+ * the pour's row was in [after], [pourNumber] its number ("2차 푸어").
+ */
+@Serializable
+data class RemovedPour(
+    val pourNumber: Int,
+    val at: Int,
+    val rows: List<TimerRow>,
+    val pouring: Boolean,
+    val gramsFor: Int?,
+    val after: List<TimerRow>,
 )
 
 /** The pure rules of the brew timer (feature-plan-v2 §2.1); the view model only adds the clock and saving. */
@@ -148,6 +165,46 @@ object BrewTimerEngine {
             row.copy(grams = value, estimated = false)
         }
         return s.copy(rows = s.rows.mapIndexed { k, r -> if (k == i) next else r })
+    }
+
+    /**
+     * ✕ on a pour in the log: 붓기 시작·끝 was tapped by mistake, so the pour never happened. Its time becomes part of
+     * the wait around it (an unnamed wait joins the wait before it, and one left at the top of the log is dropped, as
+     * if the timer had been started with 시작), a note it carried stays on that time ("스월" did happen), and a pour
+     * still going is simply cancelled. The clock is not touched. The pours after it move up a number, so their
+     * estimates are taken again (the recipe's 2nd pour becomes its 1st); grams the user typed or confirmed stay.
+     */
+    fun removePour(s: BrewTimerState, rowIndex: Int, ref: RecipeRef? = null): BrewTimerState {
+        val pour = s.rows.getOrNull(rowIndex)?.takeIf { it.pour } ?: return s
+        val running = s.pouring && rowIndex == s.rows.lastIndex
+        val converted = s.rows.toMutableList().also { it[rowIndex] = TimerRow(pour.startMs, pour = false, notes = pour.notes) }
+        val kept = converted.indices.filter { k ->
+            val r = converted[k]
+            // only the pour's own row and the wait right after it can merge; elsewhere the log stays as it was
+            val joinsWaitBefore = (k == rowIndex || k == rowIndex + 1) && !r.pour && r.notes.isEmpty() && (k == 0 || !converted[k - 1].pour)
+            !joinsWaitBefore
+        }
+        val merged = kept.map { converted[it] }
+        val rows = merged.mapIndexed { i, r ->
+            val end = merged.getOrNull(i + 1)?.startMs
+            if (r.pour && r.estimated && end != null) r.copy(grams = estimateGrams(ref, merged, i, end)) else r
+        }
+        val gramsFor = s.gramsFor?.takeIf { it != rowIndex }?.let { kept.indexOf(it) }?.takeIf { it >= 0 }
+        val removed = RemovedPour(
+            pourNumber = s.rows.take(rowIndex + 1).count { it.pour }, at = kept.count { it < rowIndex },
+            rows = s.rows, pouring = s.pouring, gramsFor = s.gramsFor, after = rows,
+        )
+        return s.copy(rows = rows, pouring = s.pouring && !running, gramsFor = gramsFor, removed = removed)
+    }
+
+    /** 되돌리기 applies: a pour was removed, nothing in the log changed since, and the brew is still going. */
+    fun canUndoRemove(s: BrewTimerState): Boolean = s.removed != null && s.removed.after == s.rows && s.endMs == null
+
+    /** 되돌리기 after ✕: the pour is back as it was (a pour that was still going goes on). */
+    fun undoRemove(s: BrewTimerState): BrewTimerState {
+        val r = s.removed ?: return s
+        if (!canUndoRemove(s)) return s
+        return s.copy(rows = r.rows, pouring = r.pouring, gramsFor = r.gramsFor, removed = null)
     }
 
     /** 확인 in the grams panel: the pour's grams as they are now (typed, or the estimate accepted), and the panel closes. */

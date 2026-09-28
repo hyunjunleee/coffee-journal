@@ -38,6 +38,10 @@ object AppIcons {
         )
     }
     val box: ImageVector by lazy { build("box", "M3 7l9-4 9 4v10l-9 4-9-4z", "M3 7l9 4 9-4", "M12 11v10") }
+    /** Lucide locate-fixed: the location picker's "현재 위치". */
+    val locate: ImageVector by lazy {
+        build("locate", "M2 12h3", "M19 12h3", "M12 2v3", "M12 19v3", "M12 19a7 7 0 1 0 0-14 7 7 0 0 0 0 14z", "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z")
+    }
 
     private fun build(name: String, vararg paths: String): ImageVector {
         val b = ImageVector.Builder(name = name, defaultWidth = 20.dp, defaultHeight = 20.dp, viewportWidth = 24f, viewportHeight = 24f)

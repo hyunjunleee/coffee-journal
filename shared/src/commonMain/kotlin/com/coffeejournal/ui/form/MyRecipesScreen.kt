@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
 import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.ui.theme.InputFilters
@@ -41,8 +42,10 @@ import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.HairlineCard
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.LeaveDialog
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
+import com.coffeejournal.ui.theme.rememberLeaveGuard
 import kotlinx.serialization.json.Json
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -57,9 +60,17 @@ fun MyRecipesScreen(nav: NavHostController) {
     val equipment by vm.equipment.collectAsStateWithLifecycle()
     var showForm by rememberSaveable { mutableStateOf(true) }
     var pendingDelete by remember { mutableStateOf<MyRecipe?>(null) }
+    // the new recipe's fields live here, so leaving the screen can ask about them and hiding the form keeps them
+    var draft by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf(MyRecipeDraft()) }
+    val hasDraft = { draft != MyRecipeDraft() }
+    val guard = rememberLeaveGuard(hasDraft, busy = false, leave = dropUnlessResumed { nav.popBackStack() })
+    LeaveDialog(guard)
+    // the form's own 취소 empties and closes it: the same question, about closing it
+    val cancelGuard = rememberLeaveGuard(hasDraft, busy = false, systemBack = false, leave = { draft = MyRecipeDraft(); showForm = false })
+    LeaveDialog(cancelGuard, text = "지금 닫으면 입력한 내용은 사라져요.", leaveLabel = "닫기")
 
     Column(Modifier.fillMaxSize().background(Ink.bg).statusBarsPadding()) {
-        ScreenTitleBar(title = "내 레시피", onBack = { nav.popBackStack() })
+        ScreenTitleBar(title = "내 레시피", onBack = guard::request)
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter).windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))) {
             Spacer(Modifier.height(14.dp))
             Text(
@@ -70,7 +81,11 @@ fun MyRecipesScreen(nav: NavHostController) {
             Spacer(Modifier.height(12.dp))
             GhostButton("+ 새 레시피 만들기", small = true, onClick = { showForm = !showForm })
             if (showForm) {
-                NewRecipeForm(equipment, onSave = { draft -> vm.create(draft).also { ok -> if (ok) showForm = false } }, onCancel = { showForm = false })
+                NewRecipeForm(
+                    equipment, draft, update = { change -> draft = change(draft) },
+                    onSave = { vm.create(draft).also { ok -> if (ok) { draft = MyRecipeDraft(); showForm = false } } },
+                    onCancel = cancelGuard::request,
+                )
             }
             Spacer(Modifier.height(16.dp))
             recipes.forEach { r ->
@@ -111,33 +126,38 @@ private val DraftSaver: Saver<MyRecipeDraft, String> = Saver(
     restore = { runCatching { Json.decodeFromString(MyRecipeDraft.serializer(), it) }.getOrNull() },
 )
 
-/** Web #new-my-recipe-form: name is required, everything else optional. */
+/** Web #new-my-recipe-form: name is required, everything else optional. [d] is the typed recipe, kept by the screen. */
 @Composable
-private fun NewRecipeForm(equipment: RecipeEquipment, onSave: (MyRecipeDraft) -> Boolean, onCancel: () -> Unit) {
-    var d by rememberSaveable(stateSaver = DraftSaver) { mutableStateOf(MyRecipeDraft()) }
+private fun NewRecipeForm(
+    equipment: RecipeEquipment,
+    d: MyRecipeDraft,
+    update: ((MyRecipeDraft) -> MyRecipeDraft) -> Unit,
+    onSave: () -> Boolean,
+    onCancel: () -> Unit,
+) {
     var nameError by rememberSaveable { mutableStateOf<String?>(null) }
     val nameFocus = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { nameFocus.requestFocus() } }
     Column(Modifier.fillMaxWidth().padding(top = 14.dp)) {
         FormTextField(
-            d.name, { d = d.copy(name = it); nameError = null }, label = "레시피 이름", placeholder = "예: 밝은 산미용 3단 푸어",
+            d.name, { update { r -> r.copy(name = it) }; nameError = null }, label = "레시피 이름", placeholder = "예: 밝은 산미용 3단 푸어",
             error = nameError, focusRequester = nameFocus, modifier = Modifier.padding(bottom = 10.dp),
         )
         TwoUp(
-            { m -> AutocompleteField(d.dripper, { d = d.copy(dripper = it) }, equipment.drippers, m, label = "드리퍼") },
-            { m -> AutocompleteField(d.filter, { d = d.copy(filter = it) }, equipment.filters, m, label = "필터") },
+            { m -> AutocompleteField(d.dripper, { update { r -> r.copy(dripper = it) } }, equipment.drippers, m, label = "드리퍼") },
+            { m -> AutocompleteField(d.filter, { update { r -> r.copy(filter = it) } }, equipment.filters, m, label = "필터") },
         )
         TwoUp(
-            { m -> FormTextField(d.grind, { d = d.copy(grind = it) }, m, label = "분쇄도") },
-            { m -> FormTextField(d.dose, { d = d.copy(dose = it) }, m, label = "원두량 (g)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
+            { m -> FormTextField(d.grind, { update { r -> r.copy(grind = it) } }, m, label = "분쇄도") },
+            { m -> FormTextField(d.dose, { update { r -> r.copy(dose = it) } }, m, label = "원두량 (g)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
         )
         TwoUp(
-            { m -> FormTextField(d.water, { d = d.copy(water = it) }, m, label = "물량 (g)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
-            { m -> FormTextField(d.temp, { d = d.copy(temp = it) }, m, label = "물 온도 (°C)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
+            { m -> FormTextField(d.water, { update { r -> r.copy(water = it) } }, m, label = "물량 (g)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
+            { m -> FormTextField(d.temp, { update { r -> r.copy(temp = it) } }, m, label = "물 온도 (°C)", keyboardType = KeyboardType.Decimal, inputFilter = InputFilters::decimal) },
         )
-        TwoUp({ m -> FormTextField(d.time, { d = d.copy(time = it) }, m, label = "총 추출시간", placeholder = "2:10") })
+        TwoUp({ m -> FormTextField(d.time, { update { r -> r.copy(time = it) } }, m, label = "총 추출시간", placeholder = "2:10") })
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            PrimaryButton("저장", onClick = { if (!onSave(d)) nameError = "레시피 이름을 입력해 주세요." }, modifier = Modifier.weight(1f))
+            PrimaryButton("저장", onClick = { if (!onSave()) nameError = "레시피 이름을 입력해 주세요." }, modifier = Modifier.weight(1f))
             GhostButton("취소", onClick = onCancel)
         }
     }

@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
@@ -48,7 +49,7 @@ class FakeBrewClock(var mono: Long = 50_000L, var wall: Long = 1_790_000_000_000
 
 /**
  * The brew timer (feature-plan-v2 §2.1) driven through the real app with a fake clock: pours, notes, the grams panel
- * and its estimates (the next pour never waits for them), the step log it writes into the form, the recipe countdown and its vibration, keeping the screen on, the replace
+ * and its estimates (the next pour never waits for them), removing a mistaken pour (✕, 되돌리기), the step log it writes into the form, the recipe countdown and its vibration, keeping the screen on, the replace
  * confirmation and the state kept for a process death.
  */
 @RunWith(AndroidJUnit4::class)
@@ -219,6 +220,63 @@ class BrewTimerFlowTest : CoverageFlowBase() {
         waitForText("새 기록")
         saveForm("붓기 계속")
         assertEquals(listOf(RecipeStep("0:00", "90", "15", "1차 푸어"), RecipeStep("0:15", "", "20", "드로우다운")), entries().single().steps)
+    }
+
+    @Test
+    fun aMistakenPour_isRemovedWithItsX_undoBringsItBack_andTheStepLogAndTotalsLeaveItOut() {
+        openTimerFromNewForm("잘못 누른 붓기")
+        tap(button("💧 붓기 시작"))
+        advance(10)
+        tap(button("붓기 끝"))
+        enterGrams("50")
+        advance(2)
+        tap(button("뜸"))
+        // 붓기 시작·끝 tapped by mistake during the bloom
+        advance(8)
+        tap(button("💧 붓기 시작"))
+        advance(2)
+        tap(button("붓기 끝"))
+        waitForText("부은 물 ≈ 60g", substring = true)
+        assertTrue(has(hasTestTag("timer-row-2") and hasText("2차 푸어 · ≈ 10g")))
+        // the ✕ is its own button with a label; the row still opens the grams
+        tap(hasContentDescription("2차 푸어 삭제") and hasClickAction())
+        waitFor(hasText("2차 푸어를 지웠어요") and hasAnyAncestor(hasTestTag("timer-removed")))
+        waitGone(hasTestTag("grams-panel"))
+        waitForText("부은 물 50g", substring = true)
+        assertFalse("the pour's row and its wait are gone", has(hasTestTag("timer-row-2")))
+        // 되돌리기 brings it back as it was
+        tap(button("되돌리기"))
+        waitFor(hasTestTag("timer-row-2") and hasText("2차 푸어 · ≈ 10g"))
+        waitGone(hasTestTag("timer-removed"))
+        tap(hasContentDescription("2차 푸어 삭제") and hasClickAction())
+        waitFor(hasTestTag("timer-removed"))
+        // the real second pour: numbered 2, and the removal can no longer be undone
+        advance(20)
+        tap(button("💧 붓기 시작"))
+        waitGone(hasTestTag("timer-removed"))
+        // a pour still going can be cancelled too
+        advance(1)
+        tap(hasContentDescription("2차 푸어 삭제") and hasClickAction())
+        waitForText("[ 진행 중 ]", substring = true)
+        tap(button("되돌리기"))
+        waitForText("[ 붓는 중 ]", substring = true)
+        advance(19)
+        tap(button("붓기 끝"))
+        enterGrams("190")
+        waitForText("부은 물 240g", substring = true)
+        advance(60)
+        tap(button("추출 끝"))
+        waitForText("총 2차 추출 · 합계 물량 240g · 총 시간 2:02")
+        tap(button("단계 로그로 옮기기"))
+        waitForText("새 기록")
+        saveForm("잘못 누른 붓기")
+        assertEquals(
+            listOf(
+                RecipeStep("0:00", "50", "10", "1차 푸어"), RecipeStep("0:10", "", "32", "뜸"),
+                RecipeStep("0:42", "190", "20", "2차 푸어"), RecipeStep("1:02", "", "60", "드로우다운"),
+            ),
+            entries().single().steps,
+        )
     }
 
     @Test

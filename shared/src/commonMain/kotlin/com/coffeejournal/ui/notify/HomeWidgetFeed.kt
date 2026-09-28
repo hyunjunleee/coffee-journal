@@ -98,14 +98,17 @@ class HomeWidgetFeed(
     ) { e, p, b, d, t -> WidgetSnapshots.build(e, p, b, d, t) }.distinctUntilChanged()
 
     /**
-     * Fires after every write to the tables the widget reads (records, their cupping beans, the pantry, blends and
-     * settings, where the D-day start lives). It only watches Room's invalidation, so it holds no data itself.
+     * Fires after every write to the tables the widget reads (records, their cupping beans, the pantry, blends) and
+     * when the D-day start changes. The tables are watched through Room's invalidation, so it holds no data itself;
+     * of the settings only the D-day start counts, as the record form writes its draft there while it is typed.
      */
-    fun changes(): Flow<Unit> =
-        db.invalidationTracker.createFlow(*WATCHED_TABLES, emitInitialState = false).map { }
+    fun changes(): Flow<Unit> = merge(
+        db.invalidationTracker.createFlow(*WATCHED_TABLES, emitInitialState = false).map { },
+        settings.observeDdayStart().distinctUntilChanged().drop(1).map { },
+    )
 
     companion object {
-        val WATCHED_TABLES = arrayOf("entries", "cupping_beans", "pantry_items", "blends", "settings")
+        val WATCHED_TABLES = arrayOf("entries", "cupping_beans", "pantry_items", "blends")
     }
 }
 

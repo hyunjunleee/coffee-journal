@@ -2,12 +2,15 @@ package com.coffeejournal.ui.settings
 
 import com.coffeejournal.data.repo.SettingsRepository
 import com.coffeejournal.ui.theme.BodyFont
+import com.coffeejournal.ui.theme.DerivationDispatcher
 import com.coffeejournal.ui.theme.DisplaySettings
 import com.coffeejournal.ui.theme.Motion
 import com.coffeejournal.ui.theme.NumberFont
 import com.coffeejournal.ui.theme.TextSize
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 
 /**
  * 설정 › 화면, kept in [SettingsRepository] under device keys ([SettingsRepository.DEVICE_PREFIX]): typefaces, text size
@@ -15,12 +18,16 @@ import kotlinx.coroutines.flow.combine
  * reads as the default.
  */
 class DisplayPrefs(private val settings: SettingsRepository) {
+    /**
+     * The saved display settings, again only when they change: every write to the settings table re-reads them (the
+     * record form writes its draft there while it is typed), and the app root collects this in its composition.
+     */
     fun observe(): Flow<DisplaySettings> = combine(
         settings.observe(KEY_BODY_FONT),
         settings.observe(KEY_NUMBER_FONT),
         settings.observe(KEY_TEXT_SIZE),
         settings.observe(KEY_MOTION),
-    ) { body, number, size, motion -> decode(body, number, size, motion) }
+    ) { body, number, size, motion -> decode(body, number, size, motion) }.distinctUntilChanged().flowOn(DerivationDispatcher)
 
     suspend fun load(): DisplaySettings =
         decode(settings.get(KEY_BODY_FONT), settings.get(KEY_NUMBER_FONT), settings.get(KEY_TEXT_SIZE), settings.get(KEY_MOTION))

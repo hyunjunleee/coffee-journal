@@ -166,7 +166,22 @@ class BackupCodec {
     }
 
     private fun encodeStep(s: RecipeStep): JsonObject = buildJsonObject { put("time", s.time); put("water", s.water); put("note", s.note); put("wait", s.wait) }
-    private fun encodeBlendComponent(c: BlendComponent): JsonObject = buildJsonObject { put("name", c.name); put("grams", c.grams) }
+    /**
+     * The web's `{name, grams}`, plus — app extension, only when there is one — a café blend bean's share and its own
+     * bean info (an empty 로스터리 / 로스팅 정도 / 로스팅 날짜 stays empty: the same as bean 1). The web ignores keys it
+     * does not know.
+     */
+    private fun encodeBlendComponent(c: BlendComponent): JsonObject = buildJsonObject {
+        put("name", c.name); put("grams", c.grams)
+        for ((key, value) in blendBeanFields(c)) if (value.isNotBlank()) put(key, value)
+    }
+
+    private fun blendBeanFields(c: BlendComponent): List<Pair<String, String>> = listOf(
+        "percent" to c.percent, "roastery" to c.roastery, "selection" to c.selection, "country" to c.country, "region" to c.region,
+        "farmProducer" to c.farmProducer, "washingStation" to c.washingStation, "altitude" to c.altitude, "variety" to c.variety,
+        "moisture" to c.moisture, "density" to c.density, "score" to c.score, "process" to c.process, "processOther" to c.processOther,
+        "roast" to c.roast, "roastDate" to c.roastDate,
+    )
 
     private fun encodeMisc(m: MiscItem, s: BackupSnapshot): JsonObject = buildJsonObject {
         val urls = s.miscPhotosFor(m.id).map { dataUrl(it.bytes) }
@@ -182,6 +197,8 @@ class BackupCodec {
     private fun encodeCafePlace(p: CafePlace): JsonObject = buildJsonObject {
         put("name", p.name)
         p.point?.let { put("lat", it.lat); put("lng", it.lng) }
+        // schema 3: only a place picked from a search has one
+        p.address?.let { put("address", it) }
         put("createdAt", p.createdAt)
     }
 
@@ -321,12 +338,14 @@ class BackupCodec {
                 put(key, v)
             }
         }.takeIf { it.isNotEmpty() }
+        val beanMode = o.str("beanMode").ifBlank { BeanMode.SINGLE }
         return Entry(
             id = id,
             createdAt = o.createdAt(where),
             category = category,
-            beanMode = o.str("beanMode").ifBlank { BeanMode.SINGLE },
-            blendComponents = o.objects("blendComponents", "${where}의 blendComponents").mapNotNull { (c, _) -> decodeBlendComponent(c) },
+            beanMode = beanMode,
+            blendComponents = o.objects("blendComponents", "${where}의 blendComponents")
+                .mapNotNull { (c, _) -> decodeBlendComponent(c, keepBlank = beanMode == BeanMode.COMMERCIAL_BLEND) },
             name = o.str("name"),
             country = o.str("country"),
             region = o.str("region"),
@@ -407,7 +426,20 @@ class BackupCodec {
     }
 
     private fun decodeStep(o: JsonObject) = RecipeStep(time = o.str("time"), water = o.str("water"), wait = o.str("wait"), note = o.str("note"))
-    private fun decodeBlendComponent(o: JsonObject): BlendComponent? = o.str("name").takeIf { it.isNotBlank() || o.str("grams").isNotBlank() }?.let { BlendComponent(it, o.str("grams")) }
+    /**
+     * A component with anything in it (a café blend bean may have no name, only its origin and share). A café blend
+     * keeps every one, blank or not: its first is bean 1 and the order says which bean is which.
+     */
+    private fun decodeBlendComponent(o: JsonObject, keepBlank: Boolean = false): BlendComponent? {
+        val c = BlendComponent(
+            name = o.str("name"), grams = o.str("grams"), percent = o.str("percent"), roastery = o.str("roastery"),
+            selection = o.str("selection"), country = o.str("country"), region = o.str("region"), farmProducer = o.str("farmProducer"),
+            washingStation = o.str("washingStation"), altitude = o.str("altitude"), variety = o.str("variety"),
+            moisture = o.str("moisture"), density = o.str("density"), score = o.str("score"), process = o.str("process"),
+            processOther = o.str("processOther"), roast = o.str("roast"), roastDate = o.str("roastDate"),
+        )
+        return c.takeIf { keepBlank || it.name.isNotBlank() || it.grams.isNotBlank() || blendBeanFields(it).any { (_, v) -> v.isNotBlank() } }
+    }
 
     private fun decodeMisc(o: JsonObject, photosOut: MutableList<PhotoBlob>, where: String): MiscItem? {
         // web loadMiscItems (script3.js 5177-5178) shows legacy 'equipment' items as kettles; storage may still hold the old type
@@ -424,12 +456,12 @@ class BackupCodec {
         )
     }
 
-    /** A `cafePlaces` row; one without a name has nothing to attach to and is skipped. */
+    /** A `cafePlaces` row; one without a name has nothing to attach to and is skipped. A file before schema 3 has no address. */
     private fun decodeCafePlace(o: JsonObject, where: String): CafePlace? {
         val name = o.str("name").trim()
         if (name.isEmpty()) return null
         val point = o.point()
-        return CafePlace(name, point?.lat, point?.lng, o.createdAt(where))
+        return CafePlace(name, point?.lat, point?.lng, o.createdAt(where), o.str("address").trim().ifEmpty { null })
     }
 
     /** `lat` / `lng` as a position: both finite and in range, else none (a damaged pair is dropped, not refused). */
@@ -636,8 +668,11 @@ class BackupCodec {
         const val APP_NAME = "coffee-journal-mobile"
         /** Web wording (script3.js 7892). */
         const val NO_DATA = "백업 파일 형식이 아니에요. (data 필드가 없어요)"
-        /** 2: miscItems carry optional lat / lng and data.cafePlaces exists (Room schema v2). Readers ignore what they do not know. */
-        const val SCHEMA = 2
+        /**
+         * 2: miscItems carry optional lat / lng and data.cafePlaces exists (Room schema v2). 3: cafePlaces rows may carry
+         * an address (Room schema v3). Readers ignore what they do not know.
+         */
+        const val SCHEMA = 3
         const val BAG_PREFIX = "bag-photo:"
         const val JOURNAL_PREFIX = "journal-photo:"
         private const val LEGACY_EQUIPMENT = "equipment"

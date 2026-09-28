@@ -28,6 +28,8 @@ import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.PantryItem
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.DdayRules
+import com.coffeejournal.ui.form.FormArgs
+import com.coffeejournal.ui.form.RecordDrafts
 import com.coffeejournal.ui.nav.LaunchTarget
 import com.coffeejournal.ui.notify.HomeWidgetFeed
 import com.coffeejournal.ui.notify.HomeWidgetSync
@@ -147,8 +149,9 @@ class HomeWidgetTest : FlowTestBase() {
             waitFor(2)
             koinGet<SettingsRepository>().setDdayStart(LocalDate(2026, 1, 1))
             waitFor(3)
-            // equipment is not on the widget
+            // equipment is not on the widget, nor the record form's draft, written to the settings while it is typed
             koinGet<MiscRepository>().upsert(MiscItem(id = "w-m", type = MiscType.DRIPPER, name = "V60", createdAt = 1L))
+            koinGet<SettingsRepository>().put(RecordDrafts.keyFor(FormArgs()), "{}")
             Thread.sleep(HomeWidgetSync.SETTLE_MS * 2)
             assertEquals(3, refreshes.get())
         } finally {

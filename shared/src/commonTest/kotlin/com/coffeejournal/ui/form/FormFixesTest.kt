@@ -34,10 +34,13 @@ class FormFixesTest {
         val older = Entry(id = "old", createdAt = now, category = Category.CUPPING, time = "2:10")
         assertFalse(EntryDisplay.infoRows(older).any { it.first == "총 시간" }, "an invented time stored earlier is not shown either")
 
-        val cafe = entryOf(FormMapper.newState(FormMode.CUPPING, null, now).copy(category = Category.CAFE, name = "케냐", dripper = "V60", dose = "15"))
-        assertEquals("", cafe.time, "카페 hides 총 추출시간 too")
+        val cafeState = FormMapper.newState(FormMode.CUPPING, null, now).copy(category = Category.CAFE, name = "케냐", dripper = "V60", dose = "15")
+        val cafe = entryOf(cafeState)
+        assertEquals("", cafe.time, "카페 folds its recipe away: nothing of it is saved until it is opened")
         assertEquals("", cafe.dose)
-        assertEquals("V60", cafe.dripper, "카페 shows 드리퍼")
+        assertEquals("", cafe.dripper)
+        val opened = entryOf(cafeState.copy(cafeRecipeUsed = true))
+        assertEquals(listOf("V60", "15", "2:10"), listOf(opened.dripper, opened.dose, opened.time), "opened, it holds what the form had")
 
         val brew = entryOf(FormMapper.newState(FormMode.CUPPING, null, now).copy(category = Category.BEAN, name = "케냐", dose = "15"))
         assertEquals("2:10", brew.time, "switching the cupping form to 원두 keeps the brew fields")

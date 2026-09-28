@@ -140,6 +140,8 @@ data class CafePlaceEntity(
     val lat: Double?,
     val lng: Double?,
     val createdAt: Long,
+    /** Schema v3 (auto-migration 2 → 3): the address of the place picked from a search, else null. */
+    val address: String? = null,
 )
 
 @Entity(tableName = "books")

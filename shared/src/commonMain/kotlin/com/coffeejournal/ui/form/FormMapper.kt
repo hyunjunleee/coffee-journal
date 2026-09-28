@@ -1,11 +1,13 @@
 package com.coffeejournal.ui.form
 
+import com.coffeejournal.data.repo.miscNameKey
 import com.coffeejournal.domain.model.BeanMode
 import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.model.CuppingType
 import com.coffeejournal.domain.model.Entry
+import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.MyRecipe
 import com.coffeejournal.domain.model.PackageType
 import com.coffeejournal.domain.model.RecipeRef
@@ -14,11 +16,13 @@ import com.coffeejournal.domain.reference.Champions
 import com.coffeejournal.domain.reference.GenericSteps
 import com.coffeejournal.domain.reference.Processes
 import com.coffeejournal.domain.rules.BeanNames
+import com.coffeejournal.domain.rules.BlendBeans
 import com.coffeejournal.domain.rules.CuppingTypes
 import com.coffeejournal.domain.rules.CvaScoring
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
 import com.coffeejournal.domain.rules.NoteCanon
+import com.coffeejournal.domain.rules.Numbers
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.Prices
 import com.coffeejournal.domain.rules.RecipeSteps
@@ -67,7 +71,9 @@ internal object FormMapper {
         val isCupping = entry.isCupping
         val (seg, sub, other) = splitProcess(entry.process, entry.processOther)
         val beanMode = entry.beanMode.ifBlank { if (entry.blendComponents.isNotEmpty()) BeanMode.CUSTOM_BLEND else BeanMode.SINGLE }
-        val rows = entry.blendComponents.map { BlendRowForm(it.name, it.grams) }
+        val rows = if (beanMode == BeanMode.CUSTOM_BLEND) entry.blendComponents.map { BlendRowForm(it.name, it.grams) } else emptyList()
+        val cafeBlend = beanMode == BeanMode.COMMERCIAL_BLEND && !isCupping
+        val cafeRecipe = entry.isCafe && hasRecipe(entry)
         return FormState(
             mode = mode,
             editingId = entry.id,
@@ -80,6 +86,9 @@ internal object FormMapper {
             cuppingNotes = if (isCupping) entry.notes else "",
             beanMode = beanMode,
             blendRows = if (beanMode == BeanMode.CUSTOM_BLEND && rows.isEmpty()) listOf(BlendRowForm(), BlendRowForm()) else rows,
+            // a café blend opens with a block per bean; one recorded before its beans could be entered gets an empty second
+            blendBeans = if (cafeBlend) entry.blendComponents.drop(1).map(::beanForm).ifEmpty { listOf(BeanForm()) } else emptyList(),
+            firstBeanPercent = if (cafeBlend) entry.blendComponents.firstOrNull()?.percent ?: "" else "",
             cafeName = entry.cafeName,
             name = entry.name,
             price = Prices.formatInput(entry.price),
@@ -114,6 +123,8 @@ internal object FormMapper {
             waterType = entry.waterType,
             steps = entry.steps.map(StepForm::from),
             appliedRecipeRef = entry.recipeRef,
+            cafeRecipeOpen = cafeRecipe,
+            cafeRecipeUsed = cafeRecipe,
             // one form per tasting: the SCA 2004 attributes and a CVA assessment (its `cva.` keys) are kept apart
             scoreForm = if (CvaScoring.present(entry.attributes, entry.attributeNotes)) ScoreForm.CVA else ScoreForm.SCA2004,
             attributes = FormNumbers.finiteAttributes(entry.attributes).filterKeys { !CvaScoring.isCvaKey(it) }
@@ -172,9 +183,12 @@ internal object FormMapper {
         val isCafe = s.isCafe
         val isBrew = s.isBrew
         val beanMode = s.effectiveBeanMode
-        val blendComponents = if (beanMode == BeanMode.CUSTOM_BLEND) {
-            s.blendRows.filter { it.name.isNotBlank() }.map { BlendComponent(it.name.trim(), FormNumbers.finiteText(it.grams.trim())) }
-        } else emptyList()
+        val blendComponents = when (beanMode) {
+            BeanMode.CUSTOM_BLEND -> s.blendRows.filter { it.name.isNotBlank() }.map { BlendComponent(it.name.trim(), FormNumbers.finiteText(it.grams.trim())) }
+            BeanMode.COMMERCIAL_BLEND -> cafeBlendComponents(s)
+            else -> emptyList()
+        }
+        val recipe = s.savesRecipe
         val cuppingBeans = if (isCupping) s.cuppingBeans.filter { it.name.isNotBlank() }.map(::cuppingBeanModel) else existing?.cuppingBeans ?: emptyList()
         val name = if (isCupping) {
             s.cuppingPlace.trim().ifBlank { cuppingBeans.firstOrNull()?.name ?: "" }
@@ -216,23 +230,23 @@ internal object FormMapper {
             cafeName = if (isCafe) s.cafeName.trim() else existing?.cafeName ?: "",
             expectedNotes = NoteCanon.joinChips(s.expectedNotes),
             actualNotes = NoteCanon.joinChips(s.actualNotes),
-            // Recipe fields are saved only where the form shows them: all of them for 원두, 드리퍼/필터 also for 카페,
-            // none for 커핑. Hidden ones would otherwise store invented values, such as the 2:10 총 추출시간 computed
-            // from the example steps every fresh form is seeded with.
-            dripper = if (isCupping) "" else s.dripper.trim(),
-            filter = if (isCupping) "" else s.filter.trim(),
-            dose = if (isBrew) dose else "",
-            water = if (isBrew) FormNumbers.finiteText(s.water.trim()) else "",
-            temp = if (isBrew) FormNumbers.finiteText(s.temp.trim()) else "",
-            grind = if (isBrew) s.grind.trim() else "",
-            waterType = if (isBrew) s.waterType.trim() else "",
-            time = if (isBrew) FormNumbers.safeTime(s.time.trim()) else "",
+            // Recipe fields are saved only where the form shows them: always for 원두, for 카페 once its folded recipe
+            // part was opened, never for 커핑. Hidden ones would otherwise store invented values, such as the 2:10 총
+            // 추출시간 computed from the example steps every fresh brew form is seeded with.
+            dripper = if (recipe) s.dripper.trim() else "",
+            filter = if (recipe) s.filter.trim() else "",
+            dose = if (recipe) dose else "",
+            water = if (recipe) FormNumbers.finiteText(s.water.trim()) else "",
+            temp = if (recipe) FormNumbers.finiteText(s.temp.trim()) else "",
+            grind = if (recipe) s.grind.trim() else "",
+            waterType = if (recipe) s.waterType.trim() else "",
+            time = if (recipe) FormNumbers.safeTime(s.time.trim()) else "",
             notes = if (isCupping) s.cuppingNotes.trim() else s.notes.trim(),
             cuppingType = if (isCupping) s.cuppingType.ifBlank { CuppingType.PUBLIC } else existing?.cuppingType ?: "",
             cuppingPlace = if (isCupping) s.cuppingPlace.trim() else existing?.cuppingPlace ?: "",
             cuppingBeans = cuppingBeans,
-            steps = if (isBrew) s.steps.map { it.toStep() }.filter { !it.isEmpty } else emptyList(),
-            recipeRef = if (isBrew) s.appliedRecipeRef else null,
+            steps = if (recipe) s.steps.map { it.toStep() }.filter { !it.isEmpty } else emptyList(),
+            recipeRef = if (recipe) s.appliedRecipeRef else null,
             // only the chosen form is saved (a CVA tasting has no 2004 score and the other way round)
             attributes = when {
                 isCupping -> existing?.attributes ?: emptyMap()
@@ -269,6 +283,52 @@ internal object FormMapper {
     }
 
     fun customBlendName(components: List<BlendComponent>): String = components.joinToString(" + ") { it.name }
+
+    // ---------- café blend beans ----------
+
+    /**
+     * A café blend's beans as saved: bean 1 (the record's own fields, repeated with its share) and every later block
+     * that has anything in it. An empty later 로스터리 / 로스팅 정도 / 로스팅 날짜 is saved empty, meaning bean 1's. With
+     * no later bean and no share there is nothing to add to the record's fields.
+     */
+    fun cafeBlendComponents(s: FormState): List<BlendComponent> {
+        val others = s.blendBeans.filter { !it.isBlank }
+        if (others.isEmpty() && s.firstBeanPercent.isBlank()) return emptyList()
+        return (listOf(s.bean(0)) + others).map(::beanComponent)
+    }
+
+    fun beanComponent(b: BeanForm): BlendComponent = BlendComponent(
+        percent = Numbers.parse(b.percent)?.let(Prices::trimNumber) ?: "",
+        roastery = b.roastery.trim(), selection = b.selection.trim(), country = b.country.trim(), region = b.region.trim(),
+        farmProducer = b.farmProducer.trim(), washingStation = b.washingStation.trim(), altitude = b.altitude.trim(),
+        variety = b.variety.trim(), moisture = b.moisture.trim(), density = b.density.trim(), score = b.score.trim(),
+        process = processValue(b.process, b.processSub), processOther = if (b.process == PROCESS_OTHER) b.processOther.trim() else "",
+        roast = b.roast, roastDate = b.roastDate.trim(),
+    )
+
+    fun beanForm(c: BlendComponent): BeanForm {
+        val (seg, sub, other) = splitProcess(c.process, c.processOther)
+        return BeanForm(
+            roastery = c.roastery, selection = c.selection, country = c.country, region = c.region, farmProducer = c.farmProducer,
+            washingStation = c.washingStation, altitude = c.altitude, variety = c.variety, moisture = c.moisture, density = c.density,
+            score = c.score, process = seg, processSub = sub, processOther = other, roast = c.roast, roastDate = c.roastDate, percent = c.percent,
+        )
+    }
+
+    /** "+ 원두 추가 (블렌드)": another bean block, empty; the record is a café blend from now on. */
+    fun addBlendBean(s: FormState): FormState = s.copy(blendBeans = s.blendBeans + BeanForm(), beanMode = BeanMode.COMMERCIAL_BLEND)
+
+    /** ✕ on bean [index] (the 2nd bean is 1): its block goes, and with one bean left the record is a single bean again. */
+    fun removeBlendBean(s: FormState, index: Int): FormState {
+        if (index < 1 || index > s.blendBeans.size) return s
+        val rest = s.blendBeans.filterIndexed { i, _ -> i != index - 1 }
+        if (rest.isNotEmpty()) return s.copy(blendBeans = rest)
+        val mode = if (s.beanMode == BeanMode.COMMERCIAL_BLEND) BeanMode.SINGLE else s.beanMode
+        return s.copy(blendBeans = rest, beanMode = mode, firstBeanPercent = "")
+    }
+
+    /** The café blend's shares typed so far, added up; null while none is (the form shows "합계 N%" once there is one). */
+    fun blendPercentSum(s: FormState): Double? = BlendBeans.percentSum((0 until s.beanCount).map { s.bean(it).percent })
 
     // ---------- cupping beans ----------
 
@@ -351,6 +411,16 @@ internal object FormMapper {
         return if (hints.isEmpty()) null else "괄호에서 인식: ${hints.joinToString(" · ")}"
     }
 
+    /**
+     * The 로스터리 typed is not among the registered roasteries ([known]), so saving adds it to 원두 › 로스터리
+     * (SaveEntryPipeline's auto-registration, which matches names the same way: case and spaces ignored).
+     */
+    fun isNewRoastery(roastery: String, known: List<String>): Boolean {
+        if (roastery.isBlank()) return false
+        val key = miscNameKey(MiscType.SOURCE, roastery)
+        return known.none { miscNameKey(MiscType.SOURCE, it) == key }
+    }
+
     /** Typing a name: the parenthesised farm/producer fills 농장(생산자) only while that field is empty. */
     fun onNameTyped(state: FormState, name: String): FormState {
         val p = BeanNames.parseNameParens(name)
@@ -397,6 +467,15 @@ internal object FormMapper {
         if (state.isBrew && state.price.isBlank()) {
             sorted.firstOrNull { it.isBrew && it.price.isNotBlank() }?.let { s = s.copy(price = Prices.formatInput(it.price)) }
         }
+        // a café blend comes back with all its beans (bean 1 is the fields above), while the form has none of its own
+        val blend = sorted.firstOrNull { BlendBeans.hasBeans(it) } ?: sorted.firstOrNull { BlendBeans.isCafeBlend(it) }
+        if (blend != null && !state.isCustomBlend && !state.isCupping && state.blendBeans.all { it.isBlank } && state.firstBeanPercent.isBlank()) {
+            s = s.copy(
+                beanMode = BeanMode.COMMERCIAL_BLEND,
+                blendBeans = blend.blendComponents.drop(1).map(::beanForm).ifEmpty { listOf(BeanForm()) },
+                firstBeanPercent = blend.blendComponents.firstOrNull()?.percent ?: "",
+            )
+        }
         // Web lockBeanInfoFields + hideBagPhotoSection: shown for every repeat of a known bean, filled or not.
         return s.copy(autofillBanner = true, repeatBean = true)
     }
@@ -423,6 +502,10 @@ internal object FormMapper {
             appliedRecipeRef = RecipeRef(r.name, r.steps), openLauncher = null,
         )
     )
+
+    /** A record with any recipe value: a café record with one opens with its folded recipe part unfolded. */
+    fun hasRecipe(en: Entry): Boolean =
+        listOf(en.dripper, en.filter, en.grind, en.dose, en.water, en.temp, en.time, en.waterType).any { it.isNotBlank() } || en.steps.isNotEmpty()
 
     // ---------- steps ----------
 

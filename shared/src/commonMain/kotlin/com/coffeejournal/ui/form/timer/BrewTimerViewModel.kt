@@ -42,7 +42,12 @@ data class BrewTimerUi(
     /** Every finished pour's grams, estimates included ([pouredEstimated]). */
     val pouredSoFar: Double = 0.0,
     val pouredEstimated: Boolean = false,
+    /** The pour just removed with ✕, while 되돌리기 can still bring it back. */
+    val removed: Removed? = null,
 ) {
+    /** "[pourNumber]차 푸어를 지웠어요 · 되돌리기", shown in the log where the pour's row was ([at]). */
+    data class Removed(val pourNumber: Int, val at: Int)
+
     /**
      * [grams] is the pour's amount now: its [estimate] while [estimated] (the recipe's grams for it, [suggestion], or
      * else from how long it was poured).
@@ -126,6 +131,8 @@ class BrewTimerViewModel(
     fun confirmGrams() = act { s, _ -> BrewTimerEngine.confirmGrams(s) }
     fun editGrams(rowIndex: Int) = act { s, _ -> BrewTimerEngine.editGrams(s, rowIndex) }
     fun keepPouring() = act { s, _ -> BrewTimerEngine.cancelEndPour(s) }
+    fun removePour(rowIndex: Int) = act { s, _ -> BrewTimerEngine.removePour(s, rowIndex, args.recipe) }
+    fun undoRemovePour() = act { s, _ -> BrewTimerEngine.undoRemove(s) }
     fun note(label: String) = act { s, m -> BrewTimerEngine.note(s, label, m, clock.wallMs()) }
     fun finish() = act { s, m -> BrewTimerEngine.finish(s, m, args.recipe) }
     fun resumeBrewing() = act { s, _ -> BrewTimerEngine.resume(s) }
@@ -159,6 +166,7 @@ class BrewTimerViewModel(
             guidance = args.recipe?.let { BrewTimerEngine.guidance(it, elapsed / 1000 * 1000) },
             pouredSoFar = s.rows.sumOf { Numbers.parse(it.grams) ?: 0.0 },
             pouredEstimated = s.rows.any { it.estimated },
+            removed = s.removed?.takeIf { BrewTimerEngine.canUndoRemove(s) }?.let { BrewTimerUi.Removed(it.pourNumber, it.at) },
         )
     }
 

@@ -13,6 +13,8 @@ data class BeanData(
     val entries: List<Entry> = emptyList(),
     /** BeanRecords.flatten(entries): one row per tasted bean, cupping sessions expanded. */
     val records: List<BeanRecord> = emptyList(),
+    /** [records] plus a café blend's other beans, one row each: for the views that count origins (map, variety, process). */
+    val originRecords: List<BeanRecord> = emptyList(),
     val miscItems: List<MiscItem> = emptyList(),
     val blends: List<Blend> = emptyList(),
     val pantry: List<PantryItem> = emptyList(),

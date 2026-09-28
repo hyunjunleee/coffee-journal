@@ -58,6 +58,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.ImeAction
@@ -214,7 +215,9 @@ object SubTabScroll {
 }
 
 /**
- * Square segmented control; tapping the active option again clears it when [allowClear]. Laid out like the web's
+ * Square segmented control; tapping the active option again clears it when [allowClear]. While nothing is chosen,
+ * [inherited] is shown muted and outlined — the value the field takes over from elsewhere (a blend bean's roast from
+ * bean 1), read by TalkBack with [inheritedState]; tapping it chooses it for real. Laid out like the web's
  * `.seg` (options `flex: 1` with `white-space: nowrap`, the row `flex-wrap: wrap`): the options share the width equally
  * while every label fits on one line, a longer label keeps its own width, and when they cannot all fit (a narrow
  * screen, a large font) the options continue on another row instead of breaking a word such as "미디엄 라이트".
@@ -227,6 +230,8 @@ fun Seg(
     modifier: Modifier = Modifier,
     allowClear: Boolean = true,
     labels: Map<String, String> = emptyMap(),
+    inherited: String? = null,
+    inheritedState: String = "",
 ) {
     // one choice out of several: radio buttons with a selected state for TalkBack (design §8)
     Layout(
@@ -234,10 +239,12 @@ fun Seg(
         content = {
             options.forEach { opt ->
                 val on = opt == value
+                val ghost = !on && value.isBlank() && opt == inherited
                 Box(
                     Modifier
                         .heightIn(min = 40.dp)
-                        .background(if (on) Ink.accent else Ink.surface)
+                        .background(if (on) Ink.accent else if (ghost) Ink.accentSoft else Ink.surface)
+                        .then(if (ghost) Modifier.border(BorderStroke(Dimens.rule, Ink.textFaint), RectangleShape).semantics { stateDescription = inheritedState } else Modifier)
                         // separators: every option draws its left and top edge; on the outer edges they fall on the border
                         .drawBehind {
                             val t = Dimens.hairline.toPx()
@@ -248,7 +255,7 @@ fun Seg(
                         .padding(horizontal = 6.dp, vertical = 9.dp),
                     contentAlignment = Alignment.Center,
                 ) {
-                    Text(labels[opt] ?: opt, style = AppType.small.copy(color = if (on) Ink.bg else Ink.text), textAlign = TextAlign.Center)
+                    Text(labels[opt] ?: opt, style = AppType.small.copy(color = if (on) Ink.bg else if (ghost) Ink.textMuted else Ink.text), textAlign = TextAlign.Center)
                 }
             }
         },

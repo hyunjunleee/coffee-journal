@@ -98,15 +98,17 @@ object StatsCalc {
         val grams = Numbers.finite(brews.sumOf { Numbers.parse(it.dose)?.takeIf { d -> d > 0 } ?: 0.0 }) ?: 0.0
 
         val records = BeanRecords.flatten(inPeriod)
+        // origins, processes and varieties count every bean of a café blend; roasteries count the record once
+        val beans = BeanRecords.flatten(inPeriod, blendBeans = true)
         val scored = (brews + cafes).mapNotNull { e -> scoreOf(e)?.let { (s, cva) -> Triple(e, s, cva) } }.sortedBy { it.first.createdAt }
         return StatsSummary(
             period = period, from = from, to = to,
             brewCount = brews.size, cafeCount = cafes.size, cuppingCount = inPeriod.count { it.isCupping },
             bars = bars, daily = daily, gramsUsed = grams,
             spending = spending(brews, cafes, entries, pantry),
-            origins = top(records.mapNotNull { r -> MapStats.countryOf(r)?.ko }),
-            processes = top(records.map { processLabel(it.process, it.processOther) }.filter { it.isNotBlank() }),
-            varieties = topVarieties(records.flatMap { BeanNames.splitVarietyValues(it.variety) }),
+            origins = top(beans.mapNotNull { r -> MapStats.countryOf(r)?.ko }),
+            processes = top(beans.map { processLabel(it.process, it.processOther) }.filter { it.isNotBlank() }),
+            varieties = topVarieties(beans.flatMap { BeanNames.splitVarietyValues(it.variety) }),
             roasteries = top(records.map { r -> r.roastery.trim().ifBlank { BeanNames.parseNameRoastery(r.name).trim() } }.filter { it.isNotBlank() }),
             scores = scored.map { (e, s, cva) -> ScorePoint(e.createdAt, s, cva) },
             ratioVsScore = scored.filter { Packages.isBrew(it.first) }.mapNotNull { (e, s, cva) ->

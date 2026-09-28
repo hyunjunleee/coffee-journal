@@ -7,9 +7,8 @@ import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.rules.BeanNames
+import com.coffeejournal.domain.rules.BlendBeans
 import com.coffeejournal.domain.rules.Dates
-import com.coffeejournal.domain.rules.Numbers
-import kotlin.math.roundToInt
 
 /** One card in the 블렌드 view; [kind] matches the web filter values. */
 sealed class BlendItem(val kind: String, val time: Long) {
@@ -37,16 +36,23 @@ object BlendSources {
         return items.filter { filter == ALL || it.kind == filter }.sortedByDescending { it.time }
     }
 
-    /** "이름 12g (40%)" per component; the percentage only when any grams were entered. */
+    /**
+     * "이름 12g (40%)" per component; the percentage only when any grams were entered, whole percents that add up to
+     * 100 ([BlendBeans.sharesFromGrams]). "NaN" / "Infinity" / "1e999" grams count as missing.
+     */
     fun componentLines(components: List<BlendComponent>): List<String> {
-        // "NaN" / "Infinity" / "1e999" grams count as missing (a NaN share would crash roundToInt)
-        val total = components.sumOf { Numbers.parse(it.grams) ?: 0.0 }.takeIf { it.isFinite() } ?: 0.0
-        return components.map { c ->
+        val shares = BlendBeans.sharesFromGrams(components.map { it.grams })
+        val any = shares.any { it != null }
+        return components.mapIndexed { i, c ->
             val g = c.grams.trim()
-            val pct = if (total > 0) " (${((Numbers.parse(g) ?: 0.0) / total * 100).roundToInt()}%)" else ""
-            c.name + (if (g.isNotEmpty()) " ${g}g" else "") + pct
+            c.name + (if (g.isNotEmpty()) " ${g}g" else "") + (if (any) " (${shares[i] ?: 0}%)" else "")
         }
     }
+
+    /** A café blend record's beans, "브라질 Cerrado 60%" each; nothing when its beans were never entered. */
+    fun cafeBlendLines(entry: Entry): List<String> =
+        if (!BlendBeans.hasBeans(entry)) emptyList()
+        else BlendBeans.beans(entry).mapIndexed { i, b -> BlendBeans.label(b, i) + (BlendBeans.percentText(b.percent)?.let { " $it" } ?: "") }
 
     /**
      * Web entryBlendCardHtml "상업 블렌드 · {roastery || source}": the roastery field, else the roastery in the name's

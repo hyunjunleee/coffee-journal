@@ -45,10 +45,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.navigation.NavHostController
+import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.ui.bean.b.RoasteryPanel
 import com.coffeejournal.ui.map.CafeMapLogic
 import com.coffeejournal.ui.map.CafeSpotPanel
 import com.coffeejournal.ui.map.MapPickResult
+import com.coffeejournal.ui.map.UnplacedCafes
+import com.coffeejournal.ui.map.addCafe
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.platform.openUrl
 import com.coffeejournal.ui.theme.AppType
@@ -215,13 +218,21 @@ private fun ViewPanel(
             if (mapShown) HintText("두 손가락으로 늘리고 옮겨 길·건물·지명을 볼 수 있어요. 핀을 누르면 정보가 여기에 나와요.")
             val what = if (cafes) "카페" else "로스터리"
             if (content.pins.isEmpty()) {
-                EmptyNote("상세 지도에 표시할 ${what}가 없어요. 위치를 지정하거나 지역을 적으면 여기에도 표시돼요.", Modifier.padding(top = 10.dp))
+                EmptyNote("상세 지도에 표시할 ${what}가 없어요. 아래 ‘+ $what 추가’로 등록하고 위치를 정하면 바로 표시돼요.", Modifier.padding(top = 10.dp))
             } else {
                 SectionLabel("지도에 표시한 $what", hint = "${content.pins.size}곳")
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     content.pins.forEach { pin -> GhostButton(DetailMapPins.labelOf(pin), small = true, onClick = { onSelect(pin) }) }
                 }
             }
+            // cafés without a position can be placed from here too
+            val unplaced = if (cafes) content.cafes.filter { it.point == null } else emptyList()
+            if (unplaced.isNotEmpty()) UnplacedCafes(nav, unplaced, Modifier.padding(top = 10.dp))
+            // a new roastery starts in this map's 국내/해외; a new café opens the picker next and comes back here
+            GhostButton(
+                "+ $what 추가", small = true, modifier = Modifier.padding(top = 12.dp),
+                onClick = { if (cafes) nav.addCafe() else nav.navigate(Route.FlatItemForm(type = MiscType.SOURCE, scope = route.scope)) },
+            )
         }
     }
 }

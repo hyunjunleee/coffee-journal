@@ -49,9 +49,10 @@ fun BeanVarietyView(nav: NavHostController, data: BeanData) {
     var species by rememberSaveable { mutableStateOf(VarietyStats.ARABICA) }
     var sort by rememberSaveable { mutableStateOf(VarietyStats.SORT_ALPHA) }
 
-    val index = remember(data.records) { VarietyStats.index(data.records) }
+    // a café blend counts for the variety of each of its beans
+    val index = remember(data.originRecords) { VarietyStats.index(data.originRecords) }
     val explorer = remember(index, species, query, sort) { VarietyStats.explorer(index, species, query, sort) }
-    val byCountry = remember(data.records) { VarietyStats.byCountry(data.records) }
+    val byCountry = remember(data.originRecords) { VarietyStats.byCountry(data.originRecords) }
 
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = Dimens.gutter, end = Dimens.gutter, bottom = 96.dp)) {
         item {

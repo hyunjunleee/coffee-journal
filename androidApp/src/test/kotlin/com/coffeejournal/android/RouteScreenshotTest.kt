@@ -39,7 +39,12 @@ import com.coffeejournal.ui.ai.AiProvider
 import com.coffeejournal.ui.ai.AiTexts
 import com.coffeejournal.ui.form.timer.BrewClock
 import com.coffeejournal.ui.form.timer.BrewTimerResult
+import com.coffeejournal.ui.map.MapPickTarget
 import com.coffeejournal.ui.map.detail.DetailMapCamera
+import com.coffeejournal.ui.map.search.LocateResult
+import com.coffeejournal.ui.map.search.LocateTexts
+import com.coffeejournal.ui.map.search.PlaceSearchService
+import com.coffeejournal.ui.map.search.PlaceSearchTexts
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.ReminderKind
 import com.coffeejournal.ui.nav.FormMode
@@ -182,11 +187,33 @@ class RouteScreenshotTest {
     }
     @Test fun cafeMap() {
         seedMapPlaces()
+        // a café added by hand, without a position yet: listed under the map with its picker and 삭제
+        runBlocking { GlobalContext.get().get<CafePlaceRepository>().add("가 볼 카페 연남") }
         show(Route.Bean, "50-cafe-map.png") {
             beanView("로스터리", "한국 로스터리 지도")
-            compose.onNode(hasText("방문 카페 지도") and hasClickAction()).performClick()
+            compose.onNode(hasText("카페 지도") and hasClickAction()).performClick()
             settle()
             compose.onNode(hasContentDescription("FELT 청계천, 방문 1회")).performClick()
+            settle()
+        }
+    }
+    /** "+ 카페 추가": a name that already is a café says which one, instead of making a second. */
+    @Test fun cafeAdd() {
+        seedMapPlaces()
+        show(Route.CafeAdd, "78-cafe-add.png") {
+            compose.onNode(hasSetTextAction() and hasText("예: OO카페 (서울 성수동)")).performTextInput("felt 청계천")
+            settle()
+            compose.onNode(hasText("이미 있는 카페예요", substring = true)).assertExists()
+        }
+    }
+    /** Calendar › 카페: the cafés of the list and one added by hand, each with its position, and "+ 카페 추가". */
+    @Test fun calendar_cafes() {
+        seedMapPlaces()
+        runBlocking { GlobalContext.get().get<CafePlaceRepository>().add("가 볼 카페 연남") }
+        show(Route.Calendar, "79-calendar-cafes.png") {
+            click("카페")
+            click("전체 보기")
+            compose.onNode(hasText("+ 카페 추가") and hasClickAction()).performScrollTo()
             settle()
         }
     }
@@ -377,10 +404,91 @@ class RouteScreenshotTest {
         search.complete(Unit)
     }
 
+    // ───────── lane J: the timer's ✕ for a mistaken pour, a café blend's bean blocks, the café record's folded recipe ─────────
+
+    private fun type(placeholder: String, text: String, index: Int = 0) {
+        compose.onAllNodes(hasSetTextAction() and hasText(placeholder))[index].performScrollTo().performTextInput(text)
+        settle()
+    }
+
+    /** 붓기 시작·끝 tapped by mistake during the bloom, removed with its ✕: "2차 푸어를 지웠어요 · 되돌리기" where it was. */
+    @Test fun brewTimer_removedPour() {
+        val clock = FakeBrewClock()
+        loadKoinModules(module { single<BrewClock> { clock } })
+        show(Route.BrewTimer(recipe = null, hasLog = false), "80-brew-timer-remove.png") {
+            click("💧 붓기 시작")
+            clock.advance(10_000); settle()
+            click("붓기 끝")
+            click("확인")
+            clock.advance(2_000); settle()
+            click("뜸")
+            clock.advance(8_000); settle()
+            click("💧 붓기 시작")
+            clock.advance(2_000); settle()
+            click("붓기 끝")
+            compose.onNode(hasContentDescription("2차 푸어 삭제") and hasClickAction()).performScrollTo().performClick()
+            settle()
+            bringToTop(hasText("붓기 시작·끝으로", substring = true))
+        }
+    }
+
+    /**
+     * A café blend: "+ 원두 추가 (블렌드)" gave bean 2 the same block, without example placeholders; its 로스터리 and
+     * 로스팅 show bean 1's in grey, and the shares add up to 90% (the gentle hint).
+     */
+    @Test fun recordForm_cafeBlend() = show(Route.RecordForm(mode = FormMode.EXTRACT), "81-form-cafe-blend.png") {
+        type("예: 콜롬비아 라 플라타 게이샤 워시드", "하우스 블렌드")
+        type("예: 커피정경", "프릳츠")
+        type("브라질", "콜롬비아")
+        click("미디엄")
+        click("+ 원두 추가 (블렌드)")
+        compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-block-0")))[0].performTextInput("60")
+        compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-block-1")))[0].performTextInput("30")
+        // bean 2's 국가 (its block shows no example placeholders): 비율, 로스터리, 생두 수입사, 국가
+        compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-1")))[3].performScrollTo().performTextInput("에티오피아")
+        settle()
+        bringToTop(hasTestTag("bean-block-1"))
+    }
+
+    /** The detail of a café blend: each bean its own group with its share. */
+    @Test fun entryDetail_cafeBlend() {
+        runBlocking { GlobalContext.get().get<EntryRepository>().upsert(SampleBlend.house) }
+        show(Route.EntryDetail(SampleBlend.house.id), "82-detail-cafe-blend.png")
+    }
+
+    /** A café record: the recipe is folded away behind one row until the café tells it. */
+    @Test fun recordForm_cafeRecipeFolded() = show(Route.RecordForm(mode = FormMode.CAFE), "83-form-cafe-recipe.png") {
+        bringToTop(hasText("가게에 적힌 원두 설명", substring = true))
+    }
+
     /** Claude with web search: ✓ from the cited excerpt, the uncited search result listed after the cited one. */
     @Test fun noteHelper_claude() {
         AiSetup.ready(AiProvider.CLAUDE)
         AiSetup.http.on("api.anthropic.com") { AiReplies.CLAUDE }
         show(Route.NoteHelper(mode = "note", query = "자스민"), "74-note-helper-claude.png") { waitForText(AiTexts.FOUND) }
+    }
+
+    // ───────── 위치 지정: search and 현재 위치 (fake phone search and position) ─────────
+
+    /** A café's picker after "현재 위치" and 검색: its name found near the phone, with the distances and the source. */
+    @Test fun mapPicker_search() {
+        PlaceSetup.grantLocation(ApplicationProvider.getApplicationContext())
+        PlaceSetup.location.answer = LocateResult.Found(GeoPoint(37.5700, 126.9830), accuracyM = 25.0)
+        PlaceSetup.search.hits = listOf(PlaceFixtures.FELT, PlaceFixtures.FELT_OTHER)
+        show(Route.MapPicker(target = MapPickTarget.CAFE, name = "FELT 청계천"), "76-map-picker-search.png") {
+            click(PlaceSearchTexts.HERE)
+            waitForText(LocateTexts.found(25.0))
+            click(PlaceSearchTexts.SEARCH)
+            waitForText(PlaceFixtures.FELT.name)
+        }
+    }
+
+    /** 설정's 장소 검색 with a Kakao key saved. */
+    @Test fun settings_placeSearch() {
+        AiSetup.secrets.values[PlaceSearchService.KAKAO_SECRET] = "kakao-rest-key-9f3a"
+        show(Route.Settings, "77-settings-place-search.png") {
+            bringToTop(hasText(PlaceSearchTexts.SECTION))
+            waitForText("저장됨 …9f3a")
+        }
     }
 }

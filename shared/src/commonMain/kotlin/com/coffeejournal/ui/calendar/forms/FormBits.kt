@@ -23,25 +23,37 @@ import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.BlockBackWhile
+import com.coffeejournal.ui.theme.LeaveDialog
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
+import com.coffeejournal.ui.theme.rememberLeaveGuard
 
 /**
  * Title bar, scrolling fields, then [저장][취소] (web .form-actions). The scroll area ends at the keyboard, so the
- * focused field stays above it; while [saving], 저장 is disabled and back (system, title bar, 취소) waits.
+ * focused field stays above it; while [saving], 저장 is disabled and back (system, title bar, 취소) waits. With
+ * input the form was not opened with ([hasChanges]), back and 취소 ask before leaving.
  */
 @Composable
-internal fun FormScaffold(title: String, onBack: () -> Unit, onSave: () -> Unit, saving: Boolean, content: @Composable ColumnScope.() -> Unit) {
+internal fun FormScaffold(
+    title: String,
+    onBack: () -> Unit,
+    onSave: () -> Unit,
+    saving: Boolean,
+    hasChanges: () -> Boolean,
+    content: @Composable ColumnScope.() -> Unit,
+) {
     BlockBackWhile(saving)
+    val guard = rememberLeaveGuard(hasChanges, busy = saving, leave = onBack)
+    LeaveDialog(guard)
     Column(Modifier.fillMaxSize()) {
-        ScreenTitleBar(title = title, onBack = { if (!saving) onBack() })
+        ScreenTitleBar(title = title, onBack = guard::request)
         Column(Modifier.weight(1f).imeOverlapPadding().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter).padding(top = 12.dp)) {
             content()
             Spacer(Modifier.height(24.dp))
             Row {
                 PrimaryButton("저장", onClick = onSave, enabled = !saving, modifier = Modifier.weight(1f))
                 Spacer(Modifier.width(8.dp))
-                GhostButton("취소", onClick = onBack, enabled = !saving, modifier = Modifier.weight(1f))
+                GhostButton("취소", onClick = guard::request, enabled = !saving, modifier = Modifier.weight(1f))
             }
             Spacer(Modifier.height(96.dp))
         }

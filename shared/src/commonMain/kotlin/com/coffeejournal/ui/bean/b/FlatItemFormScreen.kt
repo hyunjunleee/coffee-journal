@@ -38,16 +38,21 @@ import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Ink
+import com.coffeejournal.ui.theme.LeaveDialog
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
 import com.coffeejournal.ui.theme.Seg
+import com.coffeejournal.ui.theme.rememberLeaveGuard
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
-/** Route.FlatItemForm: add / edit a roastery, importer, farm or process item (web *-form-panel). */
+/**
+ * Route.FlatItemForm: add / edit a roastery, importer, farm or process item (web *-form-panel). [scope] starts a new
+ * roastery in 국내 or 해외 (the map tab it is added from).
+ */
 @Composable
-fun FlatItemFormScreen(nav: NavHostController, type: String, itemId: String?, results: SavedStateHandle? = null) {
-    val vm = koinViewModel<FlatItemFormViewModel> { parametersOf(type, itemId) }
+fun FlatItemFormScreen(nav: NavHostController, type: String, itemId: String?, results: SavedStateHandle? = null, scope: String? = null) {
+    val vm = koinViewModel<FlatItemFormViewModel> { parametersOf(type, itemId, scope) }
     val s by vm.state.collectAsStateWithLifecycle()
     // the location picker answers through this destination's SavedStateHandle
     if (results != null) {
@@ -60,8 +65,11 @@ fun FlatItemFormScreen(nav: NavHostController, type: String, itemId: String?, re
     // one pop per back / 취소 / successful save, even when tapped again during the exit transition
     val leave = dropUnlessResumed { nav.popBackStack() }
     BlockBackWhile(s.saving)
+    // back and 취소 ask before typed input is lost
+    val guard = rememberLeaveGuard(vm::hasChanges, busy = s.saving, leave = leave)
+    LeaveDialog(guard)
     Column(Modifier.fillMaxSize().background(Ink.bg)) {
-        ScreenTitleBar("${spec.label} ${if (itemId == null) "추가" else "수정"}", onBack = { if (!s.saving) leave() })
+        ScreenTitleBar("${spec.label} ${if (itemId == null) "추가" else "수정"}", onBack = guard::request)
         Column(Modifier.weight(1f).imeOverlapPadding().verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             Spacer(Modifier.height(16.dp))
             AppTextField(value = s.name, onValueChange = vm::setName, label = "이름", placeholder = spec.namePlaceholder, enabled = s.loaded)
@@ -88,7 +96,7 @@ fun FlatItemFormScreen(nav: NavHostController, type: String, itemId: String?, re
             AppTextField(value = s.notes, onValueChange = vm::setNotes, label = "메모 (선택)", placeholder = spec.notesPlaceholder, singleLine = false, minLines = 3)
             Row(Modifier.padding(top = 20.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 PrimaryButton(if (itemId == null) "저장" else "수정 저장", enabled = s.loaded && !s.saving && s.name.isNotBlank(), onClick = { vm.save(leave) })
-                GhostButton("취소", onClick = leave, enabled = !s.saving)
+                GhostButton("취소", onClick = guard::request, enabled = !s.saving)
             }
             Spacer(Modifier.height(96.dp))
         }

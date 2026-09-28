@@ -85,7 +85,10 @@ class MiscRepository(private val dao: MiscDao, private val photos: PhotoStore) {
     suspend fun deleteAllRows() = dao.deleteAll()
 }
 
-/** Positions of visited cafés by name (cafe_places); names match trimmed and case-insensitively. */
+/**
+ * Cafés by name (cafe_places): the position of a visited café, or a café added by hand ("+ 카페 추가") that may have
+ * no position and no visit yet. Names match trimmed and case-insensitively.
+ */
 class CafePlaceRepository(private val dao: CafePlaceDao) {
     fun observeAll(): Flow<List<CafePlace>> = dao.observeAll().map { l -> l.map { it.toDomain() } }
     suspend fun getAll(): List<CafePlace> = dao.getAll().map { it.toDomain() }
@@ -95,25 +98,54 @@ class CafePlaceRepository(private val dao: CafePlaceDao) {
         return if (key.isEmpty()) null else getAll().firstOrNull { CafePlace.key(it.name) == key }
     }
 
-    /** Sets the café's position; an existing row (any spelling of the same name) keeps its name and creation time. */
-    suspend fun set(name: String, point: GeoPoint) {
+    /**
+     * Sets the café's position and its [address] (the searched place's; null for a point without one, which also drops
+     * an address kept for an earlier point). An existing row (any spelling of the same name) keeps its name and
+     * creation time.
+     */
+    suspend fun set(name: String, point: GeoPoint, address: String? = null) {
         val trimmed = name.trim()
         if (trimmed.isEmpty()) return
         val existing = get(trimmed)
-        dao.upsert(CafePlace(existing?.name ?: trimmed, point.lat, point.lng, existing?.createdAt ?: Dates.nowMillis()).toEntity())
+        val kept = address?.trim()?.takeIf { it.isNotEmpty() }
+        dao.upsert(CafePlace(existing?.name ?: trimmed, point.lat, point.lng, existing?.createdAt ?: Dates.nowMillis(), kept).toEntity())
     }
 
+    /**
+     * Removes the café's position and the address that came with it; the row stays, so a café added by hand (without
+     * visits) is still listed.
+     */
     suspend fun clear(name: String) {
+        get(name)?.takeIf { it.lat != null || it.lng != null || it.address != null }
+            ?.let { dao.upsert(it.copy(lat = null, lng = null, address = null).toEntity()) }
+    }
+
+    /**
+     * "+ 카페 추가": keeps a café by name without a position. A café already kept under any spelling of the name stays
+     * as it is, so adding twice never makes two cafés.
+     */
+    suspend fun add(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isEmpty() || get(trimmed) != null) return
+        dao.upsert(CafePlace(trimmed, null, null, Dates.nowMillis()).toEntity())
+    }
+
+    /** Deletes the café's row: a café added by hand disappears, one with visits only loses its position. */
+    suspend fun delete(name: String) {
         get(name)?.let { dao.delete(it.name) }
     }
 
-    /** 병합 restore: each backup row replaces the local row of the same name (matched like [get]). */
+    /**
+     * 병합 restore: each backup row replaces the local row of the same name (matched like [get]). A row without an
+     * address (a file from before schema 3) keeps the local address when it puts the café at the same point.
+     */
     suspend fun mergeAll(items: List<CafePlace>) {
         val local = getAll().associateBy { CafePlace.key(it.name) }
         items.forEach { p ->
             val mine = local[CafePlace.key(p.name)]
             if (mine != null && mine.name != p.name) dao.delete(mine.name)
-            dao.upsert(p.copy(name = p.name.trim()).toEntity())
+            val address = p.address ?: mine?.address?.takeIf { mine.point != null && mine.point == p.point }
+            dao.upsert(p.copy(name = p.name.trim(), address = address).toEntity())
         }
     }
 
@@ -224,7 +256,7 @@ class SettingsRepository(private val dao: SettingsDao) {
 
         /**
          * Settings that belong to this phone rather than to the journal (notification switches, the reminder time,
-         * the reminders already sent): a backup neither writes nor restores them.
+         * the reminders already sent, the record form's unsaved draft): a backup neither writes nor restores them.
          */
         const val DEVICE_PREFIX = "device."
 

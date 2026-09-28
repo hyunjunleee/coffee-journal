@@ -65,9 +65,9 @@ object DetailMapPins {
 
     fun roasteries(pins: List<RoasteryPin>, domestic: Boolean): List<DetailPin> = pins.mapNotNull { roastery(it, domestic) }
 
-    /** Cafés with a position (the others are listed under the map, as on the SGIS map). */
+    /** Cafés with a position (the others are listed under the map, as on the SGIS map); no count for no visits. */
     fun cafes(spots: List<CafeSpot>): List<DetailPin> = spots.mapNotNull { s ->
-        s.point?.let { DetailPin(s.key, s.name, it, PinPrecision.EXACT, s.visits.size, "${s.name}, 방문 ${s.visits.size}회") }
+        s.point?.let { DetailPin(s.key, s.name, it, PinPrecision.EXACT, s.visits.size, "${s.name}, ${s.visitText}") }
     }
 
     /** Fill of a pin's dot: ink for an exact position, white (a ring) for an area centre. */

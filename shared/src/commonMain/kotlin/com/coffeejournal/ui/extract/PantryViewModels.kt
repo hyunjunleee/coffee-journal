@@ -88,6 +88,10 @@ class PantryEditorViewModel(
     val form: StateFlow<PantryForm> = _form.asStateFlow()
     private var existing: PantryItem? = null
 
+    /** The form as it was opened (blank, or the stored bag), kept next to the input: leaving asks only when they differ. */
+    private val keptOpened = SavedFormState(savedState, "pantryForm.opened", PantryForm.serializer())
+    private var opened: PantryForm? = keptOpened.restore() ?: _form.value.takeIf { itemId == null }?.also(keptOpened::put)
+
     init {
         kept.keep(viewModelScope, _form)
         if (itemId != null) viewModelScope.launch {
@@ -110,8 +114,12 @@ class PantryEditorViewModel(
                 expectedNotes = NoteCanon.parseChips(item.expectedNotes),
                 notes = item.notes,
             )
+            _form.value.also { opened = it; keptOpened.put(it) }
         }
     }
+
+    /** Whether the input differs from the form as it was opened. */
+    fun hasChanges(): Boolean = opened?.let { !kept.sameInput(it, _form.value) } ?: false
 
     fun update(transform: PantryForm.() -> PantryForm) = _form.update { it.transform().copy(error = null) }
 
