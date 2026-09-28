@@ -55,11 +55,20 @@ iOS는 서명된 앱만 설치된다. CI가 만든 .ipa에는 서명이 없으�
 - CoffeeJournal 타깃의 `dependencies`에 MapLibre 제품을 링크한다.
   - Shared는 정적 프레임워크라, Kotlin 코드가 부르는 MapLibre 심볼은 앱을 링크할 때 이 프레임워크에서 풀린다.
   - Xcode가 MapLibre.framework를 앱의 `Frameworks/`에 넣는다(CI가 .ipa를 만들기 전에 확인한다).
-- `Info.plist`에 더할 키는 없다. 사용자 위치를 쓰지 않으므로 위치 권한 문구도 두지 않는다. 한글 라벨은 기기의 시스템 글꼴로 그린다(MapLibre 기본값).
+- 상세 지도를 위해 `Info.plist`에 더할 키는 없다. 상세 지도는 사용자 위치를 쓰지 않는다(위치 권한 문구 `NSLocationWhenInUseUsageDescription`은 아래 "위치 지정"의 "현재 위치" 때문이다). 한글 라벨은 기기의 시스템 글꼴로 그린다(MapLibre 기본값).
 - Xcode가 처음 빌드할 때 GitHub에서 패키지와 xcframework(약 8.6 MB)를 받는다.
 - 시뮬레이터 테스트(`:shared:iosSimulatorArm64Test`)는 Xcode가 아니라 Kotlin/Native가 링크하므로 같은 xcframework가 따로 있어야 한다.
   - `-Pcoffeejournal.maplibreFrameworkDir=<xcframework의 ios-arm64_x86_64-simulator 폴더>`로 넘긴다. 없으면 링크 전에 멈춘다.
   - CI는 패키지의 `Package.swift`에서 주소와 체크섬을 읽어 받고, 체크섬을 확인한 뒤 넘긴다.
+
+## 위치 지정 (검색 · 현재 위치)
+
+안드로이드와 같은 화면과 규칙(공유 코드의 `PlaceSearchService`, `MapPickerViewModel`)이고, 휴대폰 쪽만 다르다.
+
+- 검색: MapKit의 `MKLocalSearch`(Apple 지도, 키 없음). 자연어 질의로 주소와 관심 지점을 찾고, 국내는 한국 영역으로, "현재 위치"를 정한 뒤면 그 주변 20 km로 치우친다. Apple이 "찾지 못함" 오류로 답하면 결과 없음으로 보인다. 설정 › 장소 검색에 카카오 키를 넣으면 국내 검색은 안드로이드처럼 카카오 로컬이 한다(요청은 NSURLSession, 키는 Keychain에 이 기기 전용).
+- 현재 위치: `CLLocationManager`. 버튼을 누를 때 "앱을 사용하는 동안" 권한을 묻고(처음 한 번만 시스템 창), `requestLocation`으로 한 번 읽는다. 15초 안에 답이 없으면 멈춘다. 위치 서비스가 꺼져 있으면 iOS가 거절로 알리므로, 공유 코드가 `locationServicesEnabled`로 구분해 "위치 서비스가 꺼져 있어요"를 보인다.
+- `Info.plist`의 `NSLocationWhenInUseUsageDescription`: "카페·로스터리 위치를 현재 위치로 정할 때만 사용해요." 이 문구가 없으면 iOS가 권한 요청을 보이지 않는다. 백그라운드 위치(`NSLocationAlways…`)는 쓰지 않는다.
+- Shared는 정적 프레임워크라 MapKit·CoreLocation은 앱을 링크할 때 풀린다(이미 쓰는 WebKit·UserNotifications·Network처럼 시스템 프레임워크 자동 링크, `project.yml`에 더한 것 없음). 이 코드는 Linux CI에서 klib 컴파일까지만 확인되고, 실제 검색·위치 동작은 기기나 시뮬레이터에서 확인해야 한다.
 
 ## iOS에 아직 없는 것
 
