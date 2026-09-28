@@ -79,6 +79,23 @@ class BackupCodecTest {
         assertEquals(listOf(CafePlace("카페", 37.1, 127.1, 6)), d.cafePlaces)
     }
 
+    @Test fun cafeAddress_roundTrips_andAFileFromBeforeSchema3HasNone() {
+        val snap = BackupSnapshot(
+            cafePlaces = listOf(CafePlace("테스트커피", 37.5446, 127.0557, 3, "서울 성동구 성수이로7길 51"), CafePlace("미정 카페", null, null, 4)),
+        )
+        val text = codec.encode(snap)
+        val root = Json.parseToJsonElement(text).jsonObject
+        assertEquals("3", root["app"]!!.jsonObject["schema"]!!.jsonPrimitive.content)
+        val rows = root["data"]!!.jsonObject["cafePlaces"]!!.jsonArray.map { it.jsonObject }
+        assertEquals("서울 성동구 성수이로7길 51", rows[0]["address"]!!.jsonPrimitive.content)
+        assertFalse("address" in rows[1], "no address, no key")
+        assertEquals(snap.cafePlaces, codec.decode(text).cafePlaces)
+        // schema 2 wrote no address; a blank one reads as none
+        val older = """{"data":{"cafePlaces":[{"name":"카페","lat":37.1,"lng":127.1,"createdAt":6},{"name":"빈 주소","lat":37.2,"lng":127.2,"address":"  ","createdAt":7}]},
+            "app":{"name":"coffee-journal-mobile","schema":2}}"""
+        assertEquals(listOf(CafePlace("빈 주소", 37.2, 127.2, 7), CafePlace("카페", 37.1, 127.1, 6)), codec.decode(older).cafePlaces.sortedBy { it.name })
+    }
+
     // ───────────── (a) domain → encode → decode round trip ─────────────
 
     @Test fun roundTripKeepsEveryCollectionAndPhotoBytes() {

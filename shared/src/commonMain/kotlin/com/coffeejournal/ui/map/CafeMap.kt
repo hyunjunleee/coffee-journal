@@ -166,6 +166,8 @@ fun CafeSpotPanel(spot: CafeSpot, nav: NavHostController, modifier: Modifier = M
     HairlineCard(modifier) {
         Text(spot.name, style = AppType.cardTitle)
         spot.point?.let { Text("📍 ${CafeMapLogic.placeLabel(it)}", style = AppType.small) }
+        // the address of the place picked from a search (schema v3)
+        spot.place?.address?.takeIf { spot.point != null }?.let { Text(it, style = AppType.faint) }
         Text("방문 ${spot.visits.size}회", style = AppType.faint)
         spot.visits.forEach { en -> VisitRow(en) { nav.navigate(Route.EntryDetail(en.id)) } }
         MapLinkButtons(spot.name, spot.point?.let { KoreaRegions.locate(it.lat, it.lng, 3.0)?.label } ?: "", spot.point, overseas = false)
@@ -185,14 +187,18 @@ private fun VisitRow(en: Entry, onClick: () -> Unit) {
     }
 }
 
-/** A café name, its visit count and where it is, with the button that opens the location picker. */
+/**
+ * A café name, its visit count and where it is (with its address when it was picked from a search), and the button
+ * that opens the location picker.
+ */
 @Composable
-private fun CafeLocationLine(name: String, visits: Int?, point: GeoPoint?, onPick: () -> Unit) {
+private fun CafeLocationLine(name: String, visits: Int?, point: GeoPoint?, address: String? = null, onPick: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Text(name, style = AppType.body)
             val where = point?.let { "📍 ${CafeMapLogic.placeLabel(it)}" } ?: "위치 미지정"
             Text(listOfNotNull(visits?.let { "방문 ${it}회" }, where).joinToString(" · "), style = AppType.faint)
+            if (point != null) address?.let { Text(it, style = AppType.faint) }
         }
         Spacer(Modifier.width(8.dp))
         GhostButton(if (point == null) "지도에서 위치 지정" else "위치 변경", small = true, onClick = onPick)
@@ -211,7 +217,7 @@ fun CafePlaceRow(nav: NavHostController, cafeName: String, modifier: Modifier = 
     val point = place?.point
     Column(modifier.fillMaxWidth()) {
         SectionLabel("카페 위치")
-        CafeLocationLine(name, null, point) { nav.pickCafe(name) }
+        CafeLocationLine(name, null, point, place?.address) { nav.pickCafe(name) }
         MapLinkButtons(name, point?.let { KoreaRegions.locate(it.lat, it.lng, 3.0)?.label } ?: "", point, overseas = false)
     }
 }
@@ -226,6 +232,6 @@ fun CafeLocationsBlock(nav: NavHostController, entries: List<Entry>, modifier: M
     if (spots.isEmpty()) return
     Column(modifier.fillMaxWidth()) {
         SectionLabel("카페 위치")
-        spots.forEach { s -> CafeLocationLine(s.name, s.visits.size, s.point) { nav.pickCafe(s.name) } }
+        spots.forEach { s -> CafeLocationLine(s.name, s.visits.size, s.point, s.place?.address) { nav.pickCafe(s.name) } }
     }
 }

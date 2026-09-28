@@ -182,6 +182,8 @@ class BackupCodec {
     private fun encodeCafePlace(p: CafePlace): JsonObject = buildJsonObject {
         put("name", p.name)
         p.point?.let { put("lat", it.lat); put("lng", it.lng) }
+        // schema 3: only a place picked from a search has one
+        p.address?.let { put("address", it) }
         put("createdAt", p.createdAt)
     }
 
@@ -424,12 +426,12 @@ class BackupCodec {
         )
     }
 
-    /** A `cafePlaces` row; one without a name has nothing to attach to and is skipped. */
+    /** A `cafePlaces` row; one without a name has nothing to attach to and is skipped. A file before schema 3 has no address. */
     private fun decodeCafePlace(o: JsonObject, where: String): CafePlace? {
         val name = o.str("name").trim()
         if (name.isEmpty()) return null
         val point = o.point()
-        return CafePlace(name, point?.lat, point?.lng, o.createdAt(where))
+        return CafePlace(name, point?.lat, point?.lng, o.createdAt(where), o.str("address").trim().ifEmpty { null })
     }
 
     /** `lat` / `lng` as a position: both finite and in range, else none (a damaged pair is dropped, not refused). */
@@ -636,8 +638,11 @@ class BackupCodec {
         const val APP_NAME = "coffee-journal-mobile"
         /** Web wording (script3.js 7892). */
         const val NO_DATA = "백업 파일 형식이 아니에요. (data 필드가 없어요)"
-        /** 2: miscItems carry optional lat / lng and data.cafePlaces exists (Room schema v2). Readers ignore what they do not know. */
-        const val SCHEMA = 2
+        /**
+         * 2: miscItems carry optional lat / lng and data.cafePlaces exists (Room schema v2). 3: cafePlaces rows may carry
+         * an address (Room schema v3). Readers ignore what they do not know.
+         */
+        const val SCHEMA = 3
         const val BAG_PREFIX = "bag-photo:"
         const val JOURNAL_PREFIX = "journal-photo:"
         private const val LEGACY_EQUIPMENT = "equipment"

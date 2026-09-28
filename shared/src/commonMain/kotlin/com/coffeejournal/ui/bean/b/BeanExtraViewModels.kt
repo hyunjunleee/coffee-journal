@@ -81,12 +81,13 @@ class FlatItemFormViewModel(val type: String, private val itemId: String?, priva
 
     /**
      * The location picker's answer ([MapPickResult]): sets or clears the position; an empty 지역 field is filled with
-     * the area found there ("서울특별시 성동구", or the country abroad).
+     * the searched place's address, else the area found there ("서울특별시 성동구", or the country abroad). What the
+     * user typed there stays.
      */
     fun applyPick(result: String) = _state.update { s ->
         if (s.saving) return@update s
         val p = MapPickResult.decode(result) ?: return@update s.copy(point = null)
-        val fill = if (s.location.isBlank()) MapPickResult.placeName(p, overseas = s.scope == Scope.OVERSEAS) else null
+        val fill = if (s.location.isBlank()) MapPickResult.address(result) ?: MapPickResult.placeName(p, overseas = s.scope == Scope.OVERSEAS) else null
         s.copy(point = p, location = fill ?: s.location)
     }
 

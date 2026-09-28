@@ -6,12 +6,16 @@
     <uses-permission android:name="android.permission.VIBRATE" />
     <!-- the detail map (상세 지도) loads OpenStreetMap tiles for the area on screen from OpenFreeMap; the network state
          tells it apart from being offline. The AI note helper calls the service the user chose, with the user's own key,
-         only when asked a question. Nothing else in the app uses the network. -->
+         only when asked a question. The location picker's search asks the phone's geocoder (or Kakao Local, with the
+         user's own key) when 검색 is tapped. Nothing else in the app uses the network. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- MapLibre's library manifest asks for these for its location component, which the app does not use -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="remove" />
+    <!-- the location picker's "현재 위치": asked only when that button is tapped, one fix while the screen is open, no
+         background location. Approximate alone is enough (a rougher point); precise lets GPS answer too. MapLibre's
+         library manifest asks for the same two for its location component, which the app still does not use. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- MapLibre's library manifest asks for this too; nothing in the app reads the Wi-Fi state -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" tools:node="remove" />
     <!-- lets rememberCameraCapture check that a camera app answers IMAGE_CAPTURE before showing 촬영 (API 30+) -->
     <queries>

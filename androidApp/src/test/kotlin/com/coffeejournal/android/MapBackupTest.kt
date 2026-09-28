@@ -21,9 +21,9 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 
 /**
- * Backup round trip of the map data (schema v2): roastery positions ride on `miscItems` as optional lat / lng keys, café
- * positions in the app extension key `cafePlaces`. 병합 matches cafés by name, 교체 swaps the table, and a web file
- * (neither key) restores without touching them.
+ * Backup round trip of the map data (schema v2, café addresses since v3): roastery positions ride on `miscItems` as
+ * optional lat / lng keys, café positions (and addresses) in the app extension key `cafePlaces`. 병합 matches cafés by
+ * name, 교체 swaps the table, and a web file (neither key) restores without touching them.
  */
 @RunWith(AndroidJUnit4::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
@@ -80,5 +80,28 @@ class MapBackupTest : FlowTestBase() {
         // 교체 swaps the misc list for the file's, so the file's (absent) position counts there
         assertNull(misc.getById("r1")!!.point)
         assertNull(misc.getById("r2"))
+    }
+
+    @Test
+    fun cafeAddress_restores_andABackupFromBeforeAddressesKeepsThemWhereTheCafeDidNotMove() = runBlocking {
+        cafes.set("FELT 청계천", GeoPoint(37.5663, 126.991), "서울 중구 청계천로 100")
+        cafes.set("프릳츠 도화", GeoPoint(37.541, 126.951))
+        val codec = BackupCodec()
+        val json = service.export().json
+        assertEquals("서울 중구 청계천로 100", codec.decode(json).cafePlaces.single { it.name == "FELT 청계천" }.address)
+        cafes.deleteAll()
+        assertTrue(service.import(codec.decode(json), ImportMode.REPLACE).allOk)
+        assertEquals("서울 중구 청계천로 100", cafes.get("FELT 청계천")!!.address)
+        assertNull(cafes.get("프릳츠 도화")!!.address)
+
+        // schema 2 had no address: 병합 keeps the one here when the café is at the same point, not when it moved
+        cafes.set("프릳츠 도화", GeoPoint(37.541, 126.951), "서울 마포구 새창로2길 17")
+        val older = """{"data":{"cafePlaces":[{"name":"felt 청계천","lat":37.5663,"lng":126.991,"createdAt":5},
+            {"name":"프릳츠 도화","lat":37.55,"lng":126.95,"createdAt":6}]},"app":{"name":"coffee-journal-mobile","schema":2}}"""
+        assertTrue(service.import(codec.decode(older), ImportMode.MERGE).allOk)
+        assertEquals("서울 중구 청계천로 100", cafes.get("felt 청계천")!!.address)
+        assertEquals("the backup's row wins, spelling and all", "felt 청계천", cafes.get("FELT 청계천")!!.name)
+        assertEquals(GeoPoint(37.55, 126.95), cafes.get("프릳츠 도화")!!.point)
+        assertNull(cafes.get("프릳츠 도화")!!.address)
     }
 }

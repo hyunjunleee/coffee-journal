@@ -9,6 +9,10 @@ import com.coffeejournal.ui.ai.AiHttp
 import com.coffeejournal.ui.ai.IosAiHttp
 import com.coffeejournal.ui.ai.IosSecretStore
 import com.coffeejournal.ui.ai.SecretStore
+import com.coffeejournal.ui.map.search.CurrentLocation
+import com.coffeejournal.ui.map.search.DevicePlaceSearch
+import com.coffeejournal.ui.map.search.IosCurrentLocation
+import com.coffeejournal.ui.map.search.IosPlaceSearch
 import com.coffeejournal.ui.notify.IosNotifications
 import com.coffeejournal.ui.notify.IosReminderPlatform
 import com.coffeejournal.ui.notify.ReminderCheck
@@ -27,4 +31,7 @@ actual val platformModule: Module = module {
     // AI 노트 도우미: HTTP on NSURLSession, keys in the Keychain (this device only)
     single<AiHttp> { IosAiHttp() }
     single<SecretStore> { IosSecretStore() }
+    // 위치 지정: Apple Maps search (MKLocalSearch) and "현재 위치" (CLLocationManager, while using the app)
+    single<DevicePlaceSearch> { IosPlaceSearch() }
+    single { IosCurrentLocation() } bind CurrentLocation::class
 }

@@ -120,8 +120,8 @@ fun MiscItemEntity.toDomain(): MiscItem {
     return MiscItem(id, type, name, notes, since, status, scope, location, favorite, parseOr(photosJson, emptyList()) { dbJson.decodeFromString(strListSer, it) }, createdAt, p?.lat, p?.lng)
 }
 
-fun CafePlace.toEntity() = CafePlaceEntity(name, point?.lat, point?.lng, createdAt)
-fun CafePlaceEntity.toDomain() = CafePlace(name, lat, lng, createdAt)
+fun CafePlace.toEntity() = CafePlaceEntity(name, point?.lat, point?.lng, createdAt, address)
+fun CafePlaceEntity.toDomain() = CafePlace(name, lat, lng, createdAt, address)
 
 fun Book.toEntity() = BookEntity(id, createdAt, title, author, status, startDate, endDate, rating, notes)
 fun BookEntity.toDomain() = Book(id, createdAt, title, author, status, startDate, endDate, rating, notes)

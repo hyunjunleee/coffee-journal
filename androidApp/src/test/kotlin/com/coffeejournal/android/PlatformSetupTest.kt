@@ -1,5 +1,7 @@
 package com.coffeejournal.android
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.content.res.Configuration
 import androidx.core.view.WindowCompat
 import androidx.test.core.app.ActivityScenario
@@ -148,6 +150,25 @@ class PlatformSetupTest {
     fun ios_infoPlist_disablesMinimumFrameDuration() {
         val plist = File(root, "iosApp/iosApp/Info.plist").readText()
         assertTrue(Regex("""<key>CADisableMinimumFrameDurationOnPhone</key>\s*<true/>""").containsMatchIn(plist))
+    }
+
+    /** "현재 위치" asks for "while using the app" only, and iOS shows the user why (the prompt stops the app without it). */
+    @Test
+    fun ios_infoPlist_saysWhyItAsksForTheLocation() {
+        val plist = File(root, "iosApp/iosApp/Info.plist").readText()
+        assertTrue(Regex("""<key>NSLocationWhenInUseUsageDescription</key>\s*<string>[^<]*현재 위치[^<]*</string>""").containsMatchIn(plist))
+        assertFalse("no background location", plist.contains("NSLocationAlways"))
+    }
+
+    /** The picker's "현재 위치" is the one user of the location permissions; nothing asks for background location or the Wi-Fi state. */
+    @Test
+    fun manifest_locationPermissions_forTheCurrentLocationButtonOnly() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val requested = context.packageManager.getPackageInfo(context.packageName, PackageManager.GET_PERMISSIONS)
+            .requestedPermissions.orEmpty().toSet()
+        assertTrue(requested.containsAll(listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION)))
+        assertFalse(Manifest.permission.ACCESS_BACKGROUND_LOCATION in requested)
+        assertFalse(Manifest.permission.ACCESS_WIFI_STATE in requested)
     }
 
     /** platform-14: iOS 18 refuses the one-argument openURL(_:) ("Force returning false"). */
