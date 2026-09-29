@@ -74,6 +74,8 @@ internal object PendingBackupFiles {
 @Composable
 actual fun rememberJsonSaver(onResult: (Boolean) -> Unit): (suggestedName: String, json: String) -> Unit {
     val context = LocalContext.current
+    // launched on Dispatchers.Main so the work after the file IO is back on the main thread in UI tests too, where the
+    // composition's own scope does not dispatch
     val scope = rememberCoroutineScope()
     val callback = rememberUpdatedState(onResult)
     var stagedPath by rememberSaveable { mutableStateOf<String?>(null) }
@@ -85,13 +87,13 @@ actual fun rememberJsonSaver(onResult: (Boolean) -> Unit): (suggestedName: Strin
             callback.value(false)
             return@rememberLauncherForActivityResult
         }
-        scope.launch {
+        scope.launch(Dispatchers.Main) {
             val ok = withContext(NonCancellable + Dispatchers.IO) { PendingBackupFiles.writeOrDiscard(context, uri, staged) }
             callback.value(ok)
         }
     }
     return { suggestedName, json ->
-        scope.launch {
+        scope.launch(Dispatchers.Main) {
             val staged = withContext(Dispatchers.IO) { PendingBackupFiles.stage(context, json) }
             if (staged == null) {
                 callback.value(false)
@@ -114,7 +116,7 @@ actual fun rememberJsonOpener(onOpened: (OpenedFile) -> Unit): () -> Unit {
     val callback = rememberUpdatedState(onOpened)
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri == null) return@rememberLauncherForActivityResult
-        scope.launch {
+        scope.launch(Dispatchers.Main) {
             val limit = BackupFileLimits.maxFileBytes(Runtime.getRuntime().maxMemory())
             val opened = withContext(Dispatchers.IO) { BackupFileReader.read(context, uri, limit) }
             callback.value(opened)

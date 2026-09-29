@@ -13,12 +13,15 @@ import com.coffeejournal.ui.settings.DisplayPrefs
 import com.coffeejournal.ui.theme.CoffeeJournalTheme
 import com.coffeejournal.ui.theme.Display
 import com.coffeejournal.ui.theme.Ink
+import kotlinx.coroutines.Dispatchers
 import org.koin.compose.koinInject
 
 @Composable
 fun App() {
     val prefs = koinInject<DisplayPrefs>()
-    val saved by remember(prefs) { prefs.observe() }.collectAsState(initial = null)
+    // read on the main thread: the settings are derived on a background dispatcher, and a composition's own coroutines
+    // do not dispatch in UI tests, so without it the first value would recompose the app on that background thread
+    val saved by remember(prefs) { prefs.observe() }.collectAsState(initial = null, context = Dispatchers.Main)
     // only the page colour until the saved display settings (설정 › 화면) are read: otherwise the first frame would show
     // the default typeface and size, then jump
     val display = saved

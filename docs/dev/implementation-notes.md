@@ -47,6 +47,7 @@ export ANDROID_HOME=/opt/android-sdk
 - 폼 상태 보존: 카메라 앱이 앞에 있는 동안 프로세스가 죽어도 입력이 남도록 `SavedFormState`(`ui/theme`, SavedStateHandle + JSON)로 저장.
 - 저장 중 뒤로 가기: 폼은 `BlockBackWhile(saving)`으로 시스템 뒤로 가기를 막고, 제목줄 ←·취소도 저장 중에는 무시한다.
 - 파생 계산: 기록 전체를 다시 묶는 계산(그룹핑·통계·추천)은 `Flow.deriveOffMain { … }`으로 `Dispatchers.Default`에서, 최신 입력만 반영해 수행한다. 메인 스레드에서 직접 계산하지 않는다(기록 1,000건에서 110–150ms).
+- 메인 스레드: Compose 상태는 메인 스레드에서만 쓴다. 뷰모델 흐름은 `stateIn(viewModelScope)`(메인)으로 넘기면 되지만, 화면의 코루틴(`LaunchedEffect`·`rememberCoroutineScope`·`collectAsState`)이 백그라운드에서 오는 값을 받거나 `withContext(Dispatchers.IO)` 뒤에 이어질 때는 `Dispatchers.Main`에서 돌린다(`App`의 화면 설정, 타이머 진동, 사진·백업 파일 선택). UI 테스트에서는 컴포지션의 코루틴이 디스패치하지 않아 그 스레드에서 재구성이 일어나고, 안드로이드가 레이아웃 요청을 거부하거나 슬롯 테이블이 깨진다(한때 `MoreFlowTest.more11`이 가끔 실패한 원인). 모든 흐름 테스트(`FlowTestBase`)는 메인 밖의 상태 쓰기를 실패로 잡는다(`MainThreadFlowTest`).
 - 큰 글자·좁은 화면: 한 줄이어야 하는 짧은 라벨은 `FitText`(줄바꿈 대신 축소), 고정 폭 숫자 열은 `N.dp.fontScaled()`(글자 배율만큼, 최대 1.6배 확장). `Seg`는 웹 flex-wrap처럼 넘치면 다음 줄로 옮긴다.
 - 동시 수정: 읽고-고쳐-쓰는 저장(로드맵, 보관함 편집, 즐겨찾기)은 `Mutex` 안에서 행을 다시 읽은 뒤 쓴다. 빠른 연속 탭이나 다른 화면의 변경이 덮이지 않게 한다.
 - 2차 기록·분석 헬퍼(feature-plan-v2 §2):

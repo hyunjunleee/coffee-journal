@@ -1,6 +1,9 @@
 package com.coffeejournal.android
 
 import android.content.Context
+import android.os.Looper
+import androidx.compose.runtime.snapshots.ObserverHandle
+import androidx.compose.runtime.snapshots.Snapshot
 import androidx.compose.ui.layout.findRootCoordinates
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.getOrNull
@@ -32,6 +35,7 @@ import org.junit.Rule
 import org.koin.core.context.GlobalContext
 import org.koin.core.context.stopKoin
 import java.io.File
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Shared driver for the end-to-end flow tests: the real [App] on Robolectric with an in-memory Room database.
@@ -51,6 +55,34 @@ abstract class FlowTestBase {
     @After
     fun stopFlowKoin() {
         stopKoin()
+    }
+
+    private val offMainWrites = CopyOnWriteArrayList<String>()
+    private var writeWatch: ObserverHandle? = null
+
+    /**
+     * Compose state is written on the main thread only. In UI tests the composition's own coroutines do not dispatch,
+     * so a value handed to one from a background thread is written there, and the recomposition it starts can run on
+     * that thread too (Android then refuses its layout request, and two threads composing at once break the slot
+     * table): every flow test fails on such a write, with where it came from.
+     */
+    @Before
+    fun watchStateWrites() {
+        val main = Looper.getMainLooper().thread
+        writeWatch = Snapshot.registerGlobalWriteObserver {
+            val t = Thread.currentThread()
+            if (t !== main && offMainWrites.size < 5) {
+                val stack = t.stackTrace.drop(2)
+                val shown = stack.filter { it.className.startsWith("com.coffeejournal") }.ifEmpty { stack }.take(10)
+                offMainWrites += "${t.name}\n    at " + shown.joinToString("\n    at ")
+            }
+        }
+    }
+
+    @After
+    fun noStateWrittenOffMain() {
+        writeWatch?.dispose()
+        if (offMainWrites.isNotEmpty()) throw AssertionError("Compose state written off the main thread:\n" + offMainWrites.joinToString("\n"))
     }
 
     protected inline fun <reified T : Any> koinGet(): T = GlobalContext.get().get()

@@ -144,6 +144,8 @@ dependencies {
     testImplementation(libs.navigation.compose)
     testImplementation(libs.work.testing)
     testImplementation(libs.glance.appwidget.testing)
+    // the test application gives Coil (used by the shared module) an image loader that stays on the main thread
+    testImplementation(libs.coil.compose)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     sqliteHostNatives(libs.sqlite.bundled.jvm)
 }

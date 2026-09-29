@@ -27,10 +27,12 @@ import java.util.UUID
 @Composable
 actual fun rememberImagePicker(maxItems: Int, onPicked: (List<ByteArray>) -> Unit): () -> Unit {
     val context = LocalContext.current
+    // launched on Dispatchers.Main so the work after the file IO is back on the main thread in UI tests too, where the
+    // composition's own scope does not dispatch
     val scope = rememberCoroutineScope()
     val callback = rememberUpdatedState(onPicked)
     val deliver: (List<Uri>) -> Unit = { uris ->
-        if (uris.isNotEmpty()) scope.launch {
+        if (uris.isNotEmpty()) scope.launch(Dispatchers.Main) {
             val read = withContext(Dispatchers.IO) {
                 uris.map { uri -> runCatching { context.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull() }
             }
@@ -67,7 +69,7 @@ actual fun rememberCameraCapture(onCaptured: (ByteArray) -> Unit): (() -> Unit)?
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val file = capturePath?.let(::File) ?: return@rememberLauncherForActivityResult
         capturePath = null
-        scope.launch {
+        scope.launch(Dispatchers.Main) {
             val bytes = withContext(Dispatchers.IO) {
                 val read = if (ok) runCatching { file.takeIf { it.length() > 0 }?.readBytes() }.getOrNull() else null
                 file.delete()
