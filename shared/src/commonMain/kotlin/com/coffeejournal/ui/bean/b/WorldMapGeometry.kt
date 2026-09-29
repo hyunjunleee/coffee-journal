@@ -30,6 +30,21 @@ object WorldMapGeometry {
     const val REGION_DOT_RADIUS = 2.2f
     const val REGION_TAP_RADIUS = 6f
 
+    /**
+     * The deepest zoom (1 = the fitted map): deep enough to tell apart most regions of Rwanda or Burundi. Regions closer
+     * than about 25 km (Acatenango next to Antigua) still share a dot there; the country's list names them all.
+     */
+    const val MAX_SCALE = 40f
+
+    /**
+     * A drawn region dot's radius in canvas px at the total scale [m] ([dp] px to a dp): 2.5 dp on the fitted map,
+     * growing with the zoom to 4 dp at most, so zooming in spreads the dots apart rather than growing them into each other.
+     */
+    fun dotRadiusPx(m: Float, dp: Float): Float = (REGION_DOT_RADIUS * m).coerceIn(2.5f * dp, 4f * dp)
+
+    /** The dots drawn and tapped at the zoom [scale] (total scale [m]): a dot's radius of space between any two. */
+    fun shownDots(scale: Float, m: Float, dp: Float): List<WorldRegions.Dot> = WorldRegions.shown(scale, 3f * dotRadiusPx(m, dp) / m)
+
     /** Parses path data that only uses absolute M/L/Z commands into closed rings (degenerate rings dropped). */
     fun parsePath(d: String): List<List<Offset>> {
         val rings = ArrayList<List<Offset>>()
@@ -82,9 +97,9 @@ object WorldMapGeometry {
      * under the finger or is drawn over it, so a neighbour's dot near the border does not take the tap; otherwise the
      * country does. In the sea the nearest dot within [seaSlop] is taken, so coastal and island dots stay reachable.
      */
-    fun resolveTap(polygons: List<MapPolygon>, p: Offset, dotRadius: Float, seaSlop: Float): MapTap? {
-        val country = hitCountry(polygons, p) ?: return hitRegion(p, seaSlop)?.let { MapTap.Region(it) }
-        val dot = hitRegion(p, dotRadius) { c, r -> c.en == country.name || country.contains(Offset(r.x, r.y)) }
+    fun resolveTap(polygons: List<MapPolygon>, p: Offset, dotRadius: Float, seaSlop: Float, dots: List<WorldRegions.Dot> = WorldRegions.webDots): MapTap? {
+        val country = hitCountry(polygons, p) ?: return hitRegion(p, seaSlop, dots)?.let { MapTap.Region(it) }
+        val dot = hitRegion(p, dotRadius, dots) { c, r -> c.en == country.name || country.contains(Offset(r.x, r.y)) }
         return if (dot != null) MapTap.Region(dot) else MapTap.Country(country.name)
     }
 
@@ -98,20 +113,19 @@ object WorldMapGeometry {
         return clampPan((pan - c) * r + c + panChange, fit * newScale, canvasW, canvasH)
     }
 
-    /** The nearest region dot within [radius] viewBox units (among those [accept] lets through), if any. */
+    /** The nearest of the [dots] drawn within [radius] viewBox units (among those [accept] lets through), if any. */
     fun hitRegion(
         p: Offset,
         radius: Float = REGION_TAP_RADIUS,
+        dots: List<WorldRegions.Dot> = WorldRegions.webDots,
         accept: (CoffeeCountries.Country, CoffeeCountries.Region) -> Boolean = { _, _ -> true },
     ): RegionHit? {
         var best: RegionHit? = null
         var bestDist = radius * radius
-        CoffeeCountries.all.forEach { c ->
-            WorldRegions.of(c).forEach { r ->
-                val dx = r.x - p.x; val dy = r.y - p.y
-                val d2 = dx * dx + dy * dy
-                if (d2 <= bestDist && accept(c, r)) { bestDist = d2; best = RegionHit(c, r) }
-            }
+        dots.forEach { d ->
+            val dx = d.region.x - p.x; val dy = d.region.y - p.y
+            val d2 = dx * dx + dy * dy
+            if (d2 <= bestDist && accept(d.country, d.region)) { bestDist = d2; best = RegionHit(d.country, d.region) }
         }
         return best
     }
