@@ -1,6 +1,6 @@
 # Coffee Journal
 
-개인 커피 저널 웹앱(`coffee-journal-empty-template`)을 분석하고, 같은 기능을 갖는 모바일 앱을 Kotlin Multiplatform + Compose Multiplatform으로 구현한 저장소입니다. 안드로이드와 아이폰 앱이 같은 공유 코드(`shared`)로 동작하고, 두 앱 모두 GitHub 릴리스로 배포합니다. 현재 버전은 **1.4.0**입니다.
+개인 커피 저널 웹앱(`coffee-journal-empty-template`)을 분석하고, 같은 기능을 갖는 모바일 앱을 Kotlin Multiplatform + Compose Multiplatform으로 구현한 저장소입니다. 안드로이드와 아이폰 앱이 같은 공유 코드(`shared`)로 동작하고, 두 앱 모두 GitHub 릴리스로 배포합니다. 현재 버전은 **1.4.1**입니다.
 
 ## 설치
 
