@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -18,17 +20,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -38,21 +37,28 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
-import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.backhandler.BackHandler
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.onPlaced
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -61,7 +67,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
@@ -70,13 +78,7 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.ui.layout.onPlaced
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.layout.positionInParent
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.text.font.FontWeight
+import com.coffeejournal.domain.rules.EnglishCase
 import kotlin.math.roundToInt
 
 /** Small mono uppercase-ish label above a group of fields (web .section-label). */
@@ -487,12 +489,18 @@ fun AppTextField(
     trailing: (@Composable () -> Unit)? = null,
     /** Accepts, rewrites or rejects (null) each edit before it is shown; see [ImeSafeText.onEdit]. */
     inputFilter: ((String) -> String?)? = null,
+    /**
+     * English words start with a capital ([EnglishCase]): the keyboard shifts at each word, and leaving the field fixes
+     * the rest. Off for a search, a model name or anything multi-line.
+     */
+    capitalizeWords: Boolean = keyboardType == KeyboardType.Text && singleLine,
 ) {
     val sync = rememberImeSafeText(value)
     AppTextFieldValue(
         value = sync.value, onValueChange = { edited -> sync.onEdit(edited, inputFilter)?.let(onValueChange) }, modifier = modifier, label = label,
         placeholder = placeholder, singleLine = singleLine, keyboardType = keyboardType, imeAction = imeAction,
-        onImeAction = onImeAction, minLines = minLines, enabled = enabled, trailing = trailing,
+        onImeAction = onImeAction, minLines = minLines, enabled = enabled, trailing = trailing, capitalizeWords = capitalizeWords,
+        onBlur = { if (capitalizeWords) EnglishCase.words(value).takeIf { it != value }?.let(onValueChange) },
     )
 }
 
@@ -510,6 +518,9 @@ private fun AppTextFieldValue(
     minLines: Int,
     enabled: Boolean,
     trailing: (@Composable () -> Unit)?,
+    capitalizeWords: Boolean = false,
+    /** Called when the field loses the focus it had. */
+    onBlur: (() -> Unit)? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     Column(modifier) {
@@ -517,7 +528,10 @@ private fun AppTextFieldValue(
         OutlinedTextField(
             value = value.shownWhen(focused),
             onValueChange = onValueChange,
-            modifier = Modifier.fillMaxWidth().onFocusChanged { focused = it.isFocused },
+            modifier = Modifier.fillMaxWidth().onFocusChanged {
+                if (focused && !it.isFocused) onBlur?.invoke()
+                focused = it.isFocused
+            },
             // a wrapping placeholder would make a one-line field taller than its neighbours
             placeholder = {
                 Text(
@@ -530,7 +544,10 @@ private fun AppTextFieldValue(
             enabled = enabled,
             textStyle = AppType.input,
             shape = RectangleShape,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = imeAction),
+            keyboardOptions = KeyboardOptions(
+                capitalization = if (capitalizeWords) KeyboardCapitalization.Words else KeyboardCapitalization.None,
+                keyboardType = keyboardType, imeAction = imeAction,
+            ),
             keyboardActions = KeyboardActions(onAny = { onImeAction?.invoke() }),
             trailingIcon = trailing,
             colors = OutlinedTextFieldDefaults.colors(
@@ -568,7 +585,8 @@ fun ChipInput(
     val clear = { sync.onEdit(TextFieldValue(""))?.let(onInputChange) }
     val add = {
         addChipsFromInput(sync, chips)?.let { added ->
-            onChipsChange(added.chips)
+            // English notes start each word with a capital, like the other fields ("jasmine" → "Jasmine")
+            onChipsChange(added.chips.map(EnglishCase::words).distinct())
             if (added.clearNow) clear() else clearPending = true
         }
     }
@@ -585,7 +603,7 @@ fun ChipInput(
             AppTextFieldValue(
                 value = sync.value, onValueChange = { edited -> sync.onEdit(edited)?.let(onInputChange) }, modifier = Modifier.weight(1f),
                 label = null, placeholder = placeholder, singleLine = true, keyboardType = KeyboardType.Text, imeAction = ImeAction.Done,
-                onImeAction = { add() }, minLines = 1, enabled = true, trailing = null,
+                onImeAction = { add() }, minLines = 1, enabled = true, trailing = null, capitalizeWords = true,
             )
             Spacer(Modifier.width(8.dp))
             GhostButton(addLabel, small = true, onClick = { add() })
@@ -618,7 +636,9 @@ internal fun addChipsFromInput(input: ImeSafeText, chips: List<String>): ChipAdd
 
 /**
  * A small square chip. With [onClick] it is an on/off choice — a checkbox with its checked state for TalkBack — or,
- * with [toggle] false, a plain button (e.g. a name suggestion).
+ * with [toggle] false, a plain button (e.g. a name suggestion). [muted]: a secondary choice (the flavor wheel's
+ * unofficial notes) — grey text (still 4.5:1) on the page colour inside a dashed line until it is selected, then
+ * like any chip.
  */
 @Composable
 fun Chip(
@@ -629,10 +649,24 @@ fun Chip(
     onRemove: (() -> Unit)? = null,
     prefix: String = "",
     toggle: Boolean = true,
+    muted: Boolean = false,
 ) {
-    val base = modifier
-        .border(BorderStroke(Dimens.hairline, if (selected) Ink.accent else Ink.line), RectangleShape)
-        .background(if (selected) Ink.accent else Ink.surface)
+    val quiet = muted && !selected
+    val base = if (quiet) {
+        modifier.background(Ink.bg).drawBehind {
+            val w = 1.dp.toPx()
+            drawRect(
+                color = Ink.textFaint,
+                topLeft = Offset(w / 2, w / 2),
+                size = androidx.compose.ui.geometry.Size(size.width - w, size.height - w),
+                style = androidx.compose.ui.graphics.drawscope.Stroke(width = w, pathEffect = PathEffect.dashPathEffect(floatArrayOf(4.dp.toPx(), 3.dp.toPx()))),
+            )
+        }
+    } else {
+        modifier
+            .border(BorderStroke(Dimens.hairline, if (selected) Ink.accent else Ink.line), RectangleShape)
+            .background(if (selected) Ink.accent else Ink.surface)
+    }
     val interactive = when {
         onClick == null -> base
         toggle -> base.toggleable(value = selected, role = Role.Checkbox, onValueChange = { onClick() })
@@ -642,7 +676,7 @@ fun Chip(
         interactive.padding(horizontal = 9.dp, vertical = 5.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(prefix + text, style = AppType.small.copy(color = if (selected) Ink.bg else Ink.text))
+        Text(prefix + text, style = AppType.small.copy(color = if (selected) Ink.bg else if (quiet) Ink.textMuted else Ink.text))
         if (onRemove != null) {
             Spacer(Modifier.width(6.dp))
             GlyphButton("×", label = "$text 삭제", onClick = onRemove, style = AppType.small.copy(color = if (selected) Ink.bg else Ink.textFaint))

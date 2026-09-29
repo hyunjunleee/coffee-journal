@@ -77,7 +77,7 @@ private fun CountryPanel(
     }
     if (info.regions.isNotEmpty()) {
         if (onRegionTap == null) Text("주요 산지: ${info.regions.joinToString(", ") { it.name }}", style = AppType.faint, modifier = Modifier.padding(top = 4.dp))
-        else RegionLinks(info.regions.map { it.name }, onRegionTap)
+        else RegionLinks(WorldRegions.of(info).map { it.name }, onRegionTap)
     }
     if (records.isNotEmpty()) {
         MapStats.groupByRegionThenFarm(records).forEach { group ->

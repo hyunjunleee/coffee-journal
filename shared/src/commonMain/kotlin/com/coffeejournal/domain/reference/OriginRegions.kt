@@ -2,7 +2,7 @@ package com.coffeejournal.domain.reference
 
 /** Placeholder: replaced by the compiled producing-region data. */
 object OriginRegions {
-    data class Place(val ko: String, val en: String, val aliases: List<String> = emptyList(), val subs: List<Place> = emptyList())
+    data class Place(val ko: String, val en: String, val aliases: List<String> = emptyList(), val subs: List<Place> = emptyList(), val lat: Double? = null, val lng: Double? = null)
 
     data class Origin(val countryEn: String, val regions: List<Place>)
 

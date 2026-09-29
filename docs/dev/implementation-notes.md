@@ -33,7 +33,7 @@ export ANDROID_HOME=/opt/android-sdk
 - 사진: `PhotoStore`(Koin `get<PhotoStore>()`), 선택은 `ui/platform/ImagePicker.kt`의 `rememberImagePicker(maxItems) { bytes -> }` / `rememberCameraCapture { bytes -> }`. 저장: `photoStore.save(bytes)` → 파일명. 표시: `coil3.compose.AsyncImage(model = "file://" + photoStore.pathFor(name), contentDescription = …)`.
 - 날짜: `domain/rules/Dates.kt`만 사용(Instant 직접 사용 금지). id: `Ids.newId()`.
 - 도메인 규칙은 `domain/rules/*`(BeanNames, Packages, BeanRecords, CalendarRanges, DdayRules, PantryRules, Prices, ScaScoring, RoastFamily, NoteCanon, CountryLookup, RegionHierarchy, RecipeSteps)를 재사용하고 중복 구현하지 않는다.
-- 참조 데이터는 `domain/reference/*`(FlavorWheel, NoteCategories, NoteSynonyms, Processes, Varieties, CoffeeCountries, WorldMapData, Champions, CafeRecipes, GenericSteps, BeanRangeColors, EquipmentTypes, RoastLevels, ScoreTiers, RoadmapDefaults, RoasteryMapPoints, ScaForm, KoreaMapData). `KoreaMapData*.kt`는 생성 파일이라 손으로 고치지 않고 `python3 tools/korea-map/build_korea_map.py [--input 행정동.geojson] [--preview 폴더]`(도구 전용 `pip install shapely`)로 다시 만든다.
+- 참조 데이터는 `domain/reference/*`(FlavorWheel — SCA/WCR 휠 원문, 모든 층의 용어를 고를 수 있음; FlavorWheelExtras — 휠에 없는 앱의 비공식 노트, 기록 폼에서 회색 점선 칩으로 따로 보임; NoteCategories, NoteSynonyms, Processes, Varieties, CoffeeCountries, WorldMapData, Champions, CafeRecipes, GenericSteps, BeanRangeColors, EquipmentTypes, RoastLevels, ScoreTiers, RoadmapDefaults, RoasteryMapPoints, ScaForm, KoreaMapData). `KoreaMapData*.kt`는 생성 파일이라 손으로 고치지 않고 `python3 tools/korea-map/build_korea_map.py [--input 행정동.geojson] [--preview 폴더]`(도구 전용 `pip install shapely`)로 다시 만든다.
 
 ## 공용 헬퍼 (감사 후 추가, 반드시 재사용)
 - 숫자: `Numbers.parse(text)` — `NaN`·`Infinity`·범위 초과를 "값 없음"(null)으로 돌린다. `toDoubleOrNull()` 직접 사용 금지.

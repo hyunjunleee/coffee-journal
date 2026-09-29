@@ -107,7 +107,7 @@ object WorldMapGeometry {
         var best: RegionHit? = null
         var bestDist = radius * radius
         CoffeeCountries.all.forEach { c ->
-            c.regions.forEach { r ->
+            WorldRegions.of(c).forEach { r ->
                 val dx = r.x - p.x; val dy = r.y - p.y
                 val d2 = dx * dx + dy * dy
                 if (d2 <= bestDist && accept(c, r)) { bestDist = d2; best = RegionHit(c, r) }

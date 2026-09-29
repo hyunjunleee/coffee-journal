@@ -23,6 +23,7 @@ import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.RoadmapItem
 import com.coffeejournal.domain.reference.RoadmapDefaults
 import com.coffeejournal.domain.rules.Dates
+import com.coffeejournal.ui.form.sections.FlavorWheelTexts
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.number
 import org.junit.Assert.assertEquals
@@ -144,6 +145,11 @@ class AccessibilityFlowTest : FlowTestBase() {
         node(jasmine).performScrollTo().assertIsOff()
         clickNode(jasmine)
         node(jasmine).assertIsOn()
+        // the app's unofficial notes are check boxes too, and say so
+        val apricot = described(FlavorWheelTexts.unofficial("Apricot")) and isToggleable()
+        waitFor(apricot)
+        assertEquals(Role.Checkbox, role(apricot))
+        node(apricot).performScrollTo().assertIsOff()
     }
 
     @Test

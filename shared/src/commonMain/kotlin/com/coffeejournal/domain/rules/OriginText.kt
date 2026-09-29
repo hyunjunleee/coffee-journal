@@ -59,3 +59,21 @@ object Altitude {
     /** A number ("1,950", "1950.5") or a range of two ("1800-2000", "1,800 ~ 2,000"). */
     private val NUMBERS = Regex("\\d[\\d,.]*(\\s*[~\\-–]\\s*\\d[\\d,.]*)?")
 }
+
+/**
+ * English written in the entry fields: each space-separated word starts with a capital ("yellow bourbon" → "Yellow
+ * Bourbon", "heirloom(74112)" → "Heirloom(74112)"). Only a lower-case a–z at a word's start changes: Korean, digits and
+ * the rest of each word ("SL28", "iPhone"'s "P") stay as typed.
+ */
+object EnglishCase {
+    fun words(text: String): String {
+        if (text.none { it in 'a'..'z' }) return text
+        val out = StringBuilder(text.length)
+        var start = true
+        for (ch in text) {
+            out.append(if (start && ch in 'a'..'z') ch.uppercaseChar() else ch)
+            start = ch == ' '
+        }
+        return out.toString()
+    }
+}

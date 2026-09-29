@@ -108,7 +108,7 @@ private fun Density.dotRadiusPx(m: Float): Float = maxOf(WorldMapGeometry.REGION
 
 /**
  * The world map: 175 polygons from [WorldMapData] fitted into the canvas, producers in dark green, tasted countries
- * in [MapPalette.tasted], 60 region dots, the two tropics, tap to select and pinch to zoom around the fingers.
+ * in [MapPalette.tasted], the region dots ([WorldRegions]), the two tropics, tap to select and pinch to zoom around the fingers.
  * [triedRegions] holds "En|region" keys in lower case.
  */
 @Composable
@@ -189,7 +189,7 @@ fun WorldMapCanvas(
             // Region dots on top of everything: tasted ones dark with a light ring, the others 연두색.
             val r = dotRadiusPx(m)
             CoffeeCountries.all.forEach { c ->
-                c.regions.forEach { reg ->
+                WorldRegions.of(c).forEach { reg ->
                     val p = WorldMapGeometry.toCanvas(Offset(reg.x, reg.y), m, origin)
                     if (p.x < -r || p.x > w + r || p.y < -r || p.y > h + r) return@forEach
                     val tried = "${c.en}|${reg.name.lowercase()}" in triedRegions

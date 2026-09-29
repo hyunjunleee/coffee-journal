@@ -51,11 +51,13 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.rules.Altitude
+import com.coffeejournal.domain.rules.EnglishCase
 import com.coffeejournal.ui.platform.openUrl
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppType
@@ -94,17 +96,25 @@ internal fun FormTextField(
     hint: String? = null,
     trailing: (@Composable () -> Unit)? = null,
     inputFilter: ((String) -> String?)? = null,
+    /** English words start with a capital: the keyboard shifts at each word, and leaving the field fixes the rest. */
+    capitalizeWords: Boolean = keyboardType == KeyboardType.Text && singleLine,
 ) {
     val sync = rememberImeSafeText(value)
     // onFocusChanged fires once on attach with "not focused"; only report a blur after a real focus.
     var hadFocus by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf(false) }
+    var wasFocused by remember { mutableStateOf(false) }
     Column(modifier) {
         if (label != null) FieldLabel(label)
         var fieldModifier: Modifier = Modifier.fillMaxWidth()
         if (focusRequester != null) fieldModifier = fieldModifier.focusRequester(focusRequester)
         fieldModifier = fieldModifier.onFocusChanged { st ->
             focused = st.isFocused
+            if (st.isFocused) wasFocused = true
+            else if (wasFocused) {
+                wasFocused = false
+                if (capitalizeWords) EnglishCase.words(value).takeIf { it != value }?.let(onValueChange)
+            }
             if (onFocusChanged == null) return@onFocusChanged
             if (st.isFocused) { hadFocus = true; onFocusChanged(true) } else if (hadFocus) { hadFocus = false; onFocusChanged(false) }
         }
@@ -124,7 +134,10 @@ internal fun FormTextField(
             isError = error != null,
             textStyle = AppType.input,
             shape = RectangleShape,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = if (singleLine) ImeAction.Next else ImeAction.Default),
+            keyboardOptions = KeyboardOptions(
+                capitalization = if (capitalizeWords) KeyboardCapitalization.Words else KeyboardCapitalization.None,
+                keyboardType = keyboardType, imeAction = if (singleLine) ImeAction.Next else ImeAction.Default,
+            ),
             trailingIcon = trailing,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Ink.accent, unfocusedBorderColor = Ink.line, errorBorderColor = Ink.bad,
@@ -284,7 +297,11 @@ internal fun CompactField(
     // the box stays 36 dp tall; the surrounding layout reserves a 48 dp touch target
     var m = modifier.minimumInteractiveComponentSize().heightIn(min = 36.dp).background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
     if (focusRequester != null) m = m.focusRequester(focusRequester)
-    m = m.onFocusChanged { focused = it.isFocused }
+    m = m.onFocusChanged {
+        // leaving the field starts each English word with a capital, as FormTextField does
+        if (focused && !it.isFocused && keyboardType == KeyboardType.Text) EnglishCase.words(value).takeIf { t -> t != value }?.let(onValueChange)
+        focused = it.isFocused
+    }
     BasicTextField(
         value = sync.value.shownWhen(focused),
         onValueChange = { edited -> sync.onEdit(edited, inputFilter)?.let(onValueChange) },
@@ -292,7 +309,10 @@ internal fun CompactField(
         singleLine = true,
         textStyle = AppType.inputSmall.copy(color = Ink.text, textAlign = textAlign),
         cursorBrush = SolidColor(Ink.accent),
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Next),
+        keyboardOptions = KeyboardOptions(
+            capitalization = if (keyboardType == KeyboardType.Text) KeyboardCapitalization.Words else KeyboardCapitalization.None,
+            keyboardType = keyboardType, imeAction = ImeAction.Next,
+        ),
         decorationBox = { inner ->
             Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), contentAlignment = if (textAlign == TextAlign.Center) Alignment.Center else Alignment.CenterStart) {
                 if (sync.value.text.isEmpty()) Text(placeholder, style = AppType.inputSmall.copy(color = Ink.textFaint), maxLines = 1)

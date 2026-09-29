@@ -5,6 +5,7 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isToggleable
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,8 +20,11 @@ import com.coffeejournal.domain.model.RecipeRef
 import com.coffeejournal.domain.model.RecipeStep
 import com.coffeejournal.domain.reference.CafeRecipes
 import com.coffeejournal.domain.reference.Champions
+import com.coffeejournal.domain.reference.FlavorWheel
 import com.coffeejournal.domain.reference.GenericSteps
 import com.coffeejournal.domain.rules.Dates
+import com.coffeejournal.ui.about.Credits
+import com.coffeejournal.ui.form.sections.FlavorWheelTexts
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -235,6 +239,46 @@ class CoverageFlowTest : CoverageFlowBase() {
         assertEquals("Peach, 자스민", saved.actualNotes)
         assertEquals("자스민, 복숭아", saved.expectedNotes)
         assertTrue("detail row", has(hasText("Peach, 자스민")))
+    }
+
+    /**
+     * Not in the web app: every label of the SCA/WCR wheel can be picked (the inner "Fruity", the middle "Brown Sugar"),
+     * and after each category's wheel terms the app's own notes (FlavorWheelExtras) sit in a block of their own as grey
+     * chips that TalkBack reads as 비공식, yet pick and unpick like any wheel term.
+     */
+    @Test
+    fun cov04b_flavorWheel_everyTierPickable_unofficialNotesGreyButSelectable() {
+        launchApp()
+        openNewForm()
+        typeInto(namePlaceholder, "비공식 노트 테스트 원두")
+        clickText("🎨 SCA Coffee Taster's Flavor Wheel")
+        waitForText(Credits.FLAVOR_WHEEL_EXTRAS_NOTE)
+        val apricot = button("Apricot")
+        waitFor(apricot)
+        assertTrue("labelled unofficial", has(apricot and hasContentDescription(FlavorWheelTexts.unofficial("Apricot")) and isToggleable()))
+        assertFalse("wheel terms are not", has(button("Peach") and hasContentDescription("비공식", substring = true)))
+        assertEquals(FlavorWheel.categories.size, count(hasText(FlavorWheelTexts.EXTRAS_LABEL)))
+        // Fruity's card: the wheel's own groups first, then the unofficial block, then the next category
+        val fruityExtras = hasText(FlavorWheelTexts.EXTRAS_LABEL) // the second block; the first is Floral's
+        assertTopToBottom("Fruity card", button("Fruity"), button("Berry"), button("Lime"), apricot, button("Sour"))
+        assertTrue("the block heading sits between Lime and Apricot", top(fruityExtras, 1) > top(button("Lime")) && top(fruityExtras, 1) < top(apricot))
+        assertEquals(ToggleableState.Off, toggleState(apricot))
+
+        clickNode(apricot)
+        waitFor(hasContentDescription("Apricot 삭제"), "Apricot added to 내가 느낀 노트")
+        assertEquals(ToggleableState.On, toggleState(apricot))
+        clickText("Brown Sugar")
+        waitFor(hasContentDescription("Brown Sugar 삭제"))
+        clickText("Fruity")
+        waitFor(hasContentDescription("Fruity 삭제"))
+        clickNode(apricot) // picking it again removes it, like a wheel term
+        waitGone(hasContentDescription("Apricot 삭제"))
+        assertEquals(ToggleableState.Off, toggleState(apricot))
+        clickText("Tartaric Acid")
+        waitFor(hasContentDescription("Tartaric Acid 삭제"))
+
+        saveForm("비공식 노트 테스트 원두")
+        assertEquals("Brown Sugar, Fruity, Tartaric Acid", entries().single().actualNotes)
     }
 
     // ───────────── web 649 / 7428-7446: 원두 구성 = 카페 블렌드 (a second bean block makes one) ─────────────
