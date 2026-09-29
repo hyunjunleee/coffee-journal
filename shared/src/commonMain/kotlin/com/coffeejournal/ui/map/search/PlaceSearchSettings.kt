@@ -30,8 +30,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import com.coffeejournal.ui.ai.AiSettingsViewModel
-import com.coffeejournal.ui.form.TextLink
-import com.coffeejournal.ui.platform.openUrl
+import com.coffeejournal.ui.guide.KeyGuideLink
+import com.coffeejournal.ui.guide.KeyHowTos
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GhostButton
@@ -151,7 +151,7 @@ fun PlaceSearchSettingsSection(modifier: Modifier = Modifier) {
         }
         HintText(PlaceSearchTexts.KAKAO_HINT)
         HintText(PlaceSearchTexts.KAKAO_GUIDE)
-        TextLink("카카오 개발자 사이트 ↗", Ink.textMuted, { openUrl(PlaceSearchTexts.KAKAO_GUIDE_URL) })
+        KeyGuideLink(KeyHowTos.KAKAO, PlaceSearchTexts.KAKAO_GUIDE_OPEN)
         HintText(PlaceSearchTexts.KAKAO_PRIVACY)
     }
 
@@ -160,7 +160,7 @@ fun PlaceSearchSettingsSection(modifier: Modifier = Modifier) {
             onDismissRequest = { clearing = false },
             shape = RectangleShape, containerColor = Ink.bg,
             title = { Text("키 지우기", style = AppType.title) },
-            text = { Text("저장한 카카오 REST API 키를 이 휴대폰에서 지울까요? 국내 검색은 기기 지도 서비스로 돌아가요.", style = AppType.body) },
+            text = { Text("저장한 카카오 REST API 키를 이 휴대폰에서 지울까요? 국내 검색은 키 없이 찾는 방식으로 돌아가요.", style = AppType.body) },
             confirmButton = { PrimaryButton(PlaceSearchTexts.CLEAR, small = true, onClick = { vm.clear(); clearing = false }) },
             dismissButton = { GhostButton("취소", small = true, onClick = { clearing = false }) },
         )

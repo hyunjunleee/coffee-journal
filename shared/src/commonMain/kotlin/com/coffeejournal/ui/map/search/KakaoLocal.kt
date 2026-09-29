@@ -7,6 +7,7 @@ import com.coffeejournal.ui.ai.AiHttp
 import com.coffeejournal.ui.ai.AiHttpRequest
 import com.coffeejournal.ui.ai.AiJson
 import com.coffeejournal.ui.ai.arr
+import com.coffeejournal.ui.ai.bool
 import com.coffeejournal.ui.ai.get
 import com.coffeejournal.ui.ai.str
 
@@ -20,7 +21,8 @@ internal object KakaoLocal {
     const val ADDRESS_URL = "https://dapi.kakao.com/v2/local/search/address.json"
 
     sealed interface Outcome {
-        data class Hits(val hits: List<PlaceHit>) : Outcome
+        /** [more]: Kakao has another page of places for the name ("더 보기"). */
+        data class Hits(val hits: List<PlaceHit>, val more: Boolean = false) : Outcome
         /** No reply came back (offline, DNS, timeout). */
         data object Offline : Outcome
         /**
@@ -39,36 +41,52 @@ internal object KakaoLocal {
 
     fun headers(key: String) = mapOf("Authorization" to "KakaoAK $key")
 
-    /** Up to 15 places for [query]; from [near] the nearest first (Kakao then reports each one's distance too). */
-    fun keywordRequest(key: String, query: String, near: GeoPoint?, size: Int = 15): AiHttpRequest {
+    /**
+     * Up to 15 places for [query] ([page] 2 onwards for "더 보기", Kakao keeps 45); from [near] the nearest first
+     * (Kakao then reports each one's distance too).
+     */
+    fun keywordRequest(key: String, query: String, near: GeoPoint?, size: Int = 15, page: Int = 1): AiHttpRequest {
         val around = near?.let { "&x=${it.lng}&y=${it.lat}&sort=distance" } ?: ""
-        return AiHttpRequest("$KEYWORD_URL?query=${MapLinks.encode(query)}&size=$size$around", headers(key))
+        val more = if (page > 1) "&page=$page" else ""
+        return AiHttpRequest("$KEYWORD_URL?query=${MapLinks.encode(query)}&size=$size$more$around", headers(key))
     }
 
     fun addressRequest(key: String, query: String): AiHttpRequest =
         AiHttpRequest("$ADDRESS_URL?query=${MapLinks.encode(query)}&size=10", headers(key))
 
     /**
-     * The address matches first (a typed address names one building), then the places. A failed address step after a
-     * good keyword step still gives the places.
+     * The places for the name, then the address matches; the address matches first when [addressFirst] (a typed
+     * address names one building). A failed address step after a good keyword step still gives the places. [Outcome.Hits.more]
+     * tells whether the name has another page.
      */
-    suspend fun search(http: AiHttp, key: String, query: String, near: GeoPoint?): Outcome {
-        val places = send(http, keywordRequest(key, query, near), ::parseKeyword)
+    suspend fun search(http: AiHttp, key: String, query: String, near: GeoPoint?, addressFirst: Boolean = false): Outcome {
+        val places = searchPage(http, key, query, near, page = 1)
         if (places !is Outcome.Hits) return places
-        val addresses = send(http, addressRequest(key, query), ::parseAddress) as? Outcome.Hits
-        return Outcome.Hits(addresses?.hits.orEmpty() + places.hits)
+        val addresses = (send(http, addressRequest(key, query), ::parseAddress) as? Outcome.Hits)?.hits.orEmpty()
+        return Outcome.Hits(if (addressFirst) addresses + places.hits else places.hits + addresses, places.more)
     }
+
+    /** One page of places for the name (no address step): the first page of a search, or "더 보기". */
+    suspend fun searchPage(http: AiHttp, key: String, query: String, near: GeoPoint?, page: Int): Outcome =
+        send(http, keywordRequest(key, query, near, page = page), ::parseKeyword, ::hasMore)
 
     /** The key check: one keyword search for one place. */
     suspend fun check(http: AiHttp, key: String): Outcome = send(http, keywordRequest(key, "카페", near = null, size = 1), ::parseKeyword)
 
-    private suspend fun send(http: AiHttp, request: AiHttpRequest, parse: (String) -> List<PlaceHit>?): Outcome {
+    private suspend fun send(
+        http: AiHttp,
+        request: AiHttpRequest,
+        parse: (String) -> List<PlaceHit>?,
+        more: (String) -> Boolean = { false },
+    ): Outcome {
         val response = try {
             http.send(request)
         } catch (e: AiConnectionException) {
             return Outcome.Offline
         }
-        if (response.status == 200) return parse(response.body)?.let { Outcome.Hits(it) } ?: Outcome.Refused(200, message = "not a search reply")
+        if (response.status == 200) {
+            return parse(response.body)?.let { Outcome.Hits(it, more(response.body)) } ?: Outcome.Refused(200, message = "not a search reply")
+        }
         val message = errorMessage(response.body)
         return when (response.status) {
             401 -> Outcome.Refused(401, keyRejected = true, message = message)
@@ -84,6 +102,9 @@ internal object KakaoLocal {
         val root = AiJson.parse(body)
         return (root["message"].str ?: root["msg"].str ?: body).trim().take(300)
     }
+
+    /** Whether a keyword reply says another page follows (meta.is_end false). */
+    fun hasMore(body: String): Boolean = AiJson.parseObject(body)?.get("meta")?.get("is_end")?.bool == false
 
     /** Null when [body] is not a keyword reply; places without a readable position are left out. */
     fun parseKeyword(body: String): List<PlaceHit>? {

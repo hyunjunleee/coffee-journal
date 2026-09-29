@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 
 /** Lenient reading of the services' JSON: a missing or differently typed field reads as null / empty. */
@@ -22,6 +23,7 @@ internal val JsonElement?.obj: JsonObject? get() = this as? JsonObject
 internal val JsonElement?.arr: List<JsonElement> get() = (this as? JsonArray)?.toList() ?: emptyList()
 internal val JsonElement?.str: String? get() = (this as? JsonPrimitive)?.takeIf { it !is JsonNull && it.isString }?.contentOrNull
 internal val JsonElement?.int: Int? get() = (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.intOrNull
+internal val JsonElement?.dbl: Double? get() = (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.doubleOrNull
 internal val JsonElement?.bool: Boolean? get() = (this as? JsonPrimitive)?.takeIf { it !is JsonNull }?.booleanOrNull
 
 internal operator fun JsonElement?.get(key: String): JsonElement? = (this as? JsonObject)?.get(key)

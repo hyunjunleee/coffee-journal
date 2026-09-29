@@ -63,4 +63,7 @@ object PlaceFixtures {
     val FELT_OTHER = PlaceHit("FELT 광화문점", "서울 종로구 세종대로 170", GeoPoint(37.5716, 126.9769), "카페")
     val BUILDING = PlaceHit("테스트빌딩", "서울 성동구 성수이로7길 51", GeoPoint(37.5446, 127.0557), "주소")
     val MOMOS = PlaceHit("모모스커피 영도", "부산 영도구 봉래나루로 160", GeoPoint(35.0930, 129.0450), "카페")
+
+    /** The phone's answer for an area: only its address, as Android's geocoder gives it. */
+    val JANGCHUNG = PlaceHit("서울특별시 중구 장충동", "서울특별시 중구 장충동", GeoPoint(37.5580, 127.0050))
 }

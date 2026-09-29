@@ -18,7 +18,7 @@ object Credits {
     const val WEB_TEMPLATE_URL = "https://coffee-journal-empty-template.divine-pear-1472.chatgpt.site/"
     const val FLAVOR_WHEEL_ATTRIBUTION = "Coffee Taster's Flavor Wheel © 2016 SCA · WCR, CC BY-NC-ND 4.0"
     const val AI_HELPER_TITLE = "AI 노트 도우미 · Gemini · Tavily · OpenAI · Anthropic"
-    const val PLACE_SEARCH_TITLE = "위치 지정 검색 · 기기 지도 서비스 · 카카오 로컬"
+    const val PLACE_SEARCH_TITLE = "위치 지정 검색 · 기기 지도 서비스 · OpenStreetMap · 카카오 로컬"
 
     val all: List<Credit> = listOf(
         Credit(
@@ -132,11 +132,16 @@ object Credits {
         Credit(
             PLACE_SEARCH_TITLE,
             "로스터리·카페 위치를 이름이나 주소로 찾을 때 \"검색\"을 누르면, 적은 말을 휴대폰의 지도 서비스(Android는 휴대폰의 지오코더, 보통 Google; " +
-                "iOS는 Apple 지도)로 보내요. 설정 › 장소 검색에 자기 카카오 REST API 키를 넣으면 국내 검색은 카카오 로컬 API로 보내요. 앱에는 키가 없어요. " +
-                "\"현재 위치\"를 정한 뒤 찾으면 카카오와 Apple 지도에는 그 좌표도 보내 가까운 곳부터 보여줘요. 기록·원두·사진은 보내지 않아요.\n" +
+                "iOS는 Apple 지도)와 OpenStreetMap 검색(komoot의 공개 서비스 Photon, photon.komoot.io)으로 함께 보내요. " +
+                "OpenStreetMap에서 찾은 곳은 OpenStreetMap 기여자들이 만든 데이터(© OpenStreetMap contributors, ODbL 1.0)라서 결과 아래에 출처를 표시해요. " +
+                "설정 › 장소 검색에 자기 카카오 REST API 키를 넣으면 국내 검색은 카카오 로컬 API로 보내요. 앱에는 키가 없어요. " +
+                "\"현재 위치\"를 정한 뒤 찾거나 \"프릳츠 장충\"처럼 이름과 동네를 함께 적어 그 동네 둘레를 다시 찾을 때는 그 좌표도 보내 가까운 곳부터 보여줘요. " +
+                "기록·원두·사진은 보내지 않아요.\n" +
                 "\"현재 위치\"는 누를 때만 위치 권한을 묻고 위치를 한 번만 읽어요. 남기는 것은 저장한 좌표(와 검색으로 고른 곳의 주소)뿐이에요. " +
                 "각 서비스의 약관과 개인정보 처리방침을 따라요.",
             links = listOf(
+                "OpenStreetMap 저작권 · ODbL 1.0" to OpenFreeMap.OSM_COPYRIGHT_URL,
+                "Photon" to "https://photon.komoot.io/",
                 "카카오 개발자 운영정책" to "https://developers.kakao.com/terms/latest/ko/site-policies",
                 "카카오 개인정보" to "https://www.kakao.com/policy/privacy",
                 "Apple 지도 약관" to "https://www.apple.com/legal/internet-services/maps/terms-en.html",

@@ -133,6 +133,7 @@ class MapPickerViewModelTest {
         runCurrent()
         assertEquals(MapPickerViewModel.Search.Message(PlaceSearchTexts.noResults("없는 카페"), PlaceSource.DEVICE, error = false), vm.state.value.search)
         device.supported = false
+        http.supported = false
         vm.search()
         runCurrent()
         assertEquals(PlaceSearchTexts.UNAVAILABLE + PlaceSearchTexts.UNAVAILABLE_KAKAO, (vm.state.value.search as MapPickerViewModel.Search.Message).text)

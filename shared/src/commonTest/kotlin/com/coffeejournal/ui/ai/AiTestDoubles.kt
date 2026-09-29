@@ -5,6 +5,7 @@ package com.coffeejournal.ui.ai
  * records every request.
  */
 class FakeAiHttp : AiHttp {
+    override var supported: Boolean = true
     val requests = mutableListOf<AiHttpRequest>()
     private class Rule(val url: String, val body: String?, val reply: (AiHttpRequest) -> AiHttpResponse)
     private val rules = mutableListOf<Rule>()

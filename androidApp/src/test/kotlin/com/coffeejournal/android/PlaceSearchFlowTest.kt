@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasTestTag
 import androidx.compose.ui.test.hasText
 import androidx.test.core.app.ApplicationProvider
@@ -13,6 +14,8 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.coffeejournal.data.backup.BackupService
 import com.coffeejournal.data.repo.CafePlaceRepository
 import com.coffeejournal.domain.model.GeoPoint
+import com.coffeejournal.domain.rules.MapLinks
+import com.coffeejournal.ui.guide.KeyHowTos
 import com.coffeejournal.ui.map.search.KakaoKeyCheck
 import com.coffeejournal.ui.map.search.LocateResult
 import com.coffeejournal.ui.map.search.LocateTexts
@@ -230,13 +233,63 @@ class PlaceSearchFlowTest : CoverageFlowBase() {
         search.fail = true
         searchNow()
         waitFor(message(PlaceSearchTexts.FAILED))
+        // no phone search and no connection to OpenStreetMap either
         search.supported = false
+        AiSetup.http.supported = false
         searchNow()
         waitFor(message(PlaceSearchTexts.UNAVAILABLE + PlaceSearchTexts.UNAVAILABLE_KAKAO))
         replaceIn("없는 로스터리", "")
         searchNow()
         waitFor(message(PlaceSearchTexts.EMPTY_QUERY))
         assertEquals(2, search.asked.size)
+    }
+
+    @Test
+    fun aNameWithAnArea_withoutKakao_listsTheNameAroundTheArea_andTheTipOpensKakaosHowTo() {
+        // the phone knows only the area; OpenStreetMap finds nothing for both words, two cafés for the name alone
+        search.hits = listOf(PlaceFixtures.JANGCHUNG)
+        AiSetup.http.on("q=${MapLinks.encode("테스트커피 장충")}&") { PhotonFixtures.EMPTY }
+            .on("q=${MapLinks.encode("테스트커피")}&") { PhotonFixtures.CAFES }
+        launchApp()
+        openRoasteryPicker("테스트커피 장충")
+        searchNow()
+        waitFor(button("테스트커피 약수점"))
+        // the nearer café first, each with its distance from the area, then the area itself
+        val names = compose.onAllNodes(hasAnyAncestor(hasTestTag("search-results")) and hasClickAction())
+            .fetchSemanticsNodes().mapNotNull { n -> n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.firstOrNull()?.text }
+        assertEquals(listOf("테스트커피 약수점", "테스트커피 무악점", PlaceFixtures.JANGCHUNG.name), names.filter { it.startsWith("테스트커피") || it == PlaceFixtures.JANGCHUNG.name })
+        assertTrue(has(hasText("장충에서", substring = true)))
+        assertEquals(PlaceFixtures.JANGCHUNG.point, search.asked.last().third)
+        waitFor(hasTestTag("search-source") and hasText(PlaceSearchTexts.source(listOf(PlaceSource.DEVICE, PlaceSource.OSM))))
+        assertTrue(has(hasText(PlaceSearchTexts.OSM_CREDIT)))
+        assertFalse("only Kakao pages", has(hasTestTag("search-more")))
+
+        // without a Kakao key the tip says what one adds; its how-to opens over the picker and closes back to it
+        assertTrue(has(hasTestTag("kakao-tip") and hasAnyDescendant(hasText(PlaceSearchTexts.KAKAO_TIP))))
+        tap(button(PlaceSearchTexts.KAKAO_TIP_LINK))
+        waitFor(hasTestTag("key-guide"))
+        assertTrue(has(hasText(KeyHowTos.KAKAO.title)) && has(hasText(KeyHowTos.KAKAO.sections.first().heading)))
+        tap(hasTestTag("key-guide-close"))
+        waitGone(hasTestTag("key-guide"))
+        tap(button("테스트커피 약수점"))
+        waitForText("📍 서울특별시 중구")
+    }
+
+    @Test
+    fun withKakao_more_addsTheNextPage_untilTheLast() {
+        AiSetup.secrets.values[PlaceSearchService.KAKAO_SECRET] = "kakao-rest-key-9f3a"
+        AiSetup.http.on("page=2") { KakaoFixtures.PAGE_TWO }.on("keyword.json") { KakaoFixtures.KEYWORD_MORE }.on("address.json") { KakaoFixtures.EMPTY }
+        launchApp()
+        openRoasteryPicker("테스트커피")
+        searchNow()
+        waitFor(button("테스트커피 성수"))
+        assertFalse("Kakao answered: no tip", has(hasTestTag("kakao-tip")))
+        tap(hasTestTag("search-more"))
+        waitFor(button("테스트커피 둘째"))
+        assertTrue(has(button("테스트커피 성수")))
+        assertFalse("the last page", has(hasTestTag("search-more")))
+        assertTrue(AiSetup.http.requests.any { "keyword.json" in it.url && "&page=2" in it.url })
+        assertTrue(search.asked.isEmpty())
     }
 
     @Test
@@ -285,7 +338,7 @@ class PlaceSearchFlowTest : CoverageFlowBase() {
         tap(hasTestTag("open-settings"))
         waitFor(hasTestTag("kakao-key"))
         tap(inSection(button(PlaceSearchTexts.CLEAR)))
-        waitForText("저장한 카카오 REST API 키를 이 휴대폰에서 지울까요? 국내 검색은 기기 지도 서비스로 돌아가요.")
+        waitForText("저장한 카카오 REST API 키를 이 휴대폰에서 지울까요? 국내 검색은 키 없이 찾는 방식으로 돌아가요.")
         clickNode(dialogButton(PlaceSearchTexts.CLEAR))
         waitGone(hasTestTag("kakao-key"))
         waitFor(field(PlaceSearchTexts.KAKAO_PLACEHOLDER))
@@ -304,4 +357,30 @@ object KakaoFixtures {
      ]}
     """
     const val EMPTY = """{"meta": {"total_count": 0, "pageable_count": 0, "is_end": true}, "documents": []}"""
+
+    /** [KEYWORD] with a page after it, and that page. */
+    val KEYWORD_MORE = KEYWORD.replace("\"is_end\": true", "\"is_end\": false")
+    const val PAGE_TWO = """
+    {"meta": {"total_count": 2, "pageable_count": 2, "is_end": true},
+     "documents": [
+      {"id": "1002", "place_name": "테스트커피 둘째", "category_group_name": "카페", "address_name": "서울 성동구 성수동1가 1",
+       "road_address_name": "서울 성동구 왕십리로 1", "x": "127.0443", "y": "37.5447"}
+     ]}
+    """
+}
+
+/** SYNTHETIC Photon (OpenStreetMap) replies in the documented GeoJSON shape (2026-09-29); the cafés are made up. */
+object PhotonFixtures {
+    /** Two cafés carrying the name: one about 1 km from 장충동, one about 4 km. */
+    const val CAFES = """
+    {"type": "FeatureCollection", "features": [
+      {"type": "Feature", "geometry": {"type": "Point", "coordinates": [126.9606, 37.5738]},
+       "properties": {"osm_value": "cafe", "type": "house", "name": "테스트커피 무악점", "street": "통일로12길", "district": "무악동",
+        "city": "서울특별시", "country": "대한민국", "countrycode": "KR"}},
+      {"type": "Feature", "geometry": {"type": "Point", "coordinates": [127.0110, 37.5545]},
+       "properties": {"osm_value": "cafe", "type": "house", "name": "테스트커피 약수점", "street": "다산로", "housenumber": "100",
+        "district": "약수동", "city": "서울특별시", "country": "대한민국", "countrycode": "KR"}}
+    ]}
+    """
+    const val EMPTY = """{"type": "FeatureCollection", "features": []}"""
 }
