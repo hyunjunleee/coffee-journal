@@ -156,7 +156,7 @@ class RouteScreenshotTest {
         compose.onNode(hasText("커피 지도 + 농장(생산자)") and hasClickAction()).assertIsSelected().assertIsDisplayed()
     }
     /** Pinched in about 10× on Central America: the regions of the bean form's lists appear as dots, none on another. */
-    @Test fun bean_mapZoomed() = show(Route.Bean, "87-bean-map-zoomed.png") {
+    @Test fun bean_mapZoomed() = show(Route.Bean, "89-bean-map-zoomed.png") {
         val map = compose.onNode(hasContentDescription("커피 지도.", substring = true))
         val n = map.fetchSemanticsNode()
         val size = Size(n.size.width.toFloat(), n.size.height.toFloat())
