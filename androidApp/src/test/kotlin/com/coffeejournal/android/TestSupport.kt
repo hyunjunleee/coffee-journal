@@ -4,6 +4,8 @@ import android.app.Application
 import android.content.Context
 import androidx.room.Room
 import androidx.sqlite.driver.AndroidSQLiteDriver
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
 import com.coffeejournal.data.db.AppDatabase
 import com.coffeejournal.data.photo.PhotoStore
 import com.coffeejournal.di.dataModule
@@ -28,6 +30,10 @@ class TestApp : Application() {
         super.onCreate()
         // Display (설정 › 화면) is process-wide state: an earlier test's typeface or text size must not carry over
         Display.reset()
+        // photos are read and decoded on the main thread: Coil's painter runs in the composition's scope, which does not
+        // dispatch in UI tests, so a picture read on an IO thread would be applied (and recomposed) there. A fresh
+        // loader per test also keeps an earlier test's pictures out of the memory cache.
+        SingletonImageLoader.setUnsafe(SingletonImageLoader.Factory { ImageLoader.Builder(it).coroutineContext(Dispatchers.Main.immediate).build() })
     }
 }
 

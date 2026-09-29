@@ -84,6 +84,11 @@ class AnswerTextTest {
         )
         // the wheel's inner labels are no candidates: "other" and "sweet" are everyday words
         assertEquals(emptyList(), NoteTerms.find("other notes, sweet finish"))
+        // words that in an answer are mostly not notes, and notes said not to be there
+        assertEquals(emptyList(), NoteTerms.find("roast date on the bag, Pink Bourbon variety, fresh roast, raw beans"))
+        assertEquals(emptyList(), NoteTerms.find("not sour, no bitterness, without any rubber, isn't too salty; mineral water"))
+        assertEquals(listOf("Bitter", "Mineral"), NoteTerms.find("a bitter finish with a mineral note"))
+        assertEquals(emptyList(), NoteTerms.find("신맛이 없고 꽃향은 아니다"))
     }
 
     @Test fun formNotes_mergedAfterTheOldOnes_withoutDuplicates() {

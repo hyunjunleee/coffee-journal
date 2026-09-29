@@ -26,9 +26,13 @@ object NoteCanon {
 
     fun joinChips(chips: List<String>): String = chips.joinToString(", ")
 
+    /**
+     * [existing] and the comma-separated notes in [input], each once; typed English starts each word with a capital
+     * ([EnglishCase]: "earl grey" → "Earl Grey"), as the other fields do, also for a note still in the box at saving.
+     */
     fun addChips(existing: List<String>, input: String): List<String> {
         val seen = LinkedHashSet(existing)
-        input.split(',').map { it.trim() }.filter { it.isNotEmpty() }.forEach { seen += it }
+        input.split(',').map { EnglishCase.words(it.trim()) }.filter { it.isNotEmpty() }.forEach { seen += it }
         return seen.toList()
     }
 }

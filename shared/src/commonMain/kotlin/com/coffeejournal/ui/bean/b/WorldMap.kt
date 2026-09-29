@@ -207,29 +207,36 @@ fun WorldMapCanvas(
             drawText(insetName, topLeft = insetAt)
             writing += Rect(insetAt, insetName.size.toSize())
             // Region dots on top of everything: tasted ones dark with a light ring, the others 연두색. The selected region
-            // (picked from the country's list) is drawn even where the zoom leaves its dot out.
+            // (picked from the country's list) is drawn even where the zoom leaves its dot out; a dot moved off a
+            // neighbour at the deepest zooms has a line to where it belongs.
             val r = dotRadiusPx(m)
             val shown = shownDots(state.scale, m)
             val selected = WorldRegions.dots.firstOrNull { it.country.en == state.selectedCountry && it.region.name == state.selectedRegion }
-            (if (selected != null && selected !in shown) shown + selected else shown).forEach { (c, reg) ->
+            val drawn = if (selected != null && shown.none { it.sameAs(selected) }) shown + selected else shown
+            drawn.forEach { d ->
+                val at = d.trueAt ?: return@forEach
+                drawLine(Ink.textFaint, WorldMapGeometry.toCanvas(at, m, origin), WorldMapGeometry.toCanvas(Offset(d.region.x, d.region.y), m, origin), strokeWidth = 1.dp.toPx())
+            }
+            drawn.forEach { d ->
+                val c = d.country; val reg = d.region
                 val p = WorldMapGeometry.toCanvas(Offset(reg.x, reg.y), m, origin)
                 if (p.x < -r || p.x > w + r || p.y < -r || p.y > h + r) return@forEach
                 val tried = "${c.en}|${reg.name.lowercase()}" in triedRegions
                 drawCircle(if (tried) MapPalette.triedDot else MapPalette.dot, r, p)
                 drawCircle(if (tried) MapPalette.tastedStroke else Ink.surface, r, p, style = Stroke(if (tried) 1.dp.toPx() else 0.6.dp.toPx()))
-                if (selected?.country == c && selected.region == reg) drawCircle(Ink.text, r + 3.dp.toPx(), p, style = Stroke(1.dp.toPx()))
+                if (d.sameAs(selected)) drawCircle(Ink.text, r + 3.dp.toPx(), p, style = Stroke(1.dp.toPx()))
             }
             // Zoomed in, the dots' Korean names where they fit: the selected region's first, then the tasted ones, then
             // the web's dots, then the rest.
             if (state.scale >= WorldRegions.LABEL_SCALE) {
                 val nameStyle = AppType.small.copy(fontSize = 10.sp, color = Ink.text)
                 val layouts = HashMap<String, TextLayoutResult>()
-                val onCanvas = (if (selected != null && selected !in shown) shown + selected else shown)
+                val onCanvas = drawn
                     .map { d -> d to WorldMapGeometry.toCanvas(Offset(d.region.x, d.region.y), m, origin) }
                     .filter { (_, p) -> p.x in 0f..w && p.y in 0f..h }
                     .sortedBy { (d, _) ->
                         when {
-                            d == selected -> 0
+                            d.sameAs(selected) -> 0
                             "${d.country.en}|${d.region.name.lowercase()}" in triedRegions -> 1
                             d.web -> 2
                             else -> 3

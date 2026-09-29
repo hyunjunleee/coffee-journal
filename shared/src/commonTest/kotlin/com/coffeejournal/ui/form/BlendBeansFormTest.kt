@@ -71,7 +71,8 @@ class BlendBeansFormTest {
         )
         val back = FormMapper.fromEntry(en, FormMode.EXTRACT)
         assertEquals(3, back.beanCount)
-        assertEquals((0 until 3).map { s.bean(it).copy(percent = s.bean(it).percent.removeSuffix(".0")) }, (0 until 3).map { back.bean(it) })
+        // the blocks come back as typed (each also remembering the texts it was opened with)
+        assertEquals((0 until 3).map { s.bean(it).copy(percent = s.bean(it).percent.removeSuffix(".0")) }, (0 until 3).map { back.bean(it).copy(loaded = LoadedOrigin()) })
         assertTrue(back.blendRows.isEmpty(), "no custom rows made up from the café blend's beans")
         assertEquals(en.blendComponents, entryOf(back.copy(createdAt = en.createdAt)).blendComponents)
     }

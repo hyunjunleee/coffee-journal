@@ -42,7 +42,7 @@ object MapStats {
         records.forEach { r ->
             val c = countryOf(r) ?: return@forEach
             cups[c.en] = (cups[c.en] ?: 0) + 1
-            val h = RegionHierarchy.parse(r.region)
+            val h = RegionHierarchy.parse(r.region, c.en)
             if (h.primary.isNotEmpty()) {
                 val map = regions.getOrPut(c.en) { LinkedHashMap() }
                 val key = h.primary.lowercase()
@@ -82,7 +82,7 @@ object MapStats {
     fun groupByRegionThenFarm(records: List<BeanRecord>): List<RegionGroup> {
         val byRegion = LinkedHashMap<String, LinkedHashMap<String, MutableList<BeanRecord>>>()
         records.forEach { r ->
-            val region = RegionHierarchy.parse(r.region).primary.ifEmpty { UNKNOWN_REGION }
+            val region = RegionHierarchy.parse(r.region, countryOf(r)?.en).primary.ifEmpty { UNKNOWN_REGION }
             val farm = r.farmProducer.trim().ifEmpty { UNKNOWN_FARM }
             byRegion.getOrPut(region) { LinkedHashMap() }.getOrPut(farm) { mutableListOf() }.add(r)
         }
@@ -96,7 +96,7 @@ object MapStats {
         val key = region.lowercase()
         val byFarm = LinkedHashMap<String, Pair<MutableList<BeanRecord>, LinkedHashSet<String>>>()
         countryRecords.forEach { r ->
-            val h = RegionHierarchy.parse(r.region)
+            val h = RegionHierarchy.parse(r.region, countryOf(r)?.en)
             if (h.primary.lowercase() != key) return@forEach
             val farm = r.farmProducer.trim().ifEmpty { UNKNOWN_FARM }
             val slot = byFarm.getOrPut(farm) { Pair(mutableListOf(), LinkedHashSet()) }
@@ -129,10 +129,10 @@ object MapStats {
 
     fun countryEntry(country: CoffeeCountries.Country, records: List<BeanRecord>): CountryListEntry {
         val sorted = records.sortedByDescending { it.createdAt }
-        val tags = sorted.flatMap { listOf(RegionHierarchy.parse(it.region).primary, it.variety, it.process) }
+        val tags = sorted.flatMap { listOf(RegionHierarchy.parse(it.region, country.en).primary, it.variety, it.process) }
             .map { it.trim() }.filter { it.isNotEmpty() }.distinct().take(8)
         val byRegion = LinkedHashMap<String, MutableList<BeanRecord>>()
-        sorted.forEach { r -> byRegion.getOrPut(RegionHierarchy.parse(r.region).primary.ifEmpty { UNKNOWN_REGION }) { mutableListOf() }.add(r) }
+        sorted.forEach { r -> byRegion.getOrPut(RegionHierarchy.parse(r.region, country.en).primary.ifEmpty { UNKNOWN_REGION }) { mutableListOf() }.add(r) }
         val regions = byRegion.entries.sortedWith { a, b -> regionOrder(a.key, b.key) }.map { it.key to it.value.toList() }
         return CountryListEntry(country, sorted, sorted.firstOrNull()?.let { Dates.md(it.createdAt) } ?: "", tags, regions)
     }

@@ -75,6 +75,7 @@ data class BeanForm(
     val roastDate: String = "",
     /** The bean's share of the blend (%), asked once there are two beans or more. */
     val percent: String = "",
+    val loaded: LoadedOrigin = LoadedOrigin(),
 ) {
     /** Nothing entered: an added block left empty is not saved. */
     val isBlank: Boolean
@@ -83,6 +84,14 @@ data class BeanForm(
             density, score, process, processOther, processSub, roast, roastDate, percent,
         ).all { it.isBlank() }
 }
+
+/**
+ * A bean's 지역, 재배 고도 and 품종 texts as the record held them when the form opened. While their fields are as they
+ * were opened, saving writes these texts back unchanged (OriginKeep), so a record opened and saved for another field
+ * keeps "1,950 masl", "Typica / Bourbon" or "Huila, Pitalito/Acevedo" as it was typed.
+ */
+@Serializable
+data class LoadedOrigin(val region: String = "", val altitude: String = "", val variety: String = "")
 
 /** One bean card of a cupping session (web .cupping-bean-card). */
 @Serializable
@@ -118,6 +127,7 @@ data class CuppingBeanForm(
     val scoreForm: String = ScoreForm.SCA2004,
     val cva: CvaAssessment = CvaAssessment(),
     val memo: String = "",
+    val loaded: LoadedOrigin = LoadedOrigin(),
 )
 
 /** Which cupping form a tasting / cupping bean is scored on (feature-plan-v2 §2.3). One form per tasting is saved. */
@@ -184,6 +194,8 @@ data class FormState(
     val variety: String = "",
     /** As [BeanForm.heirloomNumbers]. */
     val heirloomNumbers: String = "",
+    /** Bean 1's texts as the record held them ([LoadedOrigin]). */
+    val loaded: LoadedOrigin = LoadedOrigin(),
     val moisture: String = "",
     val density: String = "",
     val score: String = "",
@@ -260,7 +272,7 @@ data class FormState(
     fun bean(index: Int): BeanForm = if (index == 0) {
         BeanForm(
             roastery, selection, country, region, subRegion, farmProducer, washingStation, altitude, variety, heirloomNumbers, moisture,
-            density, score, process, processOther, processSub, roast, roastDate, firstBeanPercent,
+            density, score, process, processOther, processSub, roast, roastDate, firstBeanPercent, loaded,
         )
     } else blendBeans[index - 1]
 
@@ -271,7 +283,7 @@ data class FormState(
             washingStation = b.washingStation, altitude = b.altitude, variety = b.variety, heirloomNumbers = b.heirloomNumbers,
             moisture = b.moisture, density = b.density,
             score = b.score, process = b.process, processOther = b.processOther, processSub = b.processSub, roast = b.roast,
-            roastDate = b.roastDate, firstBeanPercent = b.percent,
+            roastDate = b.roastDate, firstBeanPercent = b.percent, loaded = b.loaded,
         )
     } else copy(blendBeans = blendBeans.mapIndexed { i, old -> if (i == index - 1) b else old })
     /** The category segment is fixed to 원두 when the form was opened from the extract tab. */

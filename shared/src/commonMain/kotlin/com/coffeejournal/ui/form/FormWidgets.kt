@@ -62,11 +62,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.rules.Altitude
-import com.coffeejournal.domain.rules.EnglishCase
 import com.coffeejournal.domain.rules.VarietyText
 import com.coffeejournal.ui.platform.openUrl
 import com.coffeejournal.ui.theme.AppIcons
+import com.coffeejournal.ui.platform.NumbersWithSeparatorsKeyboard
 import com.coffeejournal.ui.theme.AppType
+import com.coffeejournal.ui.theme.CapitalizeOnLeave
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.FieldLabel
 import com.coffeejournal.ui.theme.GlyphButton
@@ -114,19 +115,18 @@ internal fun FormTextField(
     // onFocusChanged fires once on attach with "not focused"; only report a blur after a real focus.
     var hadFocus by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf(false) }
-    var wasFocused by remember { mutableStateOf(false) }
+    val leave = remember { CapitalizeOnLeave() }
     Column(modifier) {
         if (label != null) FieldLabel(label)
         var fieldModifier: Modifier = Modifier.fillMaxWidth()
         if (focusRequester != null) fieldModifier = fieldModifier.focusRequester(focusRequester)
         fieldModifier = fieldModifier.onFocusChanged { st ->
-            focused = st.isFocused
-            if (st.isFocused) wasFocused = true
-            else if (wasFocused) {
-                wasFocused = false
-                val now = currentValue?.invoke() ?: value
-                if (capitalizeWords) EnglishCase.words(now).takeIf { it != now }?.let(onValueChange)
+            if (capitalizeWords && st.isFocused != focused) {
+                // a choice just picked from the field's list, else the text with its last keystroke
+                val now = currentValue?.invoke()?.takeIf { it != value } ?: sync.value.text
+                if (st.isFocused) leave.focused(now) else leave.left(now)?.let(onValueChange)
             }
+            focused = st.isFocused
             if (onFocusChanged == null) return@onFocusChanged
             if (st.isFocused) { hadFocus = true; onFocusChanged(true) } else if (hadFocus) { hadFocus = false; onFocusChanged(false) }
         }
@@ -290,7 +290,9 @@ internal fun PresetField(
                 Modifier.fillMaxWidth().heightIn(max = 264.dp).background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
                     .bringIntoViewRequester(listInView).verticalScroll(rememberScrollState()).testTag(listTag),
             ) {
-                matches.forEachIndexed { i, p ->
+                // every country's regions when no country is set: the first ones, and a word to narrow them by typing
+                val rows = matches.take(PRESET_ROWS)
+                rows.forEachIndexed { i, p ->
                     Row(
                         Modifier.fillMaxWidth().clickable(role = Role.Button) { val v = pick(p); now.value = v; onValueChange(v); showList = false; focusManager.clearFocus() }
                             .padding(horizontal = 12.dp, vertical = 9.dp),
@@ -302,12 +304,21 @@ internal fun PresetField(
                             Text(p.note, style = AppType.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
-                    if (i < matches.lastIndex) Box(Modifier.fillMaxWidth().height(Dimens.hairline).background(Ink.line))
+                    if (i < rows.lastIndex) Box(Modifier.fillMaxWidth().height(Dimens.hairline).background(Ink.line))
+                }
+                if (matches.size > rows.size) {
+                    Text(
+                        "그 밖에 ${matches.size - rows.size}개 · 더 적으면 좁혀져요", style = AppType.faint,
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                    )
                 }
             }
         }
     }
 }
+
+/** At most this many choices are drawn at once; typing narrows the rest down. */
+private const val PRESET_ROWS = 60
 
 /**
  * 품종: varieties from the list or typed (several, comma-separated) and, once Heirloom is among them, its selection
@@ -329,7 +340,7 @@ internal fun VarietyFields(
             PresetField(
                 numbers, onNumbers, VarietyOptions.heirloomNumbers, Modifier.padding(top = 8.dp), label = "Heirloom 번호",
                 placeholder = "예: 74112, 74158", hint = "여러 개면 쉼표나 띄어쓰기로 나눠요. 기록에는 Heirloom(74112, 74158)으로 남아요.",
-                multi = true, keyboardType = KeyboardType.Number, inputFilter = VarietyText::typingNumbers, listTag = "presets-Heirloom 번호",
+                multi = true, keyboardType = NumbersWithSeparatorsKeyboard, inputFilter = VarietyText::typingNumbers, listTag = "presets-Heirloom 번호",
             )
         }
     }
@@ -339,13 +350,20 @@ internal fun VarietyFields(
 @Composable
 private fun rememberLatest(value: String): MutableState<String> = remember { mutableStateOf(value) }.apply { this.value = value }
 
-/** 재배 고도: the number (or a range, "1800-2000") on the number keyboard, with the unit "m" shown after it and saved with it. */
+/**
+ * 재배 고도: the number (or a range, "1800-2000") on the number keyboard, with the unit "m" shown after it and saved
+ * with it. An older value written another way ("5,000 ft", "약 2000m") is edited as free text, without the "m", so a
+ * keystroke never turns feet into metres.
+ */
 @Composable
 internal fun AltitudeField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, label: String? = null, placeholder: String = "") {
+    val numeric = Altitude.isNumeric(value)
     FormTextField(
-        value, onValueChange, modifier, label = label, placeholder = placeholder, keyboardType = KeyboardType.Number,
-        inputFilter = Altitude::typing,
-        trailing = { Text("m", style = AppType.input.copy(color = Ink.textMuted), modifier = Modifier.padding(end = 4.dp)) },
+        value, onValueChange, modifier, label = label, placeholder = placeholder,
+        keyboardType = if (numeric) NumbersWithSeparatorsKeyboard else KeyboardType.Text,
+        inputFilter = if (numeric) Altitude::typing else null,
+        trailing = if (numeric) ({ Text("m", style = AppType.input.copy(color = Ink.textMuted), modifier = Modifier.padding(end = 4.dp)) }) else null,
+        capitalizeWords = false,
     )
 }
 
@@ -360,15 +378,20 @@ internal fun CompactField(
     focusRequester: FocusRequester? = null,
     textAlign: TextAlign = TextAlign.Start,
     inputFilter: ((String) -> String?)? = null,
+    /** As [FormTextField]'s: English words typed start with a capital. */
+    capitalizeWords: Boolean = keyboardType == KeyboardType.Text,
 ) {
     val sync = rememberImeSafeText(value)
     var focused by remember { mutableStateOf(false) }
+    val leave = remember { CapitalizeOnLeave() }
     // the box stays 36 dp tall; the surrounding layout reserves a 48 dp touch target
     var m = modifier.minimumInteractiveComponentSize().heightIn(min = 36.dp).background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
     if (focusRequester != null) m = m.focusRequester(focusRequester)
     m = m.onFocusChanged {
-        // leaving the field starts each English word with a capital, as FormTextField does
-        if (focused && !it.isFocused && keyboardType == KeyboardType.Text) EnglishCase.words(value).takeIf { t -> t != value }?.let(onValueChange)
+        // leaving the field after typing in it starts each English word with a capital, as FormTextField does
+        if (capitalizeWords && it.isFocused != focused) {
+            if (it.isFocused) leave.focused(sync.value.text) else leave.left(sync.value.text)?.let(onValueChange)
+        }
         focused = it.isFocused
     }
     BasicTextField(
@@ -379,7 +402,7 @@ internal fun CompactField(
         textStyle = AppType.inputSmall.copy(color = Ink.text, textAlign = textAlign),
         cursorBrush = SolidColor(Ink.accent),
         keyboardOptions = KeyboardOptions(
-            capitalization = if (keyboardType == KeyboardType.Text) KeyboardCapitalization.Words else KeyboardCapitalization.None,
+            capitalization = if (capitalizeWords) KeyboardCapitalization.Words else KeyboardCapitalization.None,
             keyboardType = keyboardType, imeAction = ImeAction.Next,
         ),
         decorationBox = { inner ->

@@ -27,6 +27,7 @@ import com.coffeejournal.domain.rules.Numbers
 import com.coffeejournal.domain.rules.Packages
 import com.coffeejournal.domain.rules.Prices
 import com.coffeejournal.domain.rules.RecipeSteps
+import com.coffeejournal.domain.rules.OriginKeep
 import com.coffeejournal.domain.rules.RegionText
 import com.coffeejournal.domain.rules.ScaScoring
 import com.coffeejournal.domain.rules.VarietyText
@@ -105,6 +106,7 @@ internal object FormMapper {
             altitude = Altitude.forField(entry.altitude),
             variety = VarietyText.split(entry.variety).first,
             heirloomNumbers = VarietyText.split(entry.variety).second,
+            loaded = LoadedOrigin(entry.region, entry.altitude, entry.variety),
             moisture = entry.moisture,
             density = entry.density,
             score = entry.score,
@@ -212,9 +214,9 @@ internal object FormMapper {
             blendComponents = blendComponents,
             name = name,
             country = s.country.trim(),
-            region = RegionText.join(s.region, s.subRegion),
-            altitude = Altitude.stored(s.altitude),
-            variety = VarietyText.join(s.variety, s.heirloomNumbers),
+            region = OriginKeep.region(s.loaded.region, s.region, s.subRegion),
+            altitude = OriginKeep.altitude(s.loaded.altitude, s.altitude),
+            variety = OriginKeep.variety(s.loaded.variety, s.variety, s.heirloomNumbers),
             farmProducer = s.farmProducer.trim(),
             roastery = s.roastery.trim(),
             selection = s.selection.trim(),
@@ -304,9 +306,9 @@ internal object FormMapper {
 
     fun beanComponent(b: BeanForm): BlendComponent = BlendComponent(
         percent = Numbers.parse(b.percent)?.let(Prices::trimNumber) ?: "",
-        roastery = b.roastery.trim(), selection = b.selection.trim(), country = b.country.trim(), region = RegionText.join(b.region, b.subRegion),
-        farmProducer = b.farmProducer.trim(), washingStation = b.washingStation.trim(), altitude = Altitude.stored(b.altitude),
-        variety = VarietyText.join(b.variety, b.heirloomNumbers), moisture = b.moisture.trim(), density = b.density.trim(), score = b.score.trim(),
+        roastery = b.roastery.trim(), selection = b.selection.trim(), country = b.country.trim(), region = OriginKeep.region(b.loaded.region, b.region, b.subRegion),
+        farmProducer = b.farmProducer.trim(), washingStation = b.washingStation.trim(), altitude = OriginKeep.altitude(b.loaded.altitude, b.altitude),
+        variety = OriginKeep.variety(b.loaded.variety, b.variety, b.heirloomNumbers), moisture = b.moisture.trim(), density = b.density.trim(), score = b.score.trim(),
         process = processValue(b.process, b.processSub), processOther = if (b.process == PROCESS_OTHER) b.processOther.trim() else "",
         roast = b.roast, roastDate = b.roastDate.trim(),
     )
@@ -319,6 +321,7 @@ internal object FormMapper {
             washingStation = c.washingStation, altitude = Altitude.forField(c.altitude),
             variety = VarietyText.split(c.variety).first, heirloomNumbers = VarietyText.split(c.variety).second, moisture = c.moisture, density = c.density,
             score = c.score, process = seg, processSub = sub, processOther = other, roast = c.roast, roastDate = c.roastDate, percent = c.percent,
+            loaded = LoadedOrigin(c.region, c.altitude, c.variety),
         )
     }
 
@@ -348,11 +351,11 @@ internal object FormMapper {
             id = b.id,
             name = b.name.trim(),
             country = b.country.trim(),
-            region = RegionText.join(b.region, b.subRegion),
+            region = OriginKeep.region(b.loaded.region, b.region, b.subRegion),
             roastery = b.roastery.trim(),
             farmProducer = b.farmProducer.trim(),
-            altitude = Altitude.stored(b.altitude),
-            variety = VarietyText.join(b.variety, b.heirloomNumbers),
+            altitude = OriginKeep.altitude(b.loaded.altitude, b.altitude),
+            variety = OriginKeep.variety(b.loaded.variety, b.variety, b.heirloomNumbers),
             price = Prices.normalize(b.price),
             rank = b.rank.trim(),
             process = process,
@@ -389,6 +392,7 @@ internal object FormMapper {
             altitude = Altitude.forField(b.altitude),
             variety = VarietyText.split(b.variety).first,
             heirloomNumbers = VarietyText.split(b.variety).second,
+            loaded = LoadedOrigin(b.region, b.altitude, b.variety),
             price = Prices.formatInput(b.price),
             rank = b.rank,
             process = seg,
@@ -459,6 +463,12 @@ internal object FormMapper {
             // the varieties and their Heirloom numbers come together, from the same record
             variety = if (state.variety.isBlank() && state.heirloomNumbers.isBlank()) VarietyText.split(first.variety).first else state.variety,
             heirloomNumbers = if (state.variety.isBlank() && state.heirloomNumbers.isBlank()) VarietyText.split(first.variety).second else state.heirloomNumbers,
+            // what is filled from the earlier record is saved as that record wrote it
+            loaded = LoadedOrigin(
+                region = if (state.region.isBlank() && state.subRegion.isBlank()) first.region else state.loaded.region,
+                altitude = if (state.altitude.isBlank()) first.altitude else state.loaded.altitude,
+                variety = if (state.variety.isBlank() && state.heirloomNumbers.isBlank()) first.variety else state.loaded.variety,
+            ),
             farmProducer = fill(state.farmProducer, first.farmProducer),
             roastery = fill(state.roastery, first.roastery.ifBlank { parens?.roastery ?: "" }),
             selection = fill(state.selection, first.selection.ifBlank { parens?.source ?: "" }),

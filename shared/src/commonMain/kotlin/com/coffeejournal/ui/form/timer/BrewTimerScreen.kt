@@ -79,6 +79,8 @@ import com.coffeejournal.ui.theme.ScreenTitleBar
 import com.coffeejournal.ui.theme.SectionLabel
 import com.coffeejournal.ui.theme.fontScaled
 import com.coffeejournal.ui.theme.imeOverlapPadding
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
@@ -95,7 +97,8 @@ fun BrewTimerScreen(nav: NavHostController, recipeJson: String?, formHasLog: Boo
     val vm = koinViewModel<BrewTimerViewModel> { parametersOf(BrewTimerArgs(BrewTimerResult.decodeRecipe(recipeJson), formHasLog)) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val buzz = rememberStepBuzz()
-    LaunchedEffect(vm) { vm.events.collect { buzz() } }
+    // the timer ticks on a background dispatcher, so its buzzes are taken on the main thread (see App)
+    LaunchedEffect(vm) { withContext(Dispatchers.Main) { vm.events.collect { buzz() } } }
     KeepScreenOn(ui.status == TimerStatus.RUNNING)
 
     var confirmReplace by rememberSaveable { mutableStateOf(false) }

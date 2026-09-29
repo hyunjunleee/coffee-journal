@@ -28,7 +28,7 @@ android {
         minSdk = libs.versions.minSdk.get().toInt()
         targetSdk = libs.versions.targetSdk.get().toInt()
         versionCode = commitEpochSeconds?.let { ((it - 1_767_225_600L) / 60L).toInt().coerceAtLeast(2) } ?: 1
-        versionName = "1.4.1 ($commitShortSha)"
+        versionName = "1.4.2 ($commitShortSha)"
         // Phones and tablets only: the x86 / x86_64 builds of the native libraries (MapLibre, SQLite) serve emulators
         // and a few Chromebooks, and would add about 10 MB to the one sideloaded APK.
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
@@ -104,6 +104,13 @@ val unpackSqliteHostNatives by tasks.registering(Sync::class) {
 val sqliteHostDir = layout.buildDirectory.dir("sqlite-host/natives/${hostSqlite.first}")
 tasks.withType<Test>().configureEach {
     dependsOn(unpackSqliteHostNatives)
+    // a failing test prints its whole stack trace, causes included, in the build log that CI keeps
+    testLogging {
+        events(org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED)
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+    }
     systemProperty("androidx.sqlite.driver.bundled.path", sqliteHostDir.get().asFile.absolutePath)
     systemProperty("androidx.sqlite.driver.bundled.name", hostSqlite.second)
 }
@@ -137,6 +144,8 @@ dependencies {
     testImplementation(libs.navigation.compose)
     testImplementation(libs.work.testing)
     testImplementation(libs.glance.appwidget.testing)
+    // the test application gives Coil (used by the shared module) an image loader that stays on the main thread
+    testImplementation(libs.coil.compose)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     sqliteHostNatives(libs.sqlite.bundled.jvm)
 }

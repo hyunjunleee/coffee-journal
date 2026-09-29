@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import com.coffeejournal.domain.reference.CoffeeCountries
 import com.coffeejournal.domain.reference.OriginRegions
 import com.coffeejournal.domain.rules.CountryLookup
+import com.coffeejournal.domain.rules.RegionHierarchy
 import androidx.compose.ui.geometry.Size
 import com.coffeejournal.ui.map.WorldMapInsets
 import com.coffeejournal.ui.map.WorldProjection
@@ -71,22 +72,33 @@ class WorldRegionsTest {
     }
 
     @Test fun zoomedIn_theAddedDotsAppear_neverOnTopOfAnother() {
-        val counts = listOf(WorldRegions.DETAIL_SCALE, 5f, 12f, WorldMapGeometry.MAX_SCALE).map { scale ->
+        val scales = listOf(WorldRegions.DETAIL_SCALE, 5f, 12f, WorldRegions.SPREAD_SCALE - 1f, WorldRegions.SPREAD_SCALE, 32f, WorldMapGeometry.MAX_SCALE)
+        val counts = scales.map { scale ->
             val dots = shown(scale)
             val gap = 3f * dotRadius(scale)
             assertTrue(dots.containsAll(WorldRegions.webDots), "the web's dots stay")
+            assertEquals(dots.size, dots.map { it.country.en to it.region.name }.toSet().size, "$scale: a region drawn twice")
             dots.filterNot { it.web }.forEach { d ->
-                val near = dots.filter { it != d }.minOf { hypot(it.region.x - d.region.x, it.region.y - d.region.y) }
-                assertTrue(near >= gap, "$scale: ${d.region.name} is $near from another dot")
+                val near = dots.filter { it !== d }.minOf { hypot(it.region.x - d.region.x, it.region.y - d.region.y) }
+                assertTrue(near >= gap - 1e-3f, "$scale: ${d.region.name} is $near from another dot")
+                val at = d.trueAt
+                if (scale < WorldRegions.SPREAD_SCALE) assertEquals(null, at, "$scale: ${d.region.name} moved")
+                if (at != null) {
+                    // moved at most two gaps from where it belongs, which is its listed place
+                    val own = WorldRegions.dots.single { it.sameAs(d) }.region
+                    assertEquals(Offset(own.x, own.y), at)
+                    assertTrue(hypot(at.x - d.region.x, at.y - d.region.y) <= 2 * gap + 1e-3f, "$scale: ${d.region.name} moved too far")
+                }
             }
             dots.size
         }
-        // deeper, more dots; at the deepest zoom nearly every region has its dot (Rwanda's too)
+        // deeper, more dots; from SPREAD_SCALE on every region has its dot, moved beside its place where it is crowded
         assertEquals(counts.sorted(), counts)
         assertTrue(counts.first() > WorldRegions.webDots.size, "$counts")
-        assertTrue(counts.last() >= WorldRegions.dots.size * 0.9, "$counts of ${WorldRegions.dots.size}")
+        assertEquals(WorldRegions.dots.size, counts.last(), "$counts of ${WorldRegions.dots.size}")
+        assertEquals(WorldRegions.dots.size, shown(WorldRegions.SPREAD_SCALE).size, "every dot at the spread zoom")
         val rwanda = shown(WorldMapGeometry.MAX_SCALE).count { it.country.en == "Rwanda" }
-        assertTrue(rwanda >= 8, "Rwanda: $rwanda dots")
+        assertEquals(WorldRegions.dots.count { it.country.en == "Rwanda" }, rwanda)
         // the dot keeps its size on the screen: 2.5 dp on the fitted map, 4 dp at most
         assertEquals(2.5f, WorldMapGeometry.dotRadiusPx(fit, 1f))
         assertEquals(4f, WorldMapGeometry.dotRadiusPx(fit * WorldMapGeometry.MAX_SCALE, 1f))
@@ -178,22 +190,35 @@ class WorldRegionsTest {
     }
 
     @Test fun aRecordsRegion_countsForItsDot_underEveryNameOfTheRegion() {
-        // the map marks a dot tasted by the record's region as RegionHierarchy.normalize names it, so every spelling of
-        // a listed region must come out as that region's dot name: the web's ("수마트라" → "Sumatra (Mandheling)") or
-        // the added dot's English name. A name two countries share goes to the first, so it is left out here.
-        val owners = OriginRegions.all.flatMap { o -> o.regions.flatMap { p -> (listOf(p.ko, p.en) + p.aliases).map { it.lowercase() to o.countryEn } } }
-            .groupBy({ it.first }, { it.second }).filterValues { it.toSet().size == 1 }.keys
+        // the map marks a dot tasted by the record's region as RegionHierarchy.normalize names it within the record's
+        // country, so every spelling of a listed region comes out as that region's dot name: the web's ("수마트라" →
+        // "Sumatra (Mandheling)") or the added dot's English name
         val wrong = OriginRegions.all.flatMap { o ->
             val c = CoffeeCountries.byEn.getValue(o.countryEn)
             val dotNames = WorldRegions.of(c).map { it.name }
             o.regions.flatMap { p ->
                 val names = listOf(p.ko, p.en) + p.aliases
                 val dot = dotNames.firstOrNull { d -> names.any { it.equals(d, ignoreCase = true) } }
-                names.filter { it.lowercase() in owners && dot != null && !com.coffeejournal.domain.rules.RegionHierarchy.normalize(it).equals(dot, ignoreCase = true) }
-                    .map { "${o.countryEn}: $it → ${com.coffeejournal.domain.rules.RegionHierarchy.normalize(it)}, dot $dot" }
+                names.filter { dot != null && CoffeeCountries.regionSynonyms[it] == null && !RegionHierarchy.normalize(it, o.countryEn).equals(dot, ignoreCase = true) }
+                    .map { "${o.countryEn}: $it → ${RegionHierarchy.normalize(it, o.countryEn)}, dot $dot" }
             }
         }
         assertTrue(wrong.isEmpty(), wrong.joinToString("\n"))
-        assertEquals("Sumatra (Mandheling)", com.coffeejournal.domain.rules.RegionHierarchy.normalize("수마트라"))
+        assertEquals("Sumatra (Mandheling)", RegionHierarchy.normalize("수마트라", "Indonesia"))
     }
+
+    @Test fun aRegionName_isLookedUpInTheRecordsCountryOnly() {
+        // Honduras lists "La Paz" as a spelling of one of its regions; a Bolivian "La Paz" is not that region
+        val honduras = OriginRegions.all.single { it.countryEn == "Honduras" }.regions.firstOrNull { p -> p.aliases.any { it == "La Paz" } || p.en == "La Paz" }
+        if (honduras != null) assertTrue(RegionHierarchy.normalize("La Paz", "Honduras") in WorldRegions.of(CoffeeCountries.byEn.getValue("Honduras")).map { it.name })
+        val bolivia = RegionHierarchy.normalize("La Paz", "Bolivia")
+        assertTrue(bolivia !in WorldRegions.of(CoffeeCountries.byEn.getValue("Honduras")).map { it.name }, bolivia)
+        // grouped on the map by the record's own country
+        val records = com.coffeejournal.domain.rules.BeanRecords.flatten(
+            listOf(com.coffeejournal.domain.model.Entry(id = "b", createdAt = 1, name = "볼리비아 x", country = "볼리비아", region = "La Paz, Caranavi")),
+        )
+        val stats = MapStats.compute(records)
+        assertTrue(stats.getValue("Bolivia").regions.values.none { it.label == "Marcala" }, "${stats.getValue("Bolivia").regions}")
+    }
+
 }

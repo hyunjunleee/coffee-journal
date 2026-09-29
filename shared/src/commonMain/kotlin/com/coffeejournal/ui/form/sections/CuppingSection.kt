@@ -49,8 +49,10 @@ internal fun CuppingSection(
             suggestions = suggestions,
             nameFocus = if (index == 0) firstBeanFocus else null,
             error = if (index == 0 && state.error?.field == FormField.CUPPING_BEAN_NAME) state.error.message else null,
-            onChange = { changed ->
+            onChange = { change ->
                 update { s ->
+                    val current = s.cuppingBeans.getOrNull(index) ?: return@update s
+                    val changed = change(current)
                     val clearError = s.error?.field == FormField.CUPPING_BEAN_NAME && changed.name.isNotBlank()
                     s.copy(cuppingBeans = s.cuppingBeans.replaceAt(index, changed), error = if (clearError) null else s.error)
                 }
