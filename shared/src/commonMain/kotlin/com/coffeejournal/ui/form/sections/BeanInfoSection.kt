@@ -31,6 +31,7 @@ import com.coffeejournal.ui.form.OriginOptions
 import com.coffeejournal.ui.form.PresetField
 import com.coffeejournal.ui.form.RemoveButton
 import com.coffeejournal.ui.form.TwoUp
+import com.coffeejournal.ui.form.VarietyFields
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.ChipInput
 import com.coffeejournal.ui.theme.FieldLabel
@@ -165,7 +166,12 @@ private fun BeanBlockFields(
     )
     TwoUp(
         { m -> AltitudeField(bean.altitude, { v -> change { it.copy(altitude = v) } }, m, label = "재배 고도", placeholder = example("1900-2100")) },
-        { m -> FormTextField(bean.variety, { v -> change { it.copy(variety = v) } }, m, label = "품종", placeholder = example("예: Heirloom(74110), Mundo Novo")) },
+        { m ->
+            VarietyFields(
+                bean.variety, bean.heirloomNumbers, { v -> change { it.copy(variety = v) } }, { v -> change { it.copy(heirloomNumbers = v) } }, m,
+                label = "품종", placeholder = example("예: Heirloom, Mundo Novo"),
+            )
+        },
     )
     if (!isCafe) {
         TwoUp(

@@ -31,6 +31,7 @@ import com.coffeejournal.ui.form.RemoveButton
 import com.coffeejournal.ui.form.ScoreForm
 import com.coffeejournal.ui.form.SliderRow
 import com.coffeejournal.ui.form.TwoUp
+import com.coffeejournal.ui.form.VarietyFields
 import com.coffeejournal.ui.theme.InputFilters
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.ChipInput
@@ -93,9 +94,9 @@ private fun CuppingBeanGrid(bean: CuppingBeanForm, suggestions: FormSuggestions,
     )
     // web .cupping-bean-card-grid: altitude alone, variety across the whole row (grid-column: 1 / -1)
     TwoUp({ m -> AltitudeField(bean.altitude, { onChange(bean.copy(altitude = it)) }, m, placeholder = "재배 고도") })
-    FormTextField(
-        bean.variety, { onChange(bean.copy(variety = it)) }, Modifier.fillMaxWidth().padding(bottom = 10.dp),
-        placeholder = "품종 (예: Heirloom(74110))",
+    VarietyFields(
+        bean.variety, bean.heirloomNumbers, { onChange(bean.copy(variety = it)) }, { onChange(bean.copy(heirloomNumbers = it)) },
+        Modifier.fillMaxWidth().padding(bottom = 10.dp), placeholder = "품종 (예: Heirloom, Mundo Novo)",
     )
     TwoUp(
         { m ->

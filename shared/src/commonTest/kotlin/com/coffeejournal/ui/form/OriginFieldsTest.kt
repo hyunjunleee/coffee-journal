@@ -4,9 +4,11 @@ import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.reference.CoffeeCountries
 import com.coffeejournal.domain.reference.OriginRegions
 import com.coffeejournal.domain.rules.Altitude
+import com.coffeejournal.domain.rules.EnglishCase
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.RegionHierarchy
 import com.coffeejournal.domain.rules.RegionText
+import com.coffeejournal.domain.rules.VarietyText
 import com.coffeejournal.ui.nav.FormMode
 import kotlinx.datetime.LocalDate
 import kotlin.test.Test
@@ -121,5 +123,57 @@ class OriginFieldsTest {
         fun names(p: OriginRegions.Place): List<String> = listOf(p.ko, p.en) + p.aliases + p.subs.flatMap(::names)
         val all = OriginRegions.all.flatMap { o -> o.regions.flatMap(::names) }
         assertTrue(all.none { it.isBlank() || ',' in it || '›' in it || '>' in it }, all.filter { it.isBlank() || ',' in it || '›' in it || '>' in it }.toString())
+    }
+
+    // ───────────── 품종 and Heirloom numbers ─────────────
+
+    @Test fun heirloomNumbers_areKeptInTheVarietyText_asHeirloomParenthesis() {
+        assertEquals("Heirloom(74112, 74158), Mundo Novo", VarietyText.join("Heirloom, Mundo Novo", "74112 74158"))
+        assertEquals("Heirloom(74112, 74158)", VarietyText.join("Heirloom", "74112,74158, 74112"), "each number once")
+        assertEquals("Typica / Bourbon", VarietyText.join("Typica / Bourbon", ""), "without numbers the varieties stay as typed")
+        assertEquals("Bourbon", VarietyText.join("Bourbon", "74110"), "numbers without a Heirloom are not kept")
+        assertEquals("Heirloom (에티오피아 재래종)", VarietyText.join("Heirloom (에티오피아 재래종)", "74110"), "a Heirloom with its own parenthesis stays")
+        assertEquals("Heirloom, Mundo Novo" to "74112, 74158", VarietyText.split("Heirloom(74112, 74158), Mundo Novo"))
+        assertEquals("Ethiopian Heirloom" to "74110", VarietyText.split("Ethiopian Heirloom (74110)"))
+        assertEquals("Heirloom (에티오피아 재래종)" to "", VarietyText.split("Heirloom (에티오피아 재래종)"))
+        assertEquals("74158, Kurume" to "", VarietyText.split("74158, Kurume"))
+        assertTrue(VarietyText.hasHeirloom("Mundo Novo, heirloom") && VarietyText.hasHeirloom("에티오피아 재래종"))
+        assertTrue(!VarietyText.hasHeirloom("Bourbon, Typica"))
+        assertEquals("74112, 74158 ", VarietyText.typingNumbers("74112, 74158 번"))
+    }
+
+    @Test fun theRecordForm_savesHeirloomNumbers_andOpensThemApart() {
+        val s = FormMapper.newState(FormMode.EXTRACT, null, now).copy(name = "에티오피아 구지", variety = "Heirloom, Wolisho", heirloomNumbers = "74112, 74158")
+        val e = entryOf(s)
+        assertEquals("Heirloom(74112, 74158), Wolisho", e.variety)
+        val back = FormMapper.fromEntry(e, FormMode.EXTRACT)
+        assertEquals("Heirloom, Wolisho" to "74112, 74158", back.variety to back.heirloomNumbers)
+        val cupping = FormMapper.cuppingBeanModel(CuppingBeanForm(name = "x", variety = "Heirloom", heirloomNumbers = "74110"))
+        assertEquals("Heirloom(74110)", cupping.variety)
+        assertEquals("74110", FormMapper.cuppingBeanForm(cupping).heirloomNumbers)
+        assertEquals("Heirloom(74165)", FormMapper.beanComponent(BeanForm(variety = "Heirloom", heirloomNumbers = "74165")).variety)
+    }
+
+    @Test fun varietyList_englishNamesWithTheirKoreanNames_heirloomNumbersApart() {
+        val all = VarietyOptions.varieties
+        assertEquals("티피카", all.single { it.value == "Typica" }.note)
+        assertTrue(all.any { it.value == "Heirloom" && it.matches("에어룸") }, "Heirloom is found by its Korean name too")
+        assertTrue(all.any { it.value == "SL28" } && all.any { it.value == "Sidra" })
+        assertEquals(all.size, all.map { it.value.lowercase() }.toSet().size)
+        assertTrue(all.none { ',' in it.value })
+        assertTrue(VarietyOptions.heirloomNumbers.map { it.value }.containsAll(listOf("74110", "74112", "74158")))
+    }
+
+    // ───────────── English words ─────────────
+
+    @Test fun englishWords_startWithACapital_restAsTyped() {
+        assertEquals("Yellow Bourbon", EnglishCase.words("yellow bourbon"))
+        assertEquals("Finca La Esmeralda", EnglishCase.words("finca la esmeralda"))
+        assertEquals("Heirloom(74112, 74158), Mundo Novo", EnglishCase.words("heirloom(74112, 74158), mundo novo"))
+        assertEquals("SL28, 74158 Kurume", EnglishCase.words("SL28, 74158 kurume"), "digits and capitals stay")
+        assertEquals("에티오피아 Sidama 벤사", EnglishCase.words("에티오피아 sidama 벤사"))
+        assertEquals("IPhone", EnglishCase.words("iPhone"), "the first letter of a word only")
+        assertEquals("  Two  Spaces ", EnglishCase.words("  two  spaces "))
+        assertEquals("", EnglishCase.words(""))
     }
 }

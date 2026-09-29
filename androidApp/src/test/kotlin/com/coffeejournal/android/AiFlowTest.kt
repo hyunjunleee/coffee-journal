@@ -455,9 +455,10 @@ class AiFlowTest : CoverageFlowBase() {
         launchApp()
         openNewForm()
         typeInto(namePlaceholder, "AI 노트 테스트 원두")
+        // typed in lower case, kept as "Jasmine"
         typeInto(chipPlaceholder, "jasmine", 1)
         clickNode(button("추가"), 1)
-        waitFor(hasContentDescription("jasmine 삭제"))
+        waitFor(hasContentDescription("Jasmine 삭제"))
 
         // a small panel under the notes (not a dialog) for the taste in one's own words
         tap(button(AiTexts.ASK_FROM_FORM))
@@ -484,13 +485,12 @@ class AiFlowTest : CoverageFlowBase() {
         tap(chip("Jasmine"))
         tap(button("${AiTexts.ADD_TO_NOTES} (2)"))
 
-        // back in the form: 자두 added once, Jasmine not a second time next to "jasmine"; the panel is closed
+        // back in the form: 자두 added once, Jasmine not a second time; the panel is closed
         waitFor(hasContentDescription("자두 삭제"))
         assertFalse(has(hasTestTag("ask-ai-panel")))
-        assertEquals(1, count(hasContentDescription("jasmine 삭제")))
-        assertFalse(has(hasContentDescription("Jasmine 삭제")))
+        assertEquals(1, count(hasContentDescription("Jasmine 삭제")))
         saveForm("AI 노트 테스트 원두")
-        assertEquals("jasmine, 자두", entries().single().actualNotes)
+        assertEquals("Jasmine, 자두", entries().single().actualNotes)
     }
 
     // ───────────────────────── keys and errors ─────────────────────────

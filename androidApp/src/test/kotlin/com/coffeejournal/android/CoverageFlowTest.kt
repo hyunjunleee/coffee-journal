@@ -226,13 +226,14 @@ class CoverageFlowTest : CoverageFlowBase() {
         assertEquals("expected + actual chip", 2, count(hasContentDescription("자스민 삭제")))
         assertTrue("the other suggestion is still offered", has(button("+ 복숭아")))
 
-        // a typed note in another case lights up the wheel term; the term removes it case-insensitively
+        // a note typed in lower case starts with a capital, lights up the wheel term, and the term removes it
         typeInto(chipPlaceholder, "honey", 1)
         clickNode(button("추가"), 1)
-        waitFor(hasContentDescription("honey 삭제"))
+        waitFor(hasContentDescription("Honey 삭제"))
+        assertFalse(has(hasContentDescription("honey 삭제")))
         assertEquals(ToggleableState.On, toggleState(button("Honey")))
         clickText("Honey")
-        waitGone(hasContentDescription("honey 삭제"))
+        waitGone(hasContentDescription("Honey 삭제"))
 
         saveForm("노트 선택 테스트 원두")
         val saved = entries().single()

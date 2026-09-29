@@ -77,3 +77,53 @@ object EnglishCase {
         return out.toString()
     }
 }
+
+/**
+ * 품종 as the bean form edits it: the varieties ("Heirloom, Mundo Novo") and, apart, the Ethiopian selection numbers of
+ * its Heirloom ("74112, 74158"). The record keeps them as one text the way it always had, "Heirloom(74112, 74158),
+ * Mundo Novo" (BeanNames.splitVarietyValues keeps the parenthesis with its variety, and the variety view counts each
+ * number under Heirloom).
+ */
+object VarietyText {
+    /** [stored] as (varieties, Heirloom numbers); a Heirloom parenthesis that is not numbers stays in its variety. */
+    fun split(stored: String): Pair<String, String> {
+        var numbers = ""
+        val tokens = BeanNames.splitVarietyValues(stored).map { token ->
+            val paren = PAREN.find(token)
+            if (numbers.isEmpty() && isHeirloom(token) && paren != null) {
+                val inside = numberList(paren.groupValues[2])
+                if (inside.isNotEmpty() && paren.groupValues[2].all { it.isDigit() || it in ", /·" }) {
+                    numbers = inside.joinToString(", ")
+                    return@map paren.groupValues[1].trim()
+                }
+            }
+            token
+        }
+        return tokens.joinToString(", ") to numbers
+    }
+
+    /**
+     * The text to store: [numbers] ("74112 74158", "74112,74158") go after the first Heirloom as "(74112, 74158)";
+     * the rest stays as typed. Numbers without a Heirloom to go with are dropped (the form only asks for them with one).
+     */
+    fun join(varieties: String, numbers: String): String {
+        val text = varieties.trim()
+        val list = numberList(numbers)
+        if (list.isEmpty()) return text
+        val heirloom = BeanNames.splitVarietyValues(text).firstOrNull { isHeirloom(it) && PAREN.find(it) == null } ?: return text
+        return text.replaceFirst(heirloom, "$heirloom(${list.joinToString(", ")})")
+    }
+
+    /** Whether [varieties] names Heirloom (or 에티오피아 재래종), so the form asks for its numbers. */
+    fun hasHeirloom(varieties: String): Boolean = BeanNames.splitVarietyValues(varieties).any(::isHeirloom)
+
+    /** The numbers typed, in order, each once: "74112, 74158 74112" → [74112, 74158]. */
+    fun numberList(text: String): List<String> = Regex("\\d+").findAll(text).map { it.value }.distinct().toList()
+
+    /** The numbers field's input filter: digits and the separators people use between them. */
+    fun typingNumbers(typed: String): String = typed.filter { it.isDigit() || it in ", " }
+
+    private fun isHeirloom(token: String) = BeanNames.normalizedVarietyKey(token) == "ethiopian heirloom"
+
+    private val PAREN = Regex("^(.*?)\\s*\\(([^)]*)\\)\\s*$")
+}

@@ -191,7 +191,7 @@ private fun KeyField(slot: AiKeySlot, ui: KeyUi, enabled: Boolean, onSave: (Stri
 @Composable
 private fun ModelField(p: AiProvider, s: AiSettings, onChange: (String) -> Unit) {
     FieldLabel(AiTexts.MODEL)
-    AppTextField(value = s.typedModel(p), onValueChange = onChange, placeholder = p.defaultModel)
+    AppTextField(value = s.typedModel(p), onValueChange = onChange, placeholder = p.defaultModel, capitalizeWords = false)
     FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         p.presets.forEach { preset ->
             Chip(text = preset, selected = s.model(p) == preset, onClick = { onChange(preset) }, toggle = false)

@@ -83,4 +83,43 @@ class OriginFieldsFlowTest : CoverageFlowBase() {
         saveForm("케냐 손으로 적은 세부 지역")
         assertEquals("니에리, 오타야, 카가냐", entries().single().region)
     }
+
+    @Test
+    fun heirloomFromTheVarietyList_asksForItsNumbers_severalOfThem_shownAsHeirloomParenthesis() {
+        launchApp()
+        openNewForm()
+        typeInto(namePlaceholder, "에티오피아 품종 테스트")
+        assertFalse("no numbers before Heirloom", has(field("예: 74112, 74158")))
+        openList("품종")
+        waitFor(choice("품종", "Heirloom"))
+        assertTrue("each variety with its Korean name", has(choice("품종", "티피카")))
+        clickNode(choice("품종", "Heirloom"))
+        // Heirloom asks for its selection numbers: from their list, and typed
+        waitFor(field("예: 74112, 74158"))
+        openList("Heirloom 번호")
+        clickNode(choice("Heirloom 번호", "74112"))
+        waitFor(hasSetTextAction() and hasText("74112"))
+        typeInto("74112", " 74158")
+        // another variety after Heirloom, from the list: it is added, not replacing
+        openList("품종")
+        clickNode(choice("품종", "Mundo Novo"))
+        waitFor(hasSetTextAction() and hasText("Heirloom, Mundo Novo"))
+        saveForm("에티오피아 품종 테스트")
+        assertEquals("Heirloom(74112, 74158), Mundo Novo", entries().single().variety)
+        waitForText("Heirloom(74112, 74158), Mundo Novo")
+    }
+
+    @Test
+    fun englishTypedInLowerCase_startsEachWordWithACapital_whenTheFieldIsLeft() {
+        launchApp()
+        openNewForm()
+        typeInto(namePlaceholder, "colombia la plata gesha")
+        typeInto("예: 라 에스메랄다(페드로 가족)", "finca la esmeralda")
+        typeInto("예: Heirloom, Mundo Novo", "pink bourbon")
+        typeInto("20", "15")
+        waitFor(hasSetTextAction() and hasText("Colombia La Plata Gesha"))
+        saveForm("Colombia La Plata Gesha")
+        val saved = entries().single()
+        assertEquals(listOf("Colombia La Plata Gesha", "Finca La Esmeralda", "Pink Bourbon"), listOf(saved.name, saved.farmProducer, saved.variety))
+    }
 }
