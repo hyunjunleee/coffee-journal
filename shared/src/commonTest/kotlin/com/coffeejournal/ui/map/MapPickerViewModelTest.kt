@@ -92,7 +92,7 @@ class MapPickerViewModelTest {
         runCurrent()
         val found = assertIs<MapPickerViewModel.Search.Found>(vm.state.value.search)
         assertEquals(listOf(seongsu), found.hits)
-        assertEquals(PlaceSource.DEVICE, found.source)
+        assertEquals(listOf(PlaceSource.DEVICE), found.sources)
         assertEquals("테스트커피", device.asked.single().first)
 
         vm.pick(seongsu)
@@ -148,7 +148,7 @@ class MapPickerViewModelTest {
         vm.search()
         runCurrent()
         val found = assertIs<MapPickerViewModel.Search.Found>(vm.state.value.search)
-        assertEquals(PlaceSource.KAKAO, found.source)
+        assertEquals(listOf(PlaceSource.KAKAO), found.sources)
         assertEquals("테스트커피 성수", found.hits.first().name)
         assertTrue(device.asked.isEmpty())
     }

@@ -222,7 +222,9 @@ class PlaceSearchTest {
         device.hits = listOf(PlaceHit("기기 카페", "서울특별시 성동구 성수이로7길 49", GeoPoint(37.5445, 127.0556)))
         http.on("photon.komoot.io") { PhotonReplies.PLACES }
         val r = assertIs<PlaceSearchResult.Found>(service.search("성수이로 51", domestic = true))
-        assertEquals("서울특별시 성수이로 51", r.hits.first().name)
+        // the areas and addresses first, in the order found, then the places
+        assertEquals(listOf("장충동", "서울특별시 성수이로 51"), r.hits.take(2).map { it.name })
+        assertTrue(r.hits.drop(2).all(PlaceSearchService::isPlace) && r.hits.size == 6, r.hits.map { it.name }.toString())
         assertTrue(PlaceSearchService.looksLikeAddress("성수이로7길 51"))
         assertTrue(PlaceSearchService.looksLikeAddress("장충동"))
         assertTrue(PlaceSearchService.looksLikeAddress("부산 영도구 봉래동5가 1").not(), "부산 has no ending: not every word is an address word")

@@ -91,35 +91,43 @@ internal fun PickerSearch(
                 r.source?.let { Text(PlaceSearchTexts.source(it), style = AppType.faint, modifier = Modifier.padding(top = 2.dp)) }
                 if (domestic && r.source != null && r.source != PlaceSource.KAKAO) KakaoTip()
             }
-            is MapPickerViewModel.Search.Found -> Column(
-                Modifier.fillMaxWidth().padding(top = 8.dp).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape).testTag("search-results"),
-            ) {
-                r.notice?.let { Text(it, style = AppType.small.copy(color = Ink.bad), modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
-                r.hits.forEachIndexed { i, hit ->
-                    if (i > 0 || r.notice != null) Hairline()
-                    HitRow(hit) { onPick(hit) }
-                }
-                if (r.next != null || r.moreFailed) {
-                    Hairline()
-                    Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        if (r.moreFailed) Text(PlaceSearchTexts.MORE_FAILED, style = AppType.small.copy(color = Ink.bad), modifier = Modifier.weight(1f))
-                        else Spacer(Modifier.weight(1f))
-                        if (r.next != null) TextLink(
-                            if (r.loadingMore) PlaceSearchTexts.MORE_LOADING else PlaceSearchTexts.MORE, Ink.text,
-                            { if (!r.loadingMore) onMore() }, Modifier.testTag("search-more"),
-                        )
-                    }
-                }
-                Hairline()
-                Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Column(Modifier.weight(1f)) {
-                        Text(PlaceSearchTexts.source(r.sources), style = AppType.faint, modifier = Modifier.testTag("search-source"))
-                        if (PlaceSource.OSM in r.sources) Text(PlaceSearchTexts.OSM_CREDIT, style = AppType.faint)
-                    }
-                    TextLink(PlaceSearchTexts.CLOSE, Ink.textMuted, onClose, Modifier.padding(end = 4.dp))
-                }
+            is MapPickerViewModel.Search.Found -> {
+                FoundList(r, onPick, onClose, onMore)
+                if (domestic && PlaceSource.KAKAO !in r.sources) KakaoTip()
             }
-            if (domestic && PlaceSource.KAKAO !in r.sources) KakaoTip()
+        }
+    }
+}
+
+/** What the search found: the places, "더 보기" when Kakao has more, and which searches answered (with the credit). */
+@Composable
+private fun FoundList(r: MapPickerViewModel.Search.Found, onPick: (PlaceHit) -> Unit, onClose: () -> Unit, onMore: () -> Unit) {
+    Column(
+        Modifier.fillMaxWidth().padding(top = 8.dp).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape).testTag("search-results"),
+    ) {
+        r.notice?.let { Text(it, style = AppType.small.copy(color = Ink.bad), modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) }
+        r.hits.forEachIndexed { i, hit ->
+            if (i > 0 || r.notice != null) Hairline()
+            HitRow(hit) { onPick(hit) }
+        }
+        if (r.next != null || r.moreFailed) {
+            Hairline()
+            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (r.moreFailed) Text(PlaceSearchTexts.MORE_FAILED, style = AppType.small.copy(color = Ink.bad), modifier = Modifier.weight(1f))
+                else Spacer(Modifier.weight(1f))
+                if (r.next != null) TextLink(
+                    if (r.loadingMore) PlaceSearchTexts.MORE_LOADING else PlaceSearchTexts.MORE, Ink.text,
+                    { if (!r.loadingMore) onMore() }, Modifier.testTag("search-more"),
+                )
+            }
+        }
+        Hairline()
+        Row(Modifier.fillMaxWidth().padding(start = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(PlaceSearchTexts.source(r.sources), style = AppType.faint, modifier = Modifier.testTag("search-source"))
+                if (PlaceSource.OSM in r.sources) Text(PlaceSearchTexts.OSM_CREDIT, style = AppType.faint)
+            }
+            TextLink(PlaceSearchTexts.CLOSE, Ink.textMuted, onClose, Modifier.padding(end = 4.dp))
         }
     }
 }

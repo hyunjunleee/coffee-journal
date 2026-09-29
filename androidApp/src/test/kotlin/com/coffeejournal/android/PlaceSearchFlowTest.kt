@@ -3,6 +3,8 @@ package com.coffeejournal.android
 import android.Manifest
 import android.app.Application
 import android.content.pm.PackageManager
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.hasAnyAncestor
 import androidx.compose.ui.test.hasAnyDescendant
@@ -256,7 +258,7 @@ class PlaceSearchFlowTest : CoverageFlowBase() {
         waitFor(button("테스트커피 약수점"))
         // the nearer café first, each with its distance from the area, then the area itself
         val names = compose.onAllNodes(hasAnyAncestor(hasTestTag("search-results")) and hasClickAction())
-            .fetchSemanticsNodes().mapNotNull { n -> n.config.getOrNull(androidx.compose.ui.semantics.SemanticsProperties.Text)?.firstOrNull()?.text }
+            .fetchSemanticsNodes().mapNotNull { n -> n.config.getOrNull(SemanticsProperties.Text)?.firstOrNull()?.text }
         assertEquals(listOf("테스트커피 약수점", "테스트커피 무악점", PlaceFixtures.JANGCHUNG.name), names.filter { it.startsWith("테스트커피") || it == PlaceFixtures.JANGCHUNG.name })
         assertTrue(has(hasText("장충에서", substring = true)))
         assertEquals(PlaceFixtures.JANGCHUNG.point, search.asked.last().third)
