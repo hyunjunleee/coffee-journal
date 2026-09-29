@@ -54,7 +54,14 @@ class WorldRegionsTest {
         // since the map's simplified coastlines leave coastal and island regions a little off the land. However far
         // apart a country's regions are (Rondônia and Minas Gerais, Papua and Sumatra), a swapped or mistyped
         // coordinate lands in another country or the sea.
-        val off = OriginRegions.all.flatMap { o -> o.regions.map { o.countryEn to it } }.mapNotNull { (country, r) ->
+        // islands the simplified map leaves out altogether: their dot is drawn in the sea where they are
+        val islands = mapOf("Ecuador|Galápagos" to (-1.5..0.7 to -92.0..-89.0))
+        islands.forEach { (key, box) ->
+            val (country, name) = key.split('|')
+            val r = OriginRegions.all.single { it.countryEn == country }.regions.single { it.en == name }
+            assertTrue(r.lat!! in box.first && r.lng!! in box.second, "$key at (${r.lat}, ${r.lng})")
+        }
+        val off = OriginRegions.all.flatMap { o -> o.regions.map { o.countryEn to it } }.filter { (c, r) -> "$c|${r.en}" !in islands }.mapNotNull { (country, r) ->
             val poly = polygons.firstOrNull { it.name == country } ?: return@mapNotNull "$country has no outline"
             val v = WorldMapInsets.toView(r.lat!!, r.lng!!)
             val p = Offset(v.x.toFloat(), v.y.toFloat())
