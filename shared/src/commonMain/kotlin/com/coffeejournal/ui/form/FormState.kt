@@ -57,6 +57,8 @@ data class BeanForm(
     val selection: String = "",
     val country: String = "",
     val region: String = "",
+    /** 세부 지역 ("벤사 › 코코세"), saved into the region text after [region] (RegionText). */
+    val subRegion: String = "",
     val farmProducer: String = "",
     val washingStation: String = "",
     val altitude: String = "",
@@ -75,7 +77,7 @@ data class BeanForm(
     /** Nothing entered: an added block left empty is not saved. */
     val isBlank: Boolean
         get() = listOf(
-            roastery, selection, country, region, farmProducer, washingStation, altitude, variety, moisture, density, score,
+            roastery, selection, country, region, subRegion, farmProducer, washingStation, altitude, variety, moisture, density, score,
             process, processOther, processSub, roast, roastDate, percent,
         ).all { it.isBlank() }
 }
@@ -89,6 +91,8 @@ data class CuppingBeanForm(
     val blendComponentsText: String = "",
     val country: String = "",
     val region: String = "",
+    /** 세부 지역, as [BeanForm.subRegion]. */
+    val subRegion: String = "",
     val roastery: String = "",
     val farmProducer: String = "",
     val altitude: String = "",
@@ -167,8 +171,11 @@ data class FormState(
     val selection: String = "",
     val country: String = "",
     val region: String = "",
+    /** 세부 지역, as [BeanForm.subRegion]. */
+    val subRegion: String = "",
     val farmProducer: String = "",
     val washingStation: String = "",
+    /** 재배 고도 as typed, without its unit (Altitude). */
     val altitude: String = "",
     val variety: String = "",
     val moisture: String = "",
@@ -246,7 +253,7 @@ data class FormState(
     /** Bean [index]'s block: bean 1 from the flat fields, the others from [blendBeans]. */
     fun bean(index: Int): BeanForm = if (index == 0) {
         BeanForm(
-            roastery, selection, country, region, farmProducer, washingStation, altitude, variety, moisture, density, score,
+            roastery, selection, country, region, subRegion, farmProducer, washingStation, altitude, variety, moisture, density, score,
             process, processOther, processSub, roast, roastDate, firstBeanPercent,
         )
     } else blendBeans[index - 1]
@@ -254,7 +261,7 @@ data class FormState(
     /** The form with bean [index]'s block replaced by [b]. */
     fun withBean(index: Int, b: BeanForm): FormState = if (index == 0) {
         copy(
-            roastery = b.roastery, selection = b.selection, country = b.country, region = b.region, farmProducer = b.farmProducer,
+            roastery = b.roastery, selection = b.selection, country = b.country, region = b.region, subRegion = b.subRegion, farmProducer = b.farmProducer,
             washingStation = b.washingStation, altitude = b.altitude, variety = b.variety, moisture = b.moisture, density = b.density,
             score = b.score, process = b.process, processOther = b.processOther, processSub = b.processSub, roast = b.roast,
             roastDate = b.roastDate, firstBeanPercent = b.percent,

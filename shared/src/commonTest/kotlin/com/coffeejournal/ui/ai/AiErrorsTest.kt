@@ -66,6 +66,26 @@ class AiErrorsTest {
         assertEquals(AiErrorKind.BUSY, AiErrors.openAi(503, "{}").kind)
     }
 
+    /** The 429s of OpenAI's error-codes guide (2026-09-29) that waiting does not fix, and the one it does. */
+    @Test fun openAi_spendAndUsageLimits_areNotRateLimits() {
+        fun err(code: String, message: String) = AiErrors.openAi(429, """{"error": {"message": "$message", "type": "insufficient_quota", "code": "$code"}}""")
+        val project = err("project_spend_limit_exceeded", "Your project reached its enforced spend limit.")
+        assertEquals(AiErrorKind.SPEND_LIMIT, project.kind)
+        assertTrue("프로젝트" in project.message && "월 지출 한도" in project.message, project.message)
+        assertTrue("Limits" in project.hint!! && "잠시 기다려도 풀리지 않아요" in project.hint!!)
+        assertEquals("지출 한도에 닿았어요", project.checkLabel)
+        assertEquals("Your project reached its enforced spend limit.", project.detail)
+        assertTrue("조직" in err("organization_spend_limit_exceeded", "Your organization reached its enforced spend limit.").message)
+        val assigned = err("organization_usage_limit_exceeded", "Your organization reached its OpenAI-assigned usage limit.")
+        assertEquals(AiErrorKind.SPEND_LIMIT, assigned.kind)
+        assertTrue("OpenAI가 이 조직에 정한" in assigned.message)
+        assertEquals(AiErrorKind.CREDITS_EMPTY, err("credit_balance_exhausted", "Your organization has no prepaid credits remaining.").kind)
+        val slow = err("slow_down", "Your request rate increased too quickly.")
+        assertEquals(AiErrorKind.QUOTA, slow.kind)
+        assertTrue("몇 분 뒤" in slow.message)
+        assertEquals(AiErrorKind.QUOTA, AiErrors.openAi(429, """{"error": {"message": "You are sending requests too quickly.", "type": "requests"}}""").kind)
+    }
+
     @Test fun claude() {
         fun kind(status: Int, type: String, message: String) = AiErrors.claude(status, AiFixtures.claudeError(type, message)).kind
         assertEquals(AiErrorKind.CREDITS_EMPTY, kind(400, "invalid_request_error", "Your credit balance is too low to access the Anthropic API."))
@@ -81,6 +101,32 @@ class AiErrorsTest {
         assertEquals(AiErrorKind.BUSY, kind(500, "api_error", "oops"))
         assertEquals(AiErrorKind.BUSY, kind(529, "overloaded_error", "Overloaded"))
         assertEquals("Overloaded", AiErrors.claude(529, AiFixtures.claudeError("overloaded_error", "Overloaded")).detail!!.substringAfter(" · "))
+    }
+
+    /** Anthropic's rate-limits guide (2026-09-29): the spend limits the user set (400) and the tier's monthly cap (429). */
+    @Test fun claude_spendLimits_sayHowToGetBackIn() {
+        val own = AiErrors.claude(
+            400,
+            AiFixtures.claudeError("invalid_request_error", "You have reached your specified API usage limits. You will regain access on 2026-10-01 at 00:00 UTC."),
+        )
+        assertEquals(AiErrorKind.SPEND_LIMIT, own.kind)
+        assertEquals("직접 정한 Anthropic 지출 한도에 닿았어요.", own.message)
+        assertTrue("Adjust limit" in own.hint!!)
+        assertTrue("2026-10-01" in own.detail!!, "the message says when access resumes")
+        assertEquals("지출 한도에 닿았어요", own.checkLabel)
+        val workspace = AiErrors.claude(
+            400,
+            AiFixtures.claudeError("invalid_request_error", "You have reached your specified workspace API usage limits. You will regain access on 2026-10-01 at 00:00 UTC."),
+        )
+        assertEquals(AiErrorKind.SPEND_LIMIT, workspace.kind)
+        assertTrue("워크스페이스" in workspace.message)
+        val cap = AiErrors.claude(
+            429,
+            """{"type": "error", "error": {"type": "rate_limit_error", "message": "You have reached your API usage limits: your organization has crossed its monthly API usage threshold, set based on your organization's API tier. You will regain access on 2026-10-01 at 00:00 UTC.", "details": {"error_code": "enforced_spend_limit_reached"}}}""",
+        )
+        assertEquals(AiErrorKind.SPEND_LIMIT, cap.kind)
+        assertTrue("오전 9시" in cap.hint!! && "Request rate limit increase" in cap.hint!!)
+        assertEquals(AiErrorKind.QUOTA, AiErrors.claude(429, AiFixtures.claudeError("rate_limit_error", "Number of request tokens has exceeded your per-minute rate limit")).kind)
     }
 
     @Test fun common() {

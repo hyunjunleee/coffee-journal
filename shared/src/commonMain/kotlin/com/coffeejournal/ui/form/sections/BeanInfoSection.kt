@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.reference.Processes
 import com.coffeejournal.domain.reference.RoastLevels
 import com.coffeejournal.domain.rules.BlendBeans
+import com.coffeejournal.ui.form.AltitudeField
 import com.coffeejournal.ui.form.AutocompleteField
 import com.coffeejournal.ui.form.BeanForm
 import com.coffeejournal.ui.form.CompactField
@@ -26,6 +27,8 @@ import com.coffeejournal.ui.form.FormMapper
 import com.coffeejournal.ui.form.FormState
 import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
+import com.coffeejournal.ui.form.OriginOptions
+import com.coffeejournal.ui.form.PresetField
 import com.coffeejournal.ui.form.RemoveButton
 import com.coffeejournal.ui.form.TwoUp
 import com.coffeejournal.ui.theme.AppType
@@ -149,15 +152,19 @@ private fun BeanBlockFields(
         { m -> AutocompleteField(bean.selection, { v -> change { it.copy(selection = v) } }, suggestions.selections, m, label = "생두 수입사", placeholder = example("예: Nordic Approach")) },
     )
     TwoUp(
-        { m -> FormTextField(bean.country, { v -> change { it.copy(country = v) } }, m, label = "국가", placeholder = example("브라질")) },
-        { m -> AutocompleteField(bean.region, { v -> change { it.copy(region = v) } }, regionOptions(bean.country), m, label = "지역", placeholder = example("Cerrado")) },
+        { m -> PresetField(bean.country, { v -> change { it.copy(country = v) } }, OriginOptions.countries, m, label = "국가", placeholder = example("에티오피아")) },
+        { m -> PresetField(bean.region, { v -> change { it.copy(region = v) } }, OriginOptions.regions(bean.country), m, label = "지역", placeholder = example("시다모")) },
+    )
+    PresetField(
+        bean.subRegion, { v -> change { it.copy(subRegion = v) } }, OriginOptions.subRegions(bean.country, bean.region),
+        Modifier.fillMaxWidth().padding(bottom = 10.dp), label = "세부 지역", placeholder = example("벤사 › 코코세"),
     )
     TwoUp(
         { m -> AutocompleteField(bean.farmProducer, { v -> change { it.copy(farmProducer = v) } }, suggestions.farms, m, label = "농장(생산자)", placeholder = example("예: 라 에스메랄다(페드로 가족)")) },
         { m -> FormTextField(bean.washingStation, { v -> change { it.copy(washingStation = v) } }, m, label = "워싱 스테이션", placeholder = example("예: 아리차")) },
     )
     TwoUp(
-        { m -> FormTextField(bean.altitude, { v -> change { it.copy(altitude = v) } }, m, label = "재배 고도", placeholder = example("800~1,100m")) },
+        { m -> AltitudeField(bean.altitude, { v -> change { it.copy(altitude = v) } }, m, label = "재배 고도", placeholder = example("1900-2100")) },
         { m -> FormTextField(bean.variety, { v -> change { it.copy(variety = v) } }, m, label = "품종", placeholder = example("예: Heirloom(74110), Mundo Novo")) },
     )
     if (!isCafe) {

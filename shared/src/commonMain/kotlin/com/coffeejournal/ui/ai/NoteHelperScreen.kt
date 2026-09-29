@@ -219,7 +219,7 @@ internal fun withDots(text: String, shown: Int?): AnnotatedString = buildAnnotat
 @Composable
 private fun NeedsKey(s: NoteHelperUi.NeedsKey, openSettings: () -> Unit) {
     EmptyNote("“${s.provider.label}”로 물으려면 ${s.missing.joinToString(" · ") { it.label }}가 필요해요. 설정에서 방식을 고르고 자기 키를 넣어 주세요.")
-    HintText("앱에는 키가 들어 있지 않아요. 설정의 \"키 받는 방법\"에 받는 순서가 있어요.")
+    HintText("앱에는 키가 들어 있지 않아요. 설정의 \"… 받는 법 자세히 ›\"에 받는 순서가 있어요.")
     TextLink(AiErrors.LINK_KEYS, Ink.text, openSettings)
 }
 

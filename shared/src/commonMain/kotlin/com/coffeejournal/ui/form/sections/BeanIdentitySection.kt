@@ -18,9 +18,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.BeanMode
-import com.coffeejournal.domain.reference.CoffeeCountries
 import com.coffeejournal.domain.rules.BlendBeans
-import com.coffeejournal.domain.rules.CountryLookup
 import com.coffeejournal.domain.rules.Prices
 import com.coffeejournal.ui.form.AutocompleteField
 import com.coffeejournal.ui.form.BlendRowForm
@@ -176,11 +174,4 @@ private fun AutofillBanner(onClose: () -> Unit) {
         Spacer(Modifier.width(2.dp))
         TextLink("닫기", Ink.textMuted, onClose)
     }
-}
-
-/** Web populateRegionDatalist: the country's producing regions, or all 60 when the country is unknown. */
-internal fun regionOptions(country: String): List<String> {
-    val c = CountryLookup.lookup(country)
-    val names = if (c != null && c.regions.isNotEmpty()) c.regions.map { it.name } else CoffeeCountries.all.flatMap { it.regions }.map { it.name }
-    return names.distinct().sorted()
 }

@@ -125,3 +125,8 @@ export ANDROID_HOME=/opt/android-sdk
 - 키 없이 국내를 찾았으면 결과 아래에 카카오 안내(`KAKAO_TIP`)와 `KeyGuideLink(KeyHowTos.KAKAO)`가 붙는다.
 - 키 안내: 서비스마다 `KeyHowTos`(`ui/guide`)에 `KeyHowTo`(이 키로 하는 일 · 준비물 · 키 받기 · 앱에 넣기 · 요금과 한도 · 문제가 생기면 · 보안과 개인정보)로 적고, `KeyGuideLink`가 `KeyGuideSheet`(전체 화면 `Dialog`, 경로가 아님)를 연다. 설정에는 링크 한 줄만 둔다. 서비스 화면·버튼 이름이 바뀌면 `KeyHowTos`와 `asOf`를 같이 고친다. 링크 글자는 그 단계 글 안에 그대로 있어야 한다(`KeyHowTosTest`).
 - 테스트: 공용 `PlaceSearchTest`(가짜 `FakeDevicePlaceSearch` + `FakeAiHttp`의 `PhotonReplies`/`KakaoReplies`), 흐름 `PlaceSearchFlowTest`(`PhotonFixtures`, `PlaceFixtures.JANGCHUNG`). 가짜 HTTP에 규칙이 없는 OpenStreetMap 요청은 연결 실패로 끝나 휴대폰 결과만 남는다.
+
+## 산지 칸과 재배 고도 (v1.4.0, 재사용)
+- 지역은 저장 형식을 바꾸지 않는다: 웹 regionHierarchy처럼 한 칸의 쉼표 계층("시다모, 벤사, 코코세")이다. 폼만 지역(`FormState.region`, `BeanForm.region`, `CuppingBeanForm.region` = 첫 부분)과 세부 지역(`subRegion` = 나머지, " › "로 보임)으로 나눠 보여 주고, `FormMapper`가 열 때 `RegionText.split`, 저장할 때 `RegionText.join`(›, >, ->, →, /, 쉼표 모두 구분자)으로 바꾼다. 읽는 화면은 `RegionText.display`("시다모 › 벤사 › 코코세").
+- 목록은 `OriginOptions`(국가 = `CoffeeCountries`, 지역·세부 지역 = `OriginRegions`)이고 칸은 `PresetField`(▾로 열고, 한글·영어·별칭으로 좁히고, 고르면 한글 값을 넣음; 자유 입력 그대로 허용)다. 커피 지도의 지역 묶음은 `RegionHierarchy.normalize`가 `OriginRegions`의 표기(ko · en · aliases)를 영어 이름 하나로 모은다. `OriginRegions`의 이름에는 쉼표·›·> 를 쓰지 않는다(`OriginRegionsTest`).
+- 재배 고도는 `AltitudeField`(숫자 자판, 입력 필터 `Altitude.typing`, 뒤에 "m" 표시)이고, 칸에는 단위 없이(`Altitude.forField`), 기록에는 "m"을 붙여(`Altitude.stored`) 둔다. 숫자·범위가 아닌 예전 값은 그대로 두었다가 그대로 저장한다.

@@ -19,8 +19,10 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -43,6 +45,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -52,6 +55,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.coffeejournal.domain.rules.Altitude
 import com.coffeejournal.ui.platform.openUrl
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppType
@@ -186,6 +190,81 @@ internal fun AutocompleteField(
             }
         }
     }
+}
+
+/**
+ * Free text with a list of [presets] to pick from (국가 · 지역 · 세부 지역): the list opens on focus or with ▾, narrows
+ * as one types (Korean, English or another spelling), and shows each choice's English name faintly. Picking puts its
+ * value in the field; anything typed is kept as it is.
+ */
+@Composable
+internal fun PresetField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    presets: List<Preset>,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    placeholder: String = "",
+    hint: String? = null,
+    /** The list's test tag ("presets-지역"): the rows under it are the choices. */
+    listTag: String = "presets-${label ?: placeholder}",
+) {
+    var focused by remember { mutableStateOf(false) }
+    var showList by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(focused) {
+        if (focused) showList = true else { delay(150); showList = false }
+    }
+    // a value that is one of the choices shows them all, so another can be picked without clearing the field
+    val matches = remember(presets, value) {
+        if (presets.any { it.names(value) }) presets else presets.filter { it.matches(value.trim()) }
+    }
+    Column(modifier) {
+        FormTextField(
+            value = value, onValueChange = onValueChange, label = label, placeholder = placeholder, hint = hint,
+            onFocusChanged = { f -> focused = f },
+            trailing = if (presets.isEmpty()) null else {
+                {
+                    Box(
+                        Modifier.minimumInteractiveComponentSize().clickable(role = Role.Button) { showList = !showList }
+                            .semantics { contentDescription = "${label ?: placeholder} 목록 ${if (showList) "닫기" else "열기"}" },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(AppIcons.chevronDown, contentDescription = null, tint = Ink.textMuted, modifier = Modifier.size(18.dp)) }
+                }
+            },
+        )
+        if (showList && matches.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 264.dp).background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
+                    .verticalScroll(rememberScrollState()).testTag(listTag),
+            ) {
+                matches.forEachIndexed { i, p ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable(role = Role.Button) { onValueChange(p.value); showList = false; focusManager.clearFocus() }
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(p.value, style = AppType.small.copy(color = Ink.text), modifier = Modifier.weight(1f, fill = false))
+                        if (p.note.isNotBlank() && p.note != p.value) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(p.note, style = AppType.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (i < matches.lastIndex) Box(Modifier.fillMaxWidth().height(Dimens.hairline).background(Ink.line))
+                }
+            }
+        }
+    }
+}
+
+/** 재배 고도: the number (or a range, "1800-2000") on the number keyboard, with the unit "m" shown after it and saved with it. */
+@Composable
+internal fun AltitudeField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, label: String? = null, placeholder: String = "") {
+    FormTextField(
+        value, onValueChange, modifier, label = label, placeholder = placeholder, keyboardType = KeyboardType.Number,
+        inputFilter = Altitude::typing,
+        trailing = { Text("m", style = AppType.input.copy(color = Ink.textMuted), modifier = Modifier.padding(end = 4.dp)) },
+    )
 }
 
 /** Small bordered input for dense rows (steps, blend components); IME-safe with an optional [inputFilter] like [FormTextField]. */

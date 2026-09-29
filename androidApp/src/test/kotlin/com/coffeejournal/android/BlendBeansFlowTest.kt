@@ -38,7 +38,7 @@ class BlendBeansFlowTest : CoverageFlowBase() {
     private fun percentField(i: Int) = hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-block-$i"))
 
     /** The text fields of a later bean's block in screen order (it shows no placeholders to find them by). */
-    private val laterBeanFields = listOf("비율", "로스터리", "생두 수입사", "국가", "지역", "농장(생산자)", "워싱 스테이션", "재배 고도", "품종", "수분율", "밀도", "CoE")
+    private val laterBeanFields = listOf("비율", "로스터리", "생두 수입사", "국가", "지역", "세부 지역", "농장(생산자)", "워싱 스테이션", "재배 고도", "품종", "수분율", "밀도", "CoE")
 
     private fun typeInBean(i: Int, field: String, text: String) {
         val n = node(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-$i")), laterBeanFields.indexOf(field))
@@ -56,15 +56,15 @@ class BlendBeansFlowTest : CoverageFlowBase() {
         openNewForm()
         typeInto(namePlaceholder, "하우스 블렌드 테스트")
         typeInto("예: 커피정경", "프릳츠 테스트")
-        typeInto("브라질", "콜롬비아")
+        typeInto("에티오피아", "콜롬비아")
         clickNode(button("미디엄"))
         assertFalse("one bean: no share asked", has(field("%")))
         tap(button("+ 원두 추가 (블렌드)"))
         waitFor(hasTestTag("bean-block-1"))
         // the same fields again, and the segment says what the record now is
         assertTrue(has(button("카페 블렌드")) && !has(button("단일 원두")))
-        assertEquals("a later bean shows no examples", 1, count(field("Cerrado")))
-        assertEquals(1, count(field("800~1,100m")))
+        assertEquals("a later bean shows no examples", 1, count(field("시다모")))
+        assertEquals(1, count(field("1900-2100")))
         assertEquals("bean 2 shows bean 1's roastery in grey", 2, count(field("프릳츠 테스트")))
         assertTrue("and its roast", has(button("미디엄") and inheritedRoast))
         node(percentField(0)).performTextInput("60")

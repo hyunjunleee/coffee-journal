@@ -443,7 +443,7 @@ class RouteScreenshotTest {
     @Test fun recordForm_cafeBlend() = show(Route.RecordForm(mode = FormMode.EXTRACT), "81-form-cafe-blend.png") {
         type("예: 콜롬비아 라 플라타 게이샤 워시드", "하우스 블렌드")
         type("예: 커피정경", "프릳츠")
-        type("브라질", "콜롬비아")
+        type("에티오피아", "콜롬비아")
         click("미디엄")
         click("+ 원두 추가 (블렌드)")
         compose.onAllNodes(hasSetTextAction() and hasAnyAncestor(hasTestTag("bean-block-0")))[0].performTextInput("60")

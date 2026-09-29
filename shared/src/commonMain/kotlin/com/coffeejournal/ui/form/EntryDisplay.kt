@@ -1,15 +1,16 @@
 package com.coffeejournal.ui.form
 
-import com.coffeejournal.domain.rules.CvaScoring
+import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.reference.ScaForm
-import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.BlendBeans
 import com.coffeejournal.domain.rules.CuppingTypes
+import com.coffeejournal.domain.rules.CvaScoring
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Prices
+import com.coffeejournal.domain.rules.RegionText
 import com.coffeejournal.domain.rules.ScaScoring
 import com.coffeejournal.ui.nav.FormMode
 import kotlinx.datetime.number
@@ -72,7 +73,7 @@ internal object EntryDisplay {
         if (en.isCupping) parts += CuppingTypes.effective(en)
         if (en.isCafe && en.cafeName.isNotBlank()) parts += en.cafeName
         // a café blend's regions are its beans'
-        if (!BlendBeans.hasBeans(en)) effectiveRegion(en, siblings).takeIf { it.isNotBlank() }?.let { parts += it }
+        if (!BlendBeans.hasBeans(en)) effectiveRegion(en, siblings).takeIf { it.isNotBlank() }?.let { parts += RegionText.display(it) }
         if (en.dripper.isNotBlank()) parts += en.dripper
         return parts.joinToString(" · ")
     }
@@ -159,7 +160,7 @@ internal object EntryDisplay {
         "로스터리" to bean.roastery,
         "생두 수입사" to bean.selection,
         "국가" to bean.country,
-        "지역" to bean.region,
+        "지역" to RegionText.display(bean.region),
         "농장" to bean.farmProducer,
         "워싱 스테이션" to bean.washingStation,
         "고도" to bean.altitude,

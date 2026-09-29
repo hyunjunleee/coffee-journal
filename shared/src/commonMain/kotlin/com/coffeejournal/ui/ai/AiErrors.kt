@@ -5,6 +5,9 @@ enum class AiService(val label: String) { GEMINI("Gemini"), TAVILY("Tavily"), OP
 enum class AiErrorKind {
     MISSING_KEY, KEY_INVALID, BILLING_NEEDED, CREDITS_EMPTY, QUOTA, MODEL_UNAVAILABLE, BUSY, BLOCKED, REFUSED,
     NO_SOURCES, NETWORK, REGION, SEARCH_DISABLED, UNSUPPORTED, BAD_REQUEST, OTHER,
+
+    /** A spend limit stops the requests until it is raised or the month turns: waiting a moment does not help. */
+    SPEND_LIMIT,
 }
 
 /**
@@ -33,6 +36,7 @@ data class AiError(
             AiErrorKind.KEY_INVALID, AiErrorKind.MISSING_KEY -> "키가 틀려요"
             AiErrorKind.BILLING_NEEDED, AiErrorKind.CREDITS_EMPTY -> "결제가 필요해요"
             AiErrorKind.QUOTA -> "한도를 넘었어요"
+            AiErrorKind.SPEND_LIMIT -> "지출 한도에 닿았어요"
             AiErrorKind.MODEL_UNAVAILABLE -> "이 모델은 쓸 수 없어요"
             AiErrorKind.NETWORK -> "연결 실패"
             else -> "확인하지 못했어요"
@@ -56,7 +60,7 @@ object AiErrors {
     fun missingKeys(slots: List<AiKeySlot>) = AiError(
         AiErrorKind.MISSING_KEY, null,
         "${slots.joinToString(" · ") { it.label }}가 아직 없어요. 설정에서 키를 넣어 주세요.",
-        hint = "키는 이 휴대폰에만 암호화해 저장돼요. 설정의 \"키 받는 방법\"에 받는 순서가 있어요.",
+        hint = "키는 이 휴대폰에만 암호화해 저장돼요. 설정의 \"… 받는 법 자세히 ›\"에 받는 순서가 있어요.",
     )
 
     fun network(service: AiService, detail: String?) = AiError(
@@ -133,7 +137,11 @@ object AiErrors {
         }
     }
 
-    /** OpenAI ({"error":{"message","type","code"}}). */
+    /**
+     * OpenAI ({"error":{"message","type","code"}}). A 429 is a rate limit only without one of the codes of the
+     * error-codes guide (2026-09-29): an empty prepaid balance, a spend limit the user enforced on the organization or
+     * the project (it holds until raised or the month turns), or the organization's OpenAI-assigned usage limit.
+     */
     fun openAi(status: Int, body: String): AiError {
         val detail = errorMessage(body)
         val code = AiJson.parse(body)["error"]["code"].str ?: AiJson.parse(body)["error"]["type"].str ?: ""
@@ -142,6 +150,20 @@ object AiErrors {
             status == 401 -> AiError(AiErrorKind.KEY_INVALID, s, "OpenAI 키가 맞지 않아요. 설정에서 키를 다시 넣어 주세요.", detail = detail)
             status == 402 || code == "credit_balance_exhausted" ->
                 AiError(AiErrorKind.CREDITS_EMPTY, s, "OpenAI 크레딧이 다 떨어졌어요. 결제 페이지에서 충전해 주세요.", detail = detail)
+            code == "project_spend_limit_exceeded" || code == "organization_spend_limit_exceeded" -> AiError(
+                AiErrorKind.SPEND_LIMIT, s,
+                "직접 정한 OpenAI 월 지출 한도에 닿았어요(${if (code.startsWith("project")) "프로젝트" else "조직"} 한도).",
+                hint = "잠시 기다려도 풀리지 않아요. OpenAI 설정의 Limits › Spend에서 월 지출 한도를 올리거나, 다음 달이 될 때까지 기다려 주세요.",
+                detail = detail,
+            )
+            code == "organization_usage_limit_exceeded" -> AiError(
+                AiErrorKind.SPEND_LIMIT, s, "OpenAI가 이 조직에 정한 사용 한도에 닿았어요.",
+                hint = "등급(Tier)마다 월 사용 한도가 있어요. 결제 금액이 쌓이면 등급과 한도가 올라가요. OpenAI 설정의 Limits에서 확인해 주세요.",
+                detail = detail,
+            )
+            status == 429 && code == "slow_down" -> AiError(
+                AiErrorKind.QUOTA, s, "요청이 갑자기 늘어 OpenAI가 잠시 막았어요. 몇 분 뒤 다시 해 보세요.", detail = detail,
+            )
             status == 429 && code == "insufficient_quota" -> AiError(
                 AiErrorKind.BILLING_NEEDED, s, "OpenAI 결제가 필요해요. 크레딧을 충전하거나 사용 한도를 확인해 주세요.", detail = detail,
             )
@@ -157,12 +179,34 @@ object AiErrors {
         }
     }
 
-    /** Anthropic ({"type":"error","error":{"type","message"}}; 529 overloaded). */
+    /**
+     * Anthropic ({"type":"error","error":{"type","message"}}; 529 overloaded). Spend limits (rate-limits guide,
+     * 2026-09-29): a limit the user set answers 400 "You have reached your specified (workspace) API usage limits …";
+     * the usage tier's monthly cap answers 429 with details.error_code "enforced_spend_limit_reached" and no
+     * retry-after, and holds until 00:00 UTC on the 1st. Both messages say when access resumes (in [AiError.detail]).
+     */
     fun claude(status: Int, body: String): AiError {
         val detail = errorMessage(body)
         val lower = detail.lowercase()
+        val errorCode = AiJson.parse(body)["error"]["details"]["error_code"].str
         val s = AiService.CLAUDE
         return when {
+            status == 400 && "specified workspace api usage limits" in lower -> AiError(
+                AiErrorKind.SPEND_LIMIT, s, "이 키의 워크스페이스에 정한 Anthropic 지출 한도에 닿았어요.",
+                hint = "잠시 기다려도 풀리지 않아요. 콘솔에서 워크스페이스 한도를 올리거나 없애면 바로 다시 돼요. 아래 원문에 다시 쓸 수 있는 때가 적혀 있어요.",
+                detail = detail,
+            )
+            status == 400 && "specified api usage limits" in lower -> AiError(
+                AiErrorKind.SPEND_LIMIT, s, "직접 정한 Anthropic 지출 한도에 닿았어요.",
+                hint = "잠시 기다려도 풀리지 않아요. 콘솔 Settings › Billing의 Spend limits에서 \"Adjust limit\"로 올리면 바로 다시 돼요. " +
+                    "아래 원문에 다시 쓸 수 있는 때가 적혀 있어요.",
+                detail = detail,
+            )
+            status == 429 && (errorCode == "enforced_spend_limit_reached" || "monthly api usage threshold" in lower) -> AiError(
+                AiErrorKind.SPEND_LIMIT, s, "이번 달 Anthropic 사용 상한(조직 등급의 월 상한)에 닿았어요.",
+                hint = "다음 달 1일 00:00 UTC(한국 시간 오전 9시)까지 풀리지 않아요. 콘솔 Settings › Limits의 \"Request rate limit increase\"로 상한을 올려 달라고 할 수 있어요.",
+                detail = detail,
+            )
             status == 400 && "credit balance" in lower -> AiError(
                 AiErrorKind.CREDITS_EMPTY, s, "Anthropic 크레딧이 부족해요. 콘솔의 Billing에서 크레딧을 사 주세요.", detail = detail,
             )
