@@ -169,4 +169,24 @@ class WorldRegionsTest {
             many.forEach { (c, _) -> assertTrue(!b.overlaps(androidx.compose.ui.geometry.Rect(c.x - 4f, c.y - 4f, c.x + 4f, c.y + 4f)), "$b covers $c") }
         }
     }
+
+    @Test fun aRecordsRegion_countsForItsDot_underEveryNameOfTheRegion() {
+        // the map marks a dot tasted by the record's region as RegionHierarchy.normalize names it, so every spelling of
+        // a listed region must come out as that region's dot name: the web's ("수마트라" → "Sumatra (Mandheling)") or
+        // the added dot's English name. A name two countries share goes to the first, so it is left out here.
+        val owners = OriginRegions.all.flatMap { o -> o.regions.flatMap { p -> (listOf(p.ko, p.en) + p.aliases).map { it.lowercase() to o.countryEn } } }
+            .groupBy({ it.first }, { it.second }).filterValues { it.toSet().size == 1 }.keys
+        val wrong = OriginRegions.all.flatMap { o ->
+            val c = CoffeeCountries.byEn.getValue(o.countryEn)
+            val dotNames = WorldRegions.of(c).map { it.name }
+            o.regions.flatMap { p ->
+                val names = listOf(p.ko, p.en) + p.aliases
+                val dot = dotNames.firstOrNull { d -> names.any { it.equals(d, ignoreCase = true) } }
+                names.filter { it.lowercase() in owners && dot != null && !com.coffeejournal.domain.rules.RegionHierarchy.normalize(it).equals(dot, ignoreCase = true) }
+                    .map { "${o.countryEn}: $it → ${com.coffeejournal.domain.rules.RegionHierarchy.normalize(it)}, dot $dot" }
+            }
+        }
+        assertTrue(wrong.isEmpty(), wrong.joinToString("\n"))
+        assertEquals("Sumatra (Mandheling)", com.coffeejournal.domain.rules.RegionHierarchy.normalize("수마트라"))
+    }
 }
