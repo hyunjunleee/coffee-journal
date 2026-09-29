@@ -21,6 +21,7 @@ import java.util.Collections
  * given) matches, in the order added, and recorded; nothing reaches the network. Bound by [testPlatformModule].
  */
 class FakeAiHttp : AiHttp {
+    @Volatile override var supported: Boolean = true
     val requests: MutableList<AiHttpRequest> = Collections.synchronizedList(mutableListOf())
     private class Rule(val url: String, val body: String?, val reply: (AiHttpRequest) -> AiHttpResponse)
     private val rules = Collections.synchronizedList(mutableListOf<Rule>())

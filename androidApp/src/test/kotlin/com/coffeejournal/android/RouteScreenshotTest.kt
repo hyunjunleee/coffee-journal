@@ -33,6 +33,10 @@ import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.model.RecipeRef
 import com.coffeejournal.domain.reference.CafeRecipes
+import com.coffeejournal.domain.rules.MapLinks
+import com.coffeejournal.ui.guide.GuideTexts
+import com.coffeejournal.ui.guide.KeyHowTos
+import com.github.takahirom.roborazzi.captureScreenRoboImage
 import com.coffeejournal.ui.ai.AiErrors
 import com.coffeejournal.ui.ai.AiKeySlot
 import com.coffeejournal.ui.ai.AiProvider
@@ -481,6 +485,39 @@ class RouteScreenshotTest {
             click(PlaceSearchTexts.SEARCH)
             waitForText(PlaceFixtures.FELT.name)
         }
+    }
+
+    /**
+     * A roastery's picker without a Kakao key: "테스트커피 장충" finds only the area on the phone, so the name is searched
+     * again around 장충동: the cafés carrying it nearest first with their distance, the area after them, the sources with
+     * OpenStreetMap's credit, and the tip that opens Kakao's how-to.
+     */
+    @Test fun mapPicker_nameAroundArea() {
+        PlaceSetup.search.hits = listOf(PlaceFixtures.JANGCHUNG)
+        AiSetup.http.on("q=${MapLinks.encode("테스트커피 장충")}&") { PhotonFixtures.EMPTY }
+            .on("q=${MapLinks.encode("테스트커피")}&") { PhotonFixtures.CAFES }
+        show(Route.MapPicker(target = MapPickTarget.ROASTERY, name = "테스트커피 장충"), "86-map-picker-area-search.png") {
+            click(PlaceSearchTexts.SEARCH)
+            waitForText("테스트커피 약수점")
+        }
+    }
+
+    /** A key's how-to, full screen over 설정 (the Kakao one from 장소 검색, the Gemini one from AI 노트 도우미). */
+    @Test fun keyGuide_kakao() = keyGuide(PlaceSearchTexts.KAKAO_GUIDE_OPEN, "87-key-guide-kakao.png")
+
+    @Test fun keyGuide_gemini() = keyGuide(GuideTexts.open(AiKeySlot.GEMINI.label), "88-key-guide-gemini.png")
+
+    private fun keyGuide(link: String, file: String) {
+        compose.setContent {
+            CoffeeJournalTheme {
+                val nav = rememberNavController()
+                NavHost(navController = nav, startDestination = Route.Settings) { appGraph(nav) }
+            }
+        }
+        settle()
+        click(link)
+        waitForText(KeyHowTos.KAKAO.asOf)
+        captureScreenRoboImage("screenshots/$file")
     }
 
     /** 설정's 장소 검색 with a Kakao key saved. */

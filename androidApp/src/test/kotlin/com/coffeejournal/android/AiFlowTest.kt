@@ -20,7 +20,6 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.coffeejournal.data.backup.BackupService
 import com.coffeejournal.ui.ai.AiErrors
-import com.coffeejournal.ui.ai.AiGuides
 import com.coffeejournal.ui.ai.AiKeySlot
 import com.coffeejournal.ui.ai.AiPrefs
 import com.coffeejournal.ui.ai.AiProvider
@@ -29,6 +28,8 @@ import com.coffeejournal.ui.ai.AskStage
 import com.coffeejournal.ui.ai.NoteHelperService
 import com.coffeejournal.ui.ai.SearchDepth
 import com.coffeejournal.ui.ai.StageStatus
+import com.coffeejournal.ui.guide.GuideTexts
+import com.coffeejournal.ui.guide.KeyHowTos
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.nav.appGraph
 import com.coffeejournal.ui.platform.installUrlOpener
@@ -123,16 +124,22 @@ class AiFlowTest : CoverageFlowBase() {
         assertTrue(has(hasText(AiProvider.GEMINI_TAVILY.summary)))
         assertTrue(has(field(AiKeySlot.GEMINI.placeholder)) && has(field(AiKeySlot.TAVILY.placeholder)))
 
-        // 키 받는 방법: numbered steps with their pages
-        assertFalse(has(hasText(AiGuides.GEMINI_FREE.title)))
-        tap(button(AiTexts.GUIDE_OPEN))
-        waitForText(AiGuides.GEMINI_FREE.title)
-        assertTrue(has(hasText(AiGuides.TAVILY.title)))
-        assertTrue(has(hasText(AiGuides.GEMINI_FREE.steps[2].text)))
-        tap(button("aistudio.google.com/apikey ↗"))
-        assertEquals(AiGuides.AISTUDIO_KEYS, lastOpenedUrl())
-        tap(button("app.tavily.com ↗"))
-        assertEquals(AiGuides.TAVILY_APP, lastOpenedUrl())
+        // 키 받는 법: each key's how-to opens full screen over 설정, with its pages as links, and closes back to it
+        assertFalse(has(hasTestTag("key-guide")))
+        tap(button(GuideTexts.open(AiKeySlot.GEMINI.label)))
+        waitFor(hasTestTag("key-guide") and hasAnyDescendant(hasText(KeyHowTos.GEMINI.title)))
+        assertTrue(has(hasText(KeyHowTos.GEMINI.intro)))
+        assertTrue(KeyHowTos.GEMINI.sections.all { has(hasText(it.heading)) })
+        val page = KeyHowTos.GEMINI.sections.flatMap { it.items }.first { it.links.isNotEmpty() }.links.first()
+        tap(button("${page.first} ↗"))
+        assertEquals(page.second, lastOpenedUrl())
+        tap(hasTestTag("key-guide-close"))
+        waitGone(hasTestTag("key-guide"))
+        tap(button(GuideTexts.open(AiKeySlot.TAVILY.label)))
+        waitFor(hasTestTag("key-guide") and hasAnyDescendant(hasText(KeyHowTos.TAVILY.title)))
+        tap(hasTestTag("key-guide-close"))
+        waitGone(hasTestTag("key-guide"))
+        waitFor(field(AiKeySlot.GEMINI.placeholder))
 
         // a pasted key is saved and then shown only by its last four characters
         typeInto(AiKeySlot.GEMINI.placeholder, " AQ.test-gemini-a1b2\n")
@@ -160,7 +167,8 @@ class AiFlowTest : CoverageFlowBase() {
         tap(button(AiProvider.CLAUDE.label))
         waitFor(field(AiKeySlot.CLAUDE.placeholder))
         assertFalse(has(field(AiKeySlot.TAVILY.placeholder)) || has(hasText("저장됨 …9z9z")))
-        waitForText(AiGuides.CLAUDE.title)
+        waitFor(button(GuideTexts.open(AiKeySlot.CLAUDE.label)))
+        assertFalse(has(button(GuideTexts.open(AiKeySlot.TAVILY.label))))
         tap(button("claude-sonnet-5"))
         waitUntil("model saved") { runBlocking { prefs.load() }.model(AiProvider.CLAUDE) == "claude-sonnet-5" }
         replaceIn("claude-sonnet-5", "claude-haiku-4-5")

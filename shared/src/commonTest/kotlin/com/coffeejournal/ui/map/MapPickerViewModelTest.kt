@@ -92,7 +92,7 @@ class MapPickerViewModelTest {
         runCurrent()
         val found = assertIs<MapPickerViewModel.Search.Found>(vm.state.value.search)
         assertEquals(listOf(seongsu), found.hits)
-        assertEquals(PlaceSource.DEVICE, found.source)
+        assertEquals(listOf(PlaceSource.DEVICE), found.sources)
         assertEquals("테스트커피", device.asked.single().first)
 
         vm.pick(seongsu)
@@ -133,6 +133,7 @@ class MapPickerViewModelTest {
         runCurrent()
         assertEquals(MapPickerViewModel.Search.Message(PlaceSearchTexts.noResults("없는 카페"), PlaceSource.DEVICE, error = false), vm.state.value.search)
         device.supported = false
+        http.supported = false
         vm.search()
         runCurrent()
         assertEquals(PlaceSearchTexts.UNAVAILABLE + PlaceSearchTexts.UNAVAILABLE_KAKAO, (vm.state.value.search as MapPickerViewModel.Search.Message).text)
@@ -147,7 +148,7 @@ class MapPickerViewModelTest {
         vm.search()
         runCurrent()
         val found = assertIs<MapPickerViewModel.Search.Found>(vm.state.value.search)
-        assertEquals(PlaceSource.KAKAO, found.source)
+        assertEquals(listOf(PlaceSource.KAKAO), found.sources)
         assertEquals("테스트커피 성수", found.hits.first().name)
         assertTrue(device.asked.isEmpty())
     }

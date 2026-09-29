@@ -116,3 +116,12 @@ export ANDROID_HOME=/opt/android-sdk
 - 비밀이 아닌 설정은 `AiPrefs`(`device.ai.provider`, `device.ai.model.<방식>`, `device.ai.consent.<방식>`, `device.ai.searchDepth`, `device.ai.people`; 백업 제외, 모르는 값은 기본값).
 - 테스트: 공용 테스트는 `FakeAiHttp`/`MemorySecretStore`(commonTest), 흐름 테스트는 `testPlatformModule`이 묶는 같은 이름의 가짜(androidApp)와 `AiSetup.ready(방식)`(검색 설정은 기본값: 정밀 + 사람들 의견, 그래서 Tavily 방식의 질문은 검색어 쓰기 → advanced → 블로그 basic → 답의 네 요청), `AiSetup.tavilyAnswers()`(블로그 검색은 `include_domains`가 든 본문으로 가려 `AiReplies.TAVILY_BLOGS`), `AiReplies`(가짜 응답). 가짜 응답 JSON에는 "synthetic"이라고 적는다. Robolectric에는 AndroidKeyStore가 없다.
 - 기록 폼으로 돌려주기: 답 화면이 이전 목적지의 SavedStateHandle에 `NoteHelperResult.KEY`(JSON 목록)를 넣고, 폼이 `addActualNotes`로 중복 없이 붙인다(`BrewTimerResult`와 같은 방식).
+
+## 장소 검색과 키 안내 (v1.3.0, 재사용)
+- 위치 지정의 검색은 `PlaceSearchService` 한 곳이 정한다. 국내 + 카카오 키 → `KakaoLocal`(키워드 1쪽 + 주소, `searchPage`로 다음 쪽). 그 밖(키 없음·해외·카카오 거절)은 `DevicePlaceSearch`(Android 지오코더, iOS MKLocalSearch)와 `OsmPhoton`(photon.komoot.io, OpenStreetMap, 키 없음)을 **나란히** 돌려 합친다. 한쪽이 실패해도 다른 쪽 결과를 보여 주고, 둘 다 조용하면 실패다. OpenStreetMap은 `OSM_TIMEOUT_MS` 안에 답하지 않으면 뺀다.
+- 결과 순서: `isPlace`(카테고리가 지역·도로·주소가 아니고 이름이 주소와 다름)인 가게가 먼저, 동네·도로·주소가 뒤. `looksLikeAddress`(모든 말이 숫자·도로명·행정구역 끝말)면 거꾸로. 중복은 `tidy`(같은 이름, 약 55 m 안).
+- 이름 + 동네(`aroundArea`): 두 말 이상이고 주소가 아니며 모든 말을 가진 가게가 없을 때만 돈다. 동네 말은 끝 말, 그다음 첫 말 순으로, 결과 속 `isArea` 결과(또는 주소에 그 말이 든 가게)에서 위치를 잡는다. 카카오는 주소 검색으로 동네만 한 번 더 찾을 수 있다(`anchorBySearch`). 키 없이는 첫 검색에 동네가 없으면 다시 묻지 않는다. 나머지 말을 그 위치 둘레에서 찾고(카카오 `sort=distance`, 키 없이는 이름에 그 말이 들고 30 km 안인 가게만), 가까운 순으로 `distanceFrom`(“장충에서 …”)과 함께 앞에 둔다.
+- `PlaceSearchResult.Found.sources`는 답한 검색 목록이다. OpenStreetMap이 들면 화면이 "지도 데이터 © OpenStreetMap 기여자"를 붙인다(ODbL). `next`(`MorePlaces`)는 카카오만 채우고, 화면의 "더 보기"가 `PlaceSearchService.more`로 이어 붙인다.
+- 키 없이 국내를 찾았으면 결과 아래에 카카오 안내(`KAKAO_TIP`)와 `KeyGuideLink(KeyHowTos.KAKAO)`가 붙는다.
+- 키 안내: 서비스마다 `KeyHowTos`(`ui/guide`)에 `KeyHowTo`(이 키로 하는 일 · 준비물 · 키 받기 · 앱에 넣기 · 요금과 한도 · 문제가 생기면 · 보안과 개인정보)로 적고, `KeyGuideLink`가 `KeyGuideSheet`(전체 화면 `Dialog`, 경로가 아님)를 연다. 설정에는 링크 한 줄만 둔다. 서비스 화면·버튼 이름이 바뀌면 `KeyHowTos`와 `asOf`를 같이 고친다. 링크 글자는 그 단계 글 안에 그대로 있어야 한다(`KeyHowTosTest`).
+- 테스트: 공용 `PlaceSearchTest`(가짜 `FakeDevicePlaceSearch` + `FakeAiHttp`의 `PhotonReplies`/`KakaoReplies`), 흐름 `PlaceSearchFlowTest`(`PhotonFixtures`, `PlaceFixtures.JANGCHUNG`). 가짜 HTTP에 규칙이 없는 OpenStreetMap 요청은 연결 실패로 끝나 휴대폰 결과만 남는다.

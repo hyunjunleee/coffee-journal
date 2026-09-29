@@ -23,7 +23,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,8 +34,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.coffeejournal.ui.form.TextLink
-import com.coffeejournal.ui.platform.openUrl
+import com.coffeejournal.ui.guide.GuideTexts
+import com.coffeejournal.ui.guide.KeyGuideLink
+import com.coffeejournal.ui.guide.KeyHowTos
 import com.coffeejournal.ui.theme.AppTextField
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Chip
@@ -57,7 +57,6 @@ fun AiSettingsSection(modifier: Modifier = Modifier) {
     val state by vm.state.collectAsStateWithLifecycle()
     val focus = koinInject<AiSettingsFocus>()
     val requester = remember { BringIntoViewRequester() }
-    var guideOpen by rememberSaveable { mutableStateOf(false) }
     var clearing by remember { mutableStateOf<AiKeySlot?>(null) }
 
     // opened from the answer screen's "설정에서 키 넣기": show this section, not the top of 설정
@@ -82,8 +81,8 @@ fun AiSettingsSection(modifier: Modifier = Modifier) {
             allowClear = false,
         )
         HintText(p.summary)
-        TextLink(if (guideOpen) AiTexts.GUIDE_CLOSE else AiTexts.GUIDE_OPEN, Ink.text, { guideOpen = !guideOpen })
-        if (guideOpen) AiGuides.forProvider(p).forEach { GuideCard(it) }
+        // each key's how-to opens full screen, so this section stays short
+        p.keys.forEach { slot -> KeyHowTos.of(slot.guide)?.let { KeyGuideLink(it, GuideTexts.open(slot.label)) } }
 
         p.keys.forEach { slot ->
             Spacer(Modifier.height(10.dp))
@@ -199,40 +198,4 @@ private fun ModelField(p: AiProvider, s: AiSettings, onChange: (String) -> Unit)
         }
     }
     HintText("비워 두면 기본 모델(${p.defaultModel})을 써요. 다른 이름을 직접 적어도 돼요.")
-}
-
-/** A key guide: numbered steps with their pages as links, then the notes. */
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun GuideCard(guide: KeyGuide) {
-    Column(Modifier.fillMaxWidth().padding(top = 8.dp).testTag("ai-guide")) {
-        Text(guide.title, style = AppType.cardTitle)
-        guide.steps.forEachIndexed { i, step ->
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                Text("${i + 1}.", style = AppType.monoValue, modifier = Modifier.width(22.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(step.text, style = AppType.body)
-                    Links(step.links)
-                }
-            }
-        }
-        guide.notes.forEach { note ->
-            Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
-                Text("·", style = AppType.small, modifier = Modifier.width(22.dp))
-                Column(Modifier.weight(1f)) {
-                    Text(note.text, style = AppType.small)
-                    Links(note.links)
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun Links(links: List<Pair<String, String>>) {
-    if (links.isEmpty()) return
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        links.forEach { (label, url) -> TextLink("$label ↗", Ink.textMuted, { openUrl(url) }) }
-    }
 }

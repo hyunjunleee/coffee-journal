@@ -39,6 +39,7 @@ import com.coffeejournal.ui.map.detail.rememberDetailMapSupported
 import com.coffeejournal.ui.map.search.CurrentLocation
 import com.coffeejournal.ui.map.search.LocateResult
 import com.coffeejournal.ui.map.search.LocateTexts
+import com.coffeejournal.ui.map.search.MorePlaces
 import com.coffeejournal.ui.map.search.PlaceHit
 import com.coffeejournal.ui.map.search.PlaceSearchResult
 import com.coffeejournal.ui.map.search.PlaceSearchService
@@ -116,7 +117,19 @@ class MapPickerViewModel(
     sealed interface Search {
         data object Idle : Search
         data object Running : Search
-        data class Found(val hits: List<PlaceHit>, val source: PlaceSource, val notice: String? = null) : Search
+        /**
+         * [sources]: which searches answered (the first leading). [next]: Kakao's next page ("더 보기"), [loadingMore]
+         * while it loads, [moreFailed] when it did not come.
+         */
+        data class Found(
+            val hits: List<PlaceHit>,
+            val sources: List<PlaceSource>,
+            val notice: String? = null,
+            val next: MorePlaces? = null,
+            val loadingMore: Boolean = false,
+            val moreFailed: Boolean = false,
+        ) : Search
+
         data class Message(val text: String, val source: PlaceSource? = null, val error: Boolean = true) : Search
     }
 
@@ -176,11 +189,34 @@ class MapPickerViewModel(
         searchJob = viewModelScope.launch {
             val shown = when (val r = places.search(q, domestic = !overseas, near = s.here)) {
                 is PlaceSearchResult.Found ->
-                    if (r.hits.isNotEmpty()) Search.Found(r.hits, r.source, r.notice)
+                    if (r.hits.isNotEmpty()) Search.Found(r.hits, r.sources, r.notice, r.next)
                     else Search.Message(listOfNotNull(r.notice, PlaceSearchTexts.noResults(q)).joinToString(" "), r.source, error = false)
                 is PlaceSearchResult.Failed -> Search.Message(PlaceSearchTexts.message(r.error, domestic = !overseas), r.source)
             }
             _state.update { it.copy(search = shown) }
+        }
+    }
+
+    /** "더 보기": Kakao's next page under the places shown, each place once. */
+    fun more() {
+        val found = _state.value.search as? Search.Found ?: return
+        val next = found.next ?: return
+        if (found.loadingMore || _state.value.saving) return
+        _state.update { it.copy(search = found.copy(loadingMore = true, moreFailed = false)) }
+        searchJob = viewModelScope.launch {
+            val r = places.more(next)
+            _state.update { st ->
+                val now = st.search as? Search.Found ?: return@update st
+                st.copy(
+                    search = when (r) {
+                        is PlaceSearchResult.Found -> {
+                            val shown = now.hits.map { it.name.trim().lowercase() to it.point }.toSet()
+                            now.copy(hits = now.hits + r.hits.filter { (it.name.trim().lowercase() to it.point) !in shown }, next = r.next, loadingMore = false)
+                        }
+                        is PlaceSearchResult.Failed -> now.copy(loadingMore = false, moreFailed = true)
+                    },
+                )
+            }
         }
     }
 
@@ -303,6 +339,7 @@ fun MapPickerScreen(nav: NavHostController, vm: MapPickerViewModel, results: Sav
                 s, onQuery = vm::setQuery, onSearch = vm::search, onPick = vm::pick, onClose = vm::closeResults,
                 // nothing is asked of a phone that has no location at all
                 onLocate = { if (vm.locationSupported) askLocation() else vm.locate(granted = false) },
+                onMore = vm::more, domestic = !overseas,
                 modifier = Modifier.padding(top = 10.dp, bottom = 12.dp),
             )
             HintText(

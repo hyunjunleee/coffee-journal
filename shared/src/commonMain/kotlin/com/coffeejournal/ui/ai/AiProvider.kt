@@ -2,13 +2,13 @@ package com.coffeejournal.ui.ai
 
 /**
  * A key the user pastes in 설정 › AI 노트 도우미. The app never ships a key: every user brings their own. The Gemini key
- * serves both Gemini options.
+ * serves both Gemini options. [guide] is the id of its full-screen how-to (KeyHowTos).
  */
-enum class AiKeySlot(val label: String, val service: String, val placeholder: String) {
-    GEMINI("Gemini API 키", "Google Gemini", "AQ.… 붙여넣기"),
-    TAVILY("Tavily API 키", "Tavily", "tvly-… 붙여넣기"),
-    OPENAI("OpenAI API 키", "OpenAI", "sk-proj-… 붙여넣기"),
-    CLAUDE("Anthropic API 키", "Anthropic", "sk-ant-… 붙여넣기"),
+enum class AiKeySlot(val label: String, val service: String, val placeholder: String, val guide: String) {
+    GEMINI("Gemini API 키", "Google Gemini", "AQ.… 붙여넣기", "gemini"),
+    TAVILY("Tavily API 키", "Tavily", "tvly-… 붙여넣기", "tavily"),
+    OPENAI("OpenAI API 키", "OpenAI", "sk-proj-… 붙여넣기", "openai"),
+    CLAUDE("Anthropic API 키", "Anthropic", "sk-ant-… 붙여넣기", "claude"),
 }
 
 /**
