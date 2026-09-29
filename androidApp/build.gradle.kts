@@ -104,6 +104,13 @@ val unpackSqliteHostNatives by tasks.registering(Sync::class) {
 val sqliteHostDir = layout.buildDirectory.dir("sqlite-host/natives/${hostSqlite.first}")
 tasks.withType<Test>().configureEach {
     dependsOn(unpackSqliteHostNatives)
+    // a failing test prints its whole stack trace, causes included, in the build log that CI keeps
+    testLogging {
+        events(org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED)
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+    }
     systemProperty("androidx.sqlite.driver.bundled.path", sqliteHostDir.get().asFile.absolutePath)
     systemProperty("androidx.sqlite.driver.bundled.name", hostSqlite.second)
 }

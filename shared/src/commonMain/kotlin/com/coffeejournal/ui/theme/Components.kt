@@ -59,6 +59,7 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.layout.positionInParent
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -106,11 +107,14 @@ fun Hairline(modifier: Modifier = Modifier, color: Color = Ink.line, thickness: 
 @Composable
 fun PrimaryButton(text: String, onClick: () -> Unit, modifier: Modifier = Modifier, enabled: Boolean = true, small: Boolean = false) {
     val bg = if (enabled) Ink.accent else Ink.line
+    // A save or confirm takes the focus first: the field being typed in finishes (its English words get their
+    // capitals) before the action reads the values.
+    val focusManager = LocalFocusManager.current
     Box(
         modifier
             .heightIn(min = if (small) 34.dp else Dimens.touch)
             .background(bg)
-            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .clickable(enabled = enabled, role = Role.Button, onClick = { focusManager.clearFocus(); onClick() })
             .padding(horizontal = if (small) 12.dp else 18.dp, vertical = if (small) 6.dp else 10.dp),
         contentAlignment = Alignment.Center,
     ) {

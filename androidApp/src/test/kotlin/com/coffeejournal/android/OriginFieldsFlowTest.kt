@@ -28,6 +28,8 @@ class OriginFieldsFlowTest : CoverageFlowBase() {
 
     private fun openList(label: String) = clickNode(hasContentDescription("$label 목록 열기"))
 
+    private val chipPlaceholder = "노트 추가 후 Enter (예: 오렌지)" // 예상 노트 (0) and 내가 느낀 노트 (1)
+
     @Test
     fun countryRegionAndSubRegion_fromTheLists_altitudeAsANumber_savedAsTheWebsHierarchy() {
         launchApp()
@@ -121,5 +123,19 @@ class OriginFieldsFlowTest : CoverageFlowBase() {
         saveForm("Colombia La Plata Gesha")
         val saved = entries().single()
         assertEquals(listOf("Colombia La Plata Gesha", "Finca La Esmeralda", "Pink Bourbon"), listOf(saved.name, saved.farmProducer, saved.variety))
+    }
+
+    @Test
+    fun englishStillBeingTyped_whenSaveIsTapped_isSavedWithItsCapitals() {
+        launchApp()
+        openNewForm()
+        typeInto(namePlaceholder, "Kona 저장 테스트")
+        // a note typed but not added, then a field still being typed in when 저장 is tapped
+        typeInto(chipPlaceholder, "honey, earl grey", 1)
+        typeInto("예: 라 에스메랄다(페드로 가족)", "greenwell farms")
+        saveForm("Kona 저장 테스트")
+        val saved = entries().single()
+        assertEquals("Greenwell Farms", saved.farmProducer)
+        assertEquals("Honey, Earl Grey", saved.actualNotes)
     }
 }

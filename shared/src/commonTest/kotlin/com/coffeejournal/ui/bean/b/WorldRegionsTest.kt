@@ -71,22 +71,33 @@ class WorldRegionsTest {
     }
 
     @Test fun zoomedIn_theAddedDotsAppear_neverOnTopOfAnother() {
-        val counts = listOf(WorldRegions.DETAIL_SCALE, 5f, 12f, WorldMapGeometry.MAX_SCALE).map { scale ->
+        val scales = listOf(WorldRegions.DETAIL_SCALE, 5f, 12f, WorldRegions.SPREAD_SCALE - 1f, WorldRegions.SPREAD_SCALE, 32f, WorldMapGeometry.MAX_SCALE)
+        val counts = scales.map { scale ->
             val dots = shown(scale)
             val gap = 3f * dotRadius(scale)
             assertTrue(dots.containsAll(WorldRegions.webDots), "the web's dots stay")
+            assertEquals(dots.size, dots.map { it.country.en to it.region.name }.toSet().size, "$scale: a region drawn twice")
             dots.filterNot { it.web }.forEach { d ->
-                val near = dots.filter { it != d }.minOf { hypot(it.region.x - d.region.x, it.region.y - d.region.y) }
-                assertTrue(near >= gap, "$scale: ${d.region.name} is $near from another dot")
+                val near = dots.filter { it !== d }.minOf { hypot(it.region.x - d.region.x, it.region.y - d.region.y) }
+                assertTrue(near >= gap - 1e-3f, "$scale: ${d.region.name} is $near from another dot")
+                val at = d.trueAt
+                if (scale < WorldRegions.SPREAD_SCALE) assertEquals(null, at, "$scale: ${d.region.name} moved")
+                if (at != null) {
+                    // moved at most two gaps from where it belongs, which is its listed place
+                    val own = WorldRegions.dots.single { it.sameAs(d) }.region
+                    assertEquals(Offset(own.x, own.y), at)
+                    assertTrue(hypot(at.x - d.region.x, at.y - d.region.y) <= 2 * gap + 1e-3f, "$scale: ${d.region.name} moved too far")
+                }
             }
             dots.size
         }
-        // deeper, more dots; at the deepest zoom nearly every region has its dot (Rwanda's too)
+        // deeper, more dots; from SPREAD_SCALE on every region has its dot, moved beside its place where it is crowded
         assertEquals(counts.sorted(), counts)
         assertTrue(counts.first() > WorldRegions.webDots.size, "$counts")
-        assertTrue(counts.last() >= WorldRegions.dots.size * 0.9, "$counts of ${WorldRegions.dots.size}")
+        assertEquals(WorldRegions.dots.size, counts.last(), "$counts of ${WorldRegions.dots.size}")
+        assertEquals(WorldRegions.dots.size, shown(WorldRegions.SPREAD_SCALE).size, "every dot at the spread zoom")
         val rwanda = shown(WorldMapGeometry.MAX_SCALE).count { it.country.en == "Rwanda" }
-        assertTrue(rwanda >= 8, "Rwanda: $rwanda dots")
+        assertEquals(WorldRegions.dots.count { it.country.en == "Rwanda" }, rwanda)
         // the dot keeps its size on the screen: 2.5 dp on the fitted map, 4 dp at most
         assertEquals(2.5f, WorldMapGeometry.dotRadiusPx(fit, 1f))
         assertEquals(4f, WorldMapGeometry.dotRadiusPx(fit * WorldMapGeometry.MAX_SCALE, 1f))

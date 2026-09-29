@@ -176,4 +176,11 @@ class OriginFieldsTest {
         assertEquals("  Two  Spaces ", EnglishCase.words("  two  spaces "))
         assertEquals("", EnglishCase.words(""))
     }
+
+    @Test fun notesTypedIntoTheBox_getTheirCapitals_whenAddedOrSaved() {
+        // the chip box's add and the form's save both go through addChips
+        assertEquals(listOf("Jasmine", "Earl Grey", "자두"), com.coffeejournal.domain.rules.NoteCanon.addChips(listOf("Jasmine"), "jasmine, earl grey, 자두"))
+        val pending = FormState(actualNotes = listOf("자스민"), actualInput = "honey, black tea")
+        assertEquals(listOf("자스민", "Honey", "Black Tea"), FormMapper.commitPendingChips(pending).actualNotes)
+    }
 }

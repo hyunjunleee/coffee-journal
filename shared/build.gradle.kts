@@ -139,3 +139,13 @@ dependencies {
         add("kspIosSimulatorArm64", libs.room.compiler)
     }
 }
+
+// a failing test prints its whole stack trace, causes included, in the build log that CI keeps
+tasks.withType<Test>().configureEach {
+    testLogging {
+        events(org.gradle.api.tasks.testing.logging.TestLogEvent.FAILED)
+        exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL
+        showCauses = true
+        showStackTraces = true
+    }
+}
