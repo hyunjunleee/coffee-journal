@@ -1,5 +1,7 @@
 package com.coffeejournal.android
 
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
@@ -10,7 +12,6 @@ import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.hasTestTag
-import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onFirst
@@ -18,6 +19,9 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.pinch
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
@@ -30,27 +34,28 @@ import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.GeoPoint
 import com.coffeejournal.domain.model.MiscItem
 import com.coffeejournal.domain.model.MiscType
-import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.model.RecipeRef
+import com.coffeejournal.domain.model.Scope
 import com.coffeejournal.domain.reference.CafeRecipes
+import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.MapLinks
-import com.coffeejournal.ui.guide.GuideTexts
-import com.coffeejournal.ui.guide.KeyHowTos
-import com.github.takahirom.roborazzi.captureScreenRoboImage
+import com.coffeejournal.domain.rules.ReminderKind
 import com.coffeejournal.ui.ai.AiErrors
 import com.coffeejournal.ui.ai.AiKeySlot
 import com.coffeejournal.ui.ai.AiProvider
 import com.coffeejournal.ui.ai.AiTexts
+import com.coffeejournal.ui.bean.b.WorldMapGeometry
 import com.coffeejournal.ui.form.timer.BrewClock
 import com.coffeejournal.ui.form.timer.BrewTimerResult
+import com.coffeejournal.ui.guide.GuideTexts
+import com.coffeejournal.ui.guide.KeyHowTos
 import com.coffeejournal.ui.map.MapPickTarget
+import com.coffeejournal.ui.map.WorldProjection
 import com.coffeejournal.ui.map.detail.DetailMapCamera
 import com.coffeejournal.ui.map.search.LocateResult
 import com.coffeejournal.ui.map.search.LocateTexts
 import com.coffeejournal.ui.map.search.PlaceSearchService
 import com.coffeejournal.ui.map.search.PlaceSearchTexts
-import com.coffeejournal.domain.rules.Dates
-import com.coffeejournal.domain.rules.ReminderKind
 import com.coffeejournal.ui.nav.FormMode
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.nav.appGraph
@@ -65,6 +70,7 @@ import com.coffeejournal.ui.theme.DisplaySettings
 import com.coffeejournal.ui.theme.NumberFont
 import com.coffeejournal.ui.theme.TextSize
 import com.github.takahirom.roborazzi.captureRoboImage
+import com.github.takahirom.roborazzi.captureScreenRoboImage
 import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import org.junit.Before
@@ -148,6 +154,20 @@ class RouteScreenshotTest {
     }
     @Test fun bean_map() = show(Route.Bean, "37-bean-map.png") {
         compose.onNode(hasText("커피 지도 + 농장(생산자)") and hasClickAction()).assertIsSelected().assertIsDisplayed()
+    }
+    /** Pinched in about 10× on Central America: the regions of the bean form's lists appear as dots, none on another. */
+    @Test fun bean_mapZoomed() = show(Route.Bean, "87-bean-map-zoomed.png") {
+        val map = compose.onNode(hasContentDescription("커피 지도.", substring = true))
+        val n = map.fetchSemanticsNode()
+        val size = Size(n.size.width.toFloat(), n.size.height.toFloat())
+        // Antigua, Guatemala on the fitted map, in the map node's px
+        val m = WorldMapGeometry.fitScale(size.width, size.height)
+        val c = WorldMapGeometry.toCanvas(WorldProjection.toView(14.56, -90.73).let { Offset(it.x.toFloat(), it.y.toFloat()) }, m, Offset(size.width / 2f, size.height / 2f))
+        repeat(3) {
+            map.performTouchInput { pinch(c - Offset(100f, 0f), c - Offset(250f, 0f), c + Offset(100f, 0f), c + Offset(250f, 0f), durationMillis = 500) }
+            settle()
+        }
+        compose.onNode(hasText("전체 보기") and hasClickAction()).assertIsDisplayed()
     }
     @Test fun bean_roastery() = show(Route.Bean, "38-bean-roastery.png") { beanView("로스터리", "한국 로스터리 지도") }
     /** Roasteries and a café with positions (and one found by its 지역 text), for the map screenshots. */
