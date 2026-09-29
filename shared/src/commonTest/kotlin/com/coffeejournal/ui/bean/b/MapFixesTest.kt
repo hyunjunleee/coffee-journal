@@ -16,7 +16,7 @@ import kotlin.test.assertTrue
 
 /** beanB-1 (tasted colour), beanB-2 (tap resolution), beanB-4 (farm jump), beanB-10 (pinch), beanB-6/-7 (blend). */
 class MapFixesTest {
-    private val polygons = WorldMapGeometry.parseAll()
+    private val polygons = WorldMapGeometry.parseCoffeeMap()
 
     // The default zoom on a 411dp phone: the canvas is 379dp wide (16dp gutters). Dp values below are in "canvas px"
     // at density 1; the view-unit radii do not depend on the density.

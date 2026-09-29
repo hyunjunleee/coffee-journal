@@ -81,7 +81,7 @@ object Credits {
         ),
         Credit(
             "세계지도",
-            "커피 지도의 나라 모양은 퍼블릭 도메인인 Natural Earth 지도 데이터를 단순화한 것이에요(웹 앱 원본 코드의 주석 기준).",
+            "커피 지도의 나라 모양은 퍼블릭 도메인인 Natural Earth 지도 데이터를 단순화한 것이에요(웹 앱 원본 코드의 주석 기준). 태평양의 하와이 삽입 지도는 Natural Earth 1:50m을 단순화해 앱이 더했어요.",
             links = listOf("Natural Earth" to "https://www.naturalearthdata.com/", "이용 조건" to "https://www.naturalearthdata.com/about/terms-of-use/"),
         ),
         Credit(

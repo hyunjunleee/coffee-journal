@@ -7,7 +7,7 @@ import com.coffeejournal.domain.reference.OriginRegions.Place
 internal object OriginsAmericas {
     val all: List<Origin> = listOf(
         brazil(), colombia(), peru(), ecuador(), bolivia(), mexico(), guatemala(), honduras(), elSalvador(),
-        nicaragua(), costaRica(), panama(), jamaica(), dominicanRepublic(), cuba(), haiti(), venezuela(), puertoRico(),
+        nicaragua(), costaRica(), panama(), jamaica(), dominicanRepublic(), cuba(), haiti(), venezuela(), puertoRico(), hawaii(),
         guyana(),
     )
 
@@ -733,5 +733,37 @@ internal object OriginsAmericas {
     private fun guyana() = Origin(
         "Guyana",
         listOf(Place("루푸누니", "Rupununi", lat = 3.41, lng = -59.31)),
+    )
+
+    // source: Hawaii Department of Agriculture's coffee origins (Kona, Kaʻū, Puna, Hāmākua, Maui, Kauaʻi, Oʻahu, Molokaʻi)
+    // as the Hawaii Coffee Association lists them; towns as the Kona and Kaʻū farms and their buyers name them. Korean:
+    // 하와이 코나 / 카우 as Korean roasters and importers list them; the others transliterated.
+    // coords: enwiki — Kealakekua, Pāhala, Pāhoa, Kalāheo, Waialua; Wikidata — Honokaʻa (Q2070615), Kula (Q4243331),
+    // Kualapuʻu (Q2020849). On the coffee map they are drawn in the Hawaii inset (ui/map/WorldMapInsets).
+    private fun hawaii() = Origin(
+        "Hawaii",
+        listOf(
+            Place(
+                "코나", "Kona", listOf("Kona Coffee Belt", "Hawaii Kona", "하와이 코나"),
+                listOf(
+                    Place("홀루알로아", "Holualoa", listOf("Hōlualoa")),
+                    Place("케알라케쿠아", "Kealakekua"),
+                    Place("캡틴 쿡", "Captain Cook"),
+                    Place("호나우나우", "Honaunau", listOf("Hōnaunau")),
+                ),
+                lat = 19.53, lng = -155.92,
+            ),
+            Place(
+                "카우", "Ka'u", listOf("Kau", "Kaʻū"),
+                listOf(Place("파할라", "Pahala", listOf("Pāhala")), Place("나알레후", "Naalehu", listOf("Nāʻālehu"))),
+                lat = 19.2, lng = -155.48,
+            ),
+            Place("푸나", "Puna", subs = listOf(Place("파호아", "Pahoa", listOf("Pāhoa"))), lat = 19.49, lng = -154.95),
+            Place("하마쿠아", "Hamakua", listOf("Hāmākua"), listOf(Place("호노카아", "Honokaa", listOf("Honokaʻa"))), lat = 20.08, lng = -155.46),
+            Place("마우이", "Maui", subs = listOf(Place("쿨라", "Kula"), Place("카아나팔리", "Kaanapali", listOf("Kāʻanapali"))), lat = 20.79, lng = -156.33),
+            Place("카우아이", "Kauai", listOf("Kauaʻi"), listOf(Place("칼라헤오", "Kalaheo", listOf("Kalāheo"))), lat = 21.92, lng = -159.53),
+            Place("오아후", "Oahu", listOf("Oʻahu"), listOf(Place("와이알루아", "Waialua")), lat = 21.58, lng = -158.13),
+            Place("몰로카이", "Molokai", listOf("Molokaʻi"), listOf(Place("쿠알라푸우", "Kualapuu", listOf("Kualapuʻu"))), lat = 21.16, lng = -157.05),
+        ),
     )
 }

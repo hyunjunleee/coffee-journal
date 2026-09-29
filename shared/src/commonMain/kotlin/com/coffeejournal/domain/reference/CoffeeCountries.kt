@@ -1,11 +1,12 @@
-// Generated from the web app reference data by scratchpad/site/gen_refs.py. Do not edit by hand.
+// Generated from the web app reference data by scratchpad/site/gen_refs.py, plus the app's one addition: Hawaii
+// (Kona), drawn in an inset of the world map (ui/map/WorldMapInsets), which the web's map leaves out.
 package com.coffeejournal.domain.reference
 
 object CoffeeCountries {
     data class Region(val name: String, val x: Float, val y: Float)
     data class Country(val en: String, val ko: String, val flag: String, val regions: List<Region>)
 
-    /** 45 producing countries in the web's insertion order (order matters for lookup). */
+    /** The web's 45 producing countries in its insertion order (order matters for lookup), and Hawaii after Puerto Rico. */
     val all: List<Country> = listOf(
         Country("Brazil", "브라질", "🇧🇷", listOf(Region("Cerrado", 354.7f, 316.7f), Region("Sul de Minas", 358.7f, 324.7f), Region("Mogiana", 354.7f, 323.4f))),
         Country("Colombia", "콜롬비아", "🇨🇴", listOf(Region("Huila", 278.7f, 260.7f), Region("Nariño", 273.9f, 264.2f), Region("Antioquia", 278.7f, 250f))),
@@ -25,6 +26,8 @@ object CoffeeCountries {
         Country("Haiti", "아이티", "🇭🇹", listOf(Region("Massif de la Selle", 287.7f, 218.4f))),
         Country("Venezuela", "베네수엘라", "🇻🇪", listOf(Region("Táchira", 287.5f, 246.6f))),
         Country("Puerto Rico", "푸에르토리코", "🇵🇷", listOf(Region("Yauco", 301.7f, 219.3f))),
+        // app addition: the Kona dot is in the Hawaii inset, at Kealakekua (19.53, -155.92) through WorldMapInsets.toView
+        Country("Hawaii", "하와이", "🇺🇸", listOf(Region("Kona", 170.6f, 222.1f))),
         Country("Ethiopia", "에티오피아", "🇪🇹", listOf(Region("Yirgacheffe", 580.5f, 252.8f), Region("Sidamo", 584.5f, 250.5f), Region("Guji", 586.5f, 254.5f), Region("Harrar", 594.5f, 242.6f))),
         Country("Kenya", "케냐", "🇰🇪", listOf(Region("Nyeri", 577f, 267.5f), Region("Kirinyaga", 581f, 270f))),
         Country("Rwanda", "르완다", "🇷🇼", listOf(Region("Huye", 559.3f, 274.3f))),
@@ -83,11 +86,18 @@ object CoffeeCountries {
         "치아파스" to "Chiapas",
         "킬리만자로" to "Kilimanjaro",
         "음베야" to "Mbeya",
+        "코나" to "Kona", // app addition
     )
 
     /** lowercase alias -> lowercase canonical country (web COUNTRY_SYNONYMS). */
     val countrySynonyms: Map<String, String> = mapOf(
         "columbia" to "colombia",
+        // app addition: coffee from the United States is almost always Hawaii's (Puerto Rico has its own entry)
+        "미국" to "hawaii",
+        "usa" to "hawaii",
+        "united states" to "hawaii",
+        "united states of america" to "hawaii",
+        "hawai'i" to "hawaii",
         "tanzania, united republic of" to "tanzania",
         "lao pdr" to "laos",
         "lao people's democratic republic" to "laos",
@@ -119,6 +129,7 @@ object CoffeeCountries {
         "Haiti" to "아메리카",
         "Venezuela" to "아메리카",
         "Puerto Rico" to "아메리카",
+        "Hawaii" to "아메리카",
         "Guyana" to "아메리카",
         "Ethiopia" to "아프리카",
         "Kenya" to "아프리카",

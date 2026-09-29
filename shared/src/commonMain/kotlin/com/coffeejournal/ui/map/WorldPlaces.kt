@@ -34,7 +34,7 @@ data class WorldPlace(val name: String, val mapName: String?, val center: MapXY)
 
 /**
  * Overseas location texts → a country centre on the world map. The web's roastery places come first (its
- * roasteryPoint groups, one country each), then a few more roastery countries, then the 45 producing countries
+ * roasteryPoint groups, one country each), then a few more roastery countries, then the producing countries
  * (CountryLookup, the web's lookupCountry), then any Natural Earth country name written in English.
  */
 object WorldPlaces {
@@ -87,7 +87,7 @@ object WorldPlaces {
         polygons.mapNotNull { poly -> poly.rings.maxByOrNull { ringArea(it) }?.let { poly.name to interiorPoint(it) } }.toMap()
     }
 
-    /** Korean name of a map country when the app knows one (roastery countries and the 45 producers). */
+    /** Korean name of a map country when the app knows one (roastery countries and the coffee producers). */
     fun koreanName(mapName: String): String? =
         known.firstOrNull { it.mapName == mapName }?.ko ?: CoffeeCountries.byEn[mapName]?.ko
 

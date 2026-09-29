@@ -3,6 +3,9 @@ package com.coffeejournal.ui.bean.b
 import androidx.compose.ui.geometry.Offset
 import com.coffeejournal.domain.reference.CoffeeCountries
 import com.coffeejournal.domain.reference.OriginRegions
+import com.coffeejournal.domain.rules.CountryLookup
+import androidx.compose.ui.geometry.Size
+import com.coffeejournal.ui.map.WorldMapInsets
 import com.coffeejournal.ui.map.WorldProjection
 import kotlin.math.hypot
 import kotlin.test.Test
@@ -11,7 +14,7 @@ import kotlin.test.assertTrue
 
 /** The world map's region dots: the web's at the fitted map, the bean form's representative regions once zoomed in. */
 class WorldRegionsTest {
-    private val polygons = WorldMapGeometry.parseAll()
+    private val polygons = WorldMapGeometry.parseCoffeeMap()
 
     // as in MapFixesTest: a 411dp phone, 379dp canvas, dp = px
     private val fit = WorldMapGeometry.fitScale(379f, 379f / 1.6f)
@@ -53,7 +56,7 @@ class WorldRegionsTest {
         // coordinate lands in another country or the sea.
         val off = OriginRegions.all.flatMap { o -> o.regions.map { o.countryEn to it } }.mapNotNull { (country, r) ->
             val poly = polygons.firstOrNull { it.name == country } ?: return@mapNotNull "$country has no outline"
-            val v = WorldProjection.toView(r.lat!!, r.lng!!)
+            val v = WorldMapInsets.toView(r.lat!!, r.lng!!)
             val p = Offset(v.x.toFloat(), v.y.toFloat())
             if (poly.contains(p)) null else distanceToBorder(poly, p).takeIf { it > 4f }?.let { "$country · ${r.en} (${r.lat}, ${r.lng}) ${it}u off" }
         }
@@ -94,5 +97,76 @@ class WorldRegionsTest {
         assertTrue(fitted !is MapTap.Region || fitted.hit.region.name != added.region.name, "$fitted")
         // the hidden dot's region is still one tap away in the country's list
         assertTrue(added.region in WorldRegions.of(added.country))
+    }
+
+    @Test fun hawaii_isAnInsetInThePacific_withKonaOnTheFittedMap() {
+        val hawaii = CoffeeCountries.byEn.getValue(WorldMapInsets.HAWAII)
+        assertEquals("하와이", hawaii.ko)
+        val kona = WorldRegions.webDots.single { it.country == hawaii }
+        assertEquals("Kona", kona.region.name)
+        assertEquals("코나", WorldRegions.label(kona))
+        // the web's viewBox starts at 128°W: Hawaii itself is off it, so it is drawn in the frame, west of Mexico
+        assertTrue(WorldProjection.toView(19.53, -155.92).x < 138.0)
+        val frame = WorldMapInsets.frame
+        val p = WorldMapInsets.toView(19.53, -155.92)
+        assertTrue(frame.contains(Offset(p.x.toFloat(), p.y.toFloat())), "$p")
+        assertEquals(kona.region.x, p.x.toFloat(), 0.1f)
+        assertEquals(kona.region.y, p.y.toFloat(), 0.1f)
+        // no other country reaches into the frame, and the tropic of Cancer passes above it, as it does above Hawaii
+        polygons.filter { it.name != WorldMapInsets.HAWAII }.forEach { poly ->
+            assertTrue(poly.rings.none { ring -> ring.any { frame.contains(it) } }, "${poly.name} is in the inset")
+        }
+        assertTrue(frame.top > com.coffeejournal.domain.reference.WorldMapData.TROPIC_NORTH_Y)
+        // a tap on the Big Island opens Hawaii; the rest of the map is as before (Hawaii's islands are not elsewhere)
+        val bigIsland = WorldMapInsets.toView(19.6, -155.5)
+        assertEquals(MapTap.Country("Hawaii"), WorldMapGeometry.resolveTap(polygons, Offset(bigIsland.x.toFloat(), bigIsland.y.toFloat()), 1f, 1f))
+        assertEquals(polygons.size - 1, WorldMapGeometry.parseAll().size)
+    }
+
+    @Test fun hawaiiAndKona_areFoundByTheirUsualNames() {
+        listOf("하와이", "하와이 코나", "Hawaii", "미국", "USA", "United States", "미국(하와이)").forEach {
+            assertEquals("Hawaii", CountryLookup.lookup(it)?.en, it)
+        }
+        assertEquals("Puerto Rico", CountryLookup.lookup("푸에르토리코")?.en)
+        assertEquals("Kona", com.coffeejournal.domain.rules.RegionHierarchy.normalize("코나"))
+        assertEquals("Ka'u", com.coffeejournal.domain.rules.RegionHierarchy.normalize("카우"))
+    }
+
+    @Test fun zoomedIn_dotsAreNamedInKorean() {
+        val ethiopia = WorldRegions.webDots.first { it.region.name == "Yirgacheffe" }
+        assertEquals("예가체프", WorldRegions.label(ethiopia))
+        WorldRegions.dots.forEach { d -> assertTrue(WorldRegions.label(d).any { it in '\uAC00'..'\uD7A3' }, "${d.region.name} has no Korean name") }
+    }
+
+    @Test fun names_goRightOfTheirDot_elseLeftAboveOrBelow_neverOnAnotherNameOrDot() {
+        val measure = { t: String -> Size(t.length * 10f, 12f) }
+        val canvas = Size(300f, 200f)
+        fun place(vararg dots: Pair<Offset, String>) = WorldMapGeometry.placeLabels(dots.toList(), measure, dotRadius = 4f, gap = 3f, canvas = canvas)
+        // alone: right of the dot, centred on it
+        assertEquals(Offset(27f, 94f), place(Offset(20f, 100f) to "가나").single().topLeft)
+        // at the canvas's right edge: left of it
+        assertEquals(Offset(263f, 44f), place(Offset(290f, 50f) to "코나").single().topLeft)
+        // clear of the map's own words: a tropic's name to the right and above, the canvas edge to the left → below
+        val tropic = androidx.compose.ui.geometry.Rect(25f, 90f, 120f, 102f)
+        val below = WorldMapGeometry.placeLabels(listOf(Offset(20f, 100f) to "가나"), measure, 4f, 3f, canvas, obstacles = listOf(tropic))
+        assertEquals(Offset(10f, 107f), below.single().topLeft)
+        // dots right and left of it: above
+        val row = place(Offset(100f, 100f) to "다라마바", Offset(60f, 100f) to "가", Offset(140f, 100f) to "나")
+        assertEquals(Offset(80f, 81f), row.first { it.text == "다라마바" }.topLeft)
+        // dots on all four sides: no room, left out (the neighbours still get theirs)
+        val boxed = place(
+            Offset(100f, 100f) to "다라마바", Offset(60f, 100f) to "가", Offset(140f, 100f) to "나",
+            Offset(100f, 80f) to "다", Offset(100f, 120f) to "라",
+        )
+        assertTrue(boxed.none { it.text == "다라마바" } && boxed.isNotEmpty(), "$boxed")
+        // however many, no two placed names overlap, none covers a dot, all inside the canvas
+        val many = (0 until 40).map { i -> Offset(10f + (i % 8) * 36f, 10f + (i / 8) * 40f) to "이름$i" }
+        val boxes = WorldMapGeometry.placeLabels(many, measure, 4f, 3f, canvas).map { androidx.compose.ui.geometry.Rect(it.topLeft, it.size) }
+        assertTrue(boxes.size > 10, "${boxes.size} names")
+        boxes.forEachIndexed { k, a -> boxes.drop(k + 1).forEach { b -> assertTrue(!a.overlaps(b), "$a overlaps $b") } }
+        boxes.forEach { b ->
+            assertTrue(b.left >= 0f && b.top >= 0f && b.right <= 300f && b.bottom <= 200f, "$b")
+            many.forEach { (c, _) -> assertTrue(!b.overlaps(androidx.compose.ui.geometry.Rect(c.x - 4f, c.y - 4f, c.x + 4f, c.y + 4f)), "$b covers $c") }
+        }
     }
 }

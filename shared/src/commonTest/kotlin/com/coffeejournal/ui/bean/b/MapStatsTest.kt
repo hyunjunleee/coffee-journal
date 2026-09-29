@@ -3,6 +3,7 @@ package com.coffeejournal.ui.bean.b
 import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.model.Entry
+import com.coffeejournal.domain.reference.CoffeeCountries
 import com.coffeejournal.domain.rules.BeanRecords
 import com.coffeejournal.domain.rules.Dates
 import kotlinx.datetime.LocalDate
@@ -74,7 +75,7 @@ class MapStatsTest {
         assertEquals("1.12", entry.latest)
         assertEquals(listOf("Yirgacheffe", "워시드", "Heirloom"), entry.tags)
         val untried = MapStats.untriedByZone(byCountry.keys)
-        assertEquals(45 - 4, untried.sumOf { it.second.size })
+        assertEquals(CoffeeCountries.all.size - 4, untried.sumOf { it.second.size })
         assertEquals("Africa", untried.first().first)
     }
 }
