@@ -49,7 +49,7 @@ import com.coffeejournal.ui.theme.Seg
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
-/** 설정 › AI 노트 도우미: the way of answering, its key(s) with "키 받는 방법", and the model. */
+/** 설정 › AI 노트 도우미: the way of answering, its key(s) with a link to each key's how-to, and the model. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AiSettingsSection(modifier: Modifier = Modifier) {
@@ -191,7 +191,7 @@ private fun KeyField(slot: AiKeySlot, ui: KeyUi, enabled: Boolean, onSave: (Stri
 @Composable
 private fun ModelField(p: AiProvider, s: AiSettings, onChange: (String) -> Unit) {
     FieldLabel(AiTexts.MODEL)
-    AppTextField(value = s.typedModel(p), onValueChange = onChange, placeholder = p.defaultModel)
+    AppTextField(value = s.typedModel(p), onValueChange = onChange, placeholder = p.defaultModel, capitalizeWords = false)
     FlowRow(Modifier.padding(top = 8.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
         p.presets.forEach { preset ->
             Chip(text = preset, selected = s.model(p) == preset, onClick = { onChange(preset) }, toggle = false)

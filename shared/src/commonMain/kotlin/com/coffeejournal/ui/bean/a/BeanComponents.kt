@@ -89,7 +89,7 @@ internal fun RecordLine(record: BeanRecord, meta: String, onClick: () -> Unit) {
 @Composable
 internal fun SearchField(value: String, onValueChange: (String) -> Unit, placeholder: String, modifier: Modifier = Modifier, label: String? = null) {
     AppTextField(
-        value = value, onValueChange = onValueChange, modifier = modifier, label = label, placeholder = placeholder,
+        value = value, onValueChange = onValueChange, modifier = modifier, label = label, placeholder = placeholder, capitalizeWords = false,
         trailing = {
             if (value.isNotEmpty()) {
                 // the icon stays 16dp; the tap target around it is the full 48dp trailing slot

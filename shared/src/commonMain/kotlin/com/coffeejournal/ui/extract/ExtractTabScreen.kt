@@ -162,7 +162,7 @@ private fun FilterBlock(controls: ExtractControls, query: String, onFilter: (Str
         Spacer(Modifier.height(10.dp))
         FieldLabel("원두 이름 검색")
         AppTextField(
-            value = query, onValueChange = onQuery, placeholder = "예: 벤사, 게이샤, 리브레",
+            value = query, onValueChange = onQuery, placeholder = "예: 벤사, 게이샤, 리브레", capitalizeWords = false,
             trailing = if (query.isNotBlank()) ({
                 GlyphButton("×", label = "검색어 지우기", onClick = { onQuery("") }, modifier = Modifier.padding(8.dp), style = AppType.body.copy(color = Ink.textFaint))
             }) else null,

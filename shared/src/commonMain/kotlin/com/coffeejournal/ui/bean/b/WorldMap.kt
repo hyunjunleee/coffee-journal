@@ -101,14 +101,16 @@ object MapPalette {
 }
 
 private const val MIN_SCALE = 1f
-private const val MAX_SCALE = 5f
+private const val MAX_SCALE = WorldMapGeometry.MAX_SCALE
 
 /** Radius of a drawn region dot in canvas px at the total scale [m]; taps count as on the dot within this radius. */
-private fun Density.dotRadiusPx(m: Float): Float = maxOf(WorldMapGeometry.REGION_DOT_RADIUS * m, 2.5.dp.toPx())
+private fun Density.dotRadiusPx(m: Float): Float = WorldMapGeometry.dotRadiusPx(m, density)
+
+private fun Density.shownDots(scale: Float, m: Float): List<WorldRegions.Dot> = WorldMapGeometry.shownDots(scale, m, density)
 
 /**
  * The world map: 175 polygons from [WorldMapData] fitted into the canvas, producers in dark green, tasted countries
- * in [MapPalette.tasted], 60 region dots, the two tropics, tap to select and pinch to zoom around the fingers.
+ * in [MapPalette.tasted], the region dots ([WorldRegions]), the two tropics, tap to select and pinch to zoom around the fingers.
  * [triedRegions] holds "En|region" keys in lower case.
  */
 @Composable
@@ -152,7 +154,7 @@ fun WorldMapCanvas(
                         val m = WorldMapGeometry.fitScale(size.width, size.height) * state.scale
                         val origin = Offset(size.width / 2f, size.height / 2f) + state.pan
                         val v = WorldMapGeometry.toView(pos, m, origin)
-                        when (val hit = WorldMapGeometry.resolveTap(polygons, v, dotRadiusPx(m) / m, 14.dp.toPx() / m)) {
+                        when (val hit = WorldMapGeometry.resolveTap(polygons, v, dotRadiusPx(m) / m, 14.dp.toPx() / m, shownDots(state.scale, m))) {
                             is MapTap.Region -> onRegionTap(hit.hit)
                             is MapTap.Country -> onCountryTap(hit.name)
                             null -> Unit
@@ -186,17 +188,18 @@ fun WorldMapCanvas(
                 val layout = textMeasurer.measure(label, labelStyle)
                 drawText(layout, topLeft = Offset(maxOf(0f, a.x) + 4.dp.toPx(), a.y - layout.size.height - 1.dp.toPx()))
             }
-            // Region dots on top of everything: tasted ones dark with a light ring, the others 연두색.
+            // Region dots on top of everything: tasted ones dark with a light ring, the others 연두색. The selected region
+            // (picked from the country's list) is drawn even where the zoom leaves its dot out.
             val r = dotRadiusPx(m)
-            CoffeeCountries.all.forEach { c ->
-                c.regions.forEach { reg ->
-                    val p = WorldMapGeometry.toCanvas(Offset(reg.x, reg.y), m, origin)
-                    if (p.x < -r || p.x > w + r || p.y < -r || p.y > h + r) return@forEach
-                    val tried = "${c.en}|${reg.name.lowercase()}" in triedRegions
-                    drawCircle(if (tried) MapPalette.triedDot else MapPalette.dot, r, p)
-                    drawCircle(if (tried) MapPalette.tastedStroke else Ink.surface, r, p, style = Stroke(if (tried) 1.dp.toPx() else 0.6.dp.toPx()))
-                    if (state.selectedCountry == c.en && state.selectedRegion == reg.name) drawCircle(Ink.text, r + 3.dp.toPx(), p, style = Stroke(1.dp.toPx()))
-                }
+            val shown = shownDots(state.scale, m)
+            val selected = WorldRegions.dots.firstOrNull { it.country.en == state.selectedCountry && it.region.name == state.selectedRegion }
+            (if (selected != null && selected !in shown) shown + selected else shown).forEach { (c, reg) ->
+                val p = WorldMapGeometry.toCanvas(Offset(reg.x, reg.y), m, origin)
+                if (p.x < -r || p.x > w + r || p.y < -r || p.y > h + r) return@forEach
+                val tried = "${c.en}|${reg.name.lowercase()}" in triedRegions
+                drawCircle(if (tried) MapPalette.triedDot else MapPalette.dot, r, p)
+                drawCircle(if (tried) MapPalette.tastedStroke else Ink.surface, r, p, style = Stroke(if (tried) 1.dp.toPx() else 0.6.dp.toPx()))
+                if (selected?.country == c && selected.region == reg) drawCircle(Ink.text, r + 3.dp.toPx(), p, style = Stroke(1.dp.toPx()))
             }
         }
         if (state.scale > MIN_SCALE) {

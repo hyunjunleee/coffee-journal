@@ -60,7 +60,7 @@ import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
 
-private const val MAP_DESCRIPTION = "전 세계 주요 커피 생산국을 어두운 초록으로 표시했어요. 그중 지금까지 기록한 원두의 원산지는 강조색으로 칠해지고, 나라를 누르면 이름과 주요 산지가 나와요. 연두색 점은 국가별 대표 커피 산지 위치예요. 점선은 커피가 자라는 남·북회귀선(적도 기준 위도 23.5˚) 범위고요."
+private const val MAP_DESCRIPTION = "전 세계 주요 커피 생산국을 어두운 초록으로 표시했어요. 그중 지금까지 기록한 원두의 원산지는 강조색으로 칠해지고, 나라를 누르면 이름과 주요 산지가 나와요. 연두색 점은 국가별 대표 커피 산지 위치예요(두 손가락으로 확대하면 더 많은 산지가 보여요). 점선은 커피가 자라는 남·북회귀선(적도 기준 위도 23.5˚) 범위고요."
 
 /** 커피 지도 + 농장(생산자): the web #bean-view-map as one vertical page. */
 @Composable

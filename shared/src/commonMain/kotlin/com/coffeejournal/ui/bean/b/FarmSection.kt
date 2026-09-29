@@ -43,7 +43,7 @@ fun FarmSection(
         PrimaryButton("+ 추가", onClick = onAdd, modifier = Modifier.padding(top = 24.dp))
         Row(Modifier.padding(top = 20.dp, bottom = 8.dp), verticalAlignment = Alignment.Bottom) { Text("농장(생산자)", style = AppType.sectionLabel) }
         AppTextField(
-            value = query, onValueChange = onQueryChange, placeholder = "농장·생산자 검색",
+            value = query, onValueChange = onQueryChange, placeholder = "농장·생산자 검색", capitalizeWords = false,
             trailing = { Icon(AppIcons.search, contentDescription = null, tint = Ink.textFaint) },
         )
         Spacer(Modifier.height(10.dp))

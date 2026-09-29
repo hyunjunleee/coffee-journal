@@ -325,7 +325,7 @@ class FlowTest : FlowTestBase() {
         typeInto("예: 커피정경", "테스트 로스터리")
         typeInto("예: Nordic Approach", "Falcon Specialty")
         typeInto("예: 라 에스메랄다(페드로 가족)", "벤사 농장(아셰나피)")
-        typeInto("예: Heirloom(74110), Mundo Novo", "74158, Kurume")
+        typeInto("예: Heirloom, Mundo Novo", "74158, Kurume")
         clickNode(button("워시드"), 0)
         typeInto("세부 종류 (선택, 예: 드래곤 아이, 더블 퍼멘티드)", "더블 퍼멘티드")
         clickNode(button("라이트"), 0)
@@ -395,7 +395,7 @@ class FlowTest : FlowTestBase() {
         waitForText("새 기록")
         typeInto(namePlaceholder, bean)
         typeInto("예: 커피정경", "형제 로스터리")
-        typeInto("예: Heirloom(74110), Mundo Novo", "Bourbon")
+        typeInto("예: Heirloom, Mundo Novo", "Bourbon")
         typeInto(dosePlaceholder, "16")
         clickText("저장")
         waitUntil("second detail") { has(hasText("16g : ?g")) && onDetailOf(bean) }

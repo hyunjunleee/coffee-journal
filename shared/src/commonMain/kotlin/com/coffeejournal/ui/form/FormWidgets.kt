@@ -1,6 +1,7 @@
 package com.coffeejournal.ui.form
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -19,8 +20,12 @@ import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -30,10 +35,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -43,15 +50,20 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.coffeejournal.domain.rules.Altitude
+import com.coffeejournal.domain.rules.EnglishCase
+import com.coffeejournal.domain.rules.VarietyText
 import com.coffeejournal.ui.platform.openUrl
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppType
@@ -90,17 +102,31 @@ internal fun FormTextField(
     hint: String? = null,
     trailing: (@Composable () -> Unit)? = null,
     inputFilter: ((String) -> String?)? = null,
+    /** English words start with a capital: the keyboard shifts at each word, and leaving the field fixes the rest. */
+    capitalizeWords: Boolean = keyboardType == KeyboardType.Text && singleLine,
+    /**
+     * The value as of now, for a field whose list puts a choice in it: the tap on a choice also takes the focus away,
+     * before [value] has caught up, and leaving the field must fix the choice, not bring back what was typed.
+     */
+    currentValue: (() -> String)? = null,
 ) {
     val sync = rememberImeSafeText(value)
     // onFocusChanged fires once on attach with "not focused"; only report a blur after a real focus.
     var hadFocus by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf(false) }
+    var wasFocused by remember { mutableStateOf(false) }
     Column(modifier) {
         if (label != null) FieldLabel(label)
         var fieldModifier: Modifier = Modifier.fillMaxWidth()
         if (focusRequester != null) fieldModifier = fieldModifier.focusRequester(focusRequester)
         fieldModifier = fieldModifier.onFocusChanged { st ->
             focused = st.isFocused
+            if (st.isFocused) wasFocused = true
+            else if (wasFocused) {
+                wasFocused = false
+                val now = currentValue?.invoke() ?: value
+                if (capitalizeWords) EnglishCase.words(now).takeIf { it != now }?.let(onValueChange)
+            }
             if (onFocusChanged == null) return@onFocusChanged
             if (st.isFocused) { hadFocus = true; onFocusChanged(true) } else if (hadFocus) { hadFocus = false; onFocusChanged(false) }
         }
@@ -120,7 +146,10 @@ internal fun FormTextField(
             isError = error != null,
             textStyle = AppType.input,
             shape = RectangleShape,
-            keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = if (singleLine) ImeAction.Next else ImeAction.Default),
+            keyboardOptions = KeyboardOptions(
+                capitalization = if (capitalizeWords) KeyboardCapitalization.Words else KeyboardCapitalization.None,
+                keyboardType = keyboardType, imeAction = if (singleLine) ImeAction.Next else ImeAction.Default,
+            ),
             trailingIcon = trailing,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = Ink.accent, unfocusedBorderColor = Ink.line, errorBorderColor = Ink.bad,
@@ -163,6 +192,7 @@ internal fun AutocompleteField(
     LaunchedEffect(focused) {
         if (focused) showList = true else { delay(150); showList = false }
     }
+    val now = rememberLatest(value)
     val query = value.trim().lowercase()
     val matches = remember(options, query) {
         val filtered = if (query.isEmpty()) options else options.filter { it.lowercase().contains(query) && it.trim().lowercase() != query }
@@ -172,20 +202,151 @@ internal fun AutocompleteField(
         FormTextField(
             value = value, onValueChange = onValueChange, label = label, placeholder = placeholder, placeholderColor = placeholderColor, keyboardType = keyboardType,
             focusRequester = focusRequester, error = error, hint = hint, inputFilter = inputFilter,
-            onFocusChanged = { f -> focused = f; onFocusChanged?.invoke(f) },
+            onFocusChanged = { f -> focused = f; onFocusChanged?.invoke(f) }, currentValue = { now.value },
         )
         if (showList && matches.isNotEmpty()) {
             Column(Modifier.fillMaxWidth().background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)) {
                 matches.forEachIndexed { i, opt ->
                     Text(
                         opt, style = AppType.small.copy(color = Ink.text),
-                        modifier = Modifier.fillMaxWidth().clickable { onValueChange(opt); focusManager.clearFocus() }.padding(horizontal = 12.dp, vertical = 9.dp),
+                        modifier = Modifier.fillMaxWidth().clickable { now.value = opt; onValueChange(opt); focusManager.clearFocus() }.padding(horizontal = 12.dp, vertical = 9.dp),
                     )
                     if (i < matches.lastIndex) Box(Modifier.fillMaxWidth().height(Dimens.hairline).background(Ink.line))
                 }
             }
         }
     }
+}
+
+/**
+ * Free text with a list of [presets] to pick from (국가 · 지역 · 세부 지역): the list opens on focus or with ▾, narrows
+ * as one types (Korean, English or another spelling), and shows each choice's English name faintly. Picking puts its
+ * value in the field; anything typed is kept as it is.
+ */
+@Composable
+@OptIn(ExperimentalFoundationApi::class)
+internal fun PresetField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    presets: List<Preset>,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    placeholder: String = "",
+    hint: String? = null,
+    /** The list's test tag ("presets-지역"): the rows under it are the choices. */
+    listTag: String = "presets-${label ?: placeholder}",
+    /**
+     * Several values, comma-separated ("Heirloom, Mundo Novo"): the list follows the value being typed after the
+     * last comma and leaves out those already there; a pick replaces what is being typed, or is added after a
+     * finished value.
+     */
+    multi: Boolean = false,
+    keyboardType: KeyboardType = KeyboardType.Text,
+    inputFilter: ((String) -> String?)? = null,
+) {
+    var focused by remember { mutableStateOf(false) }
+    var showList by remember { mutableStateOf(false) }
+    val focusManager = LocalFocusManager.current
+    val now = rememberLatest(value)
+    val listInView = remember { BringIntoViewRequester() }
+    LaunchedEffect(focused) {
+        if (focused) showList = true else { delay(150); showList = false }
+    }
+    // an opened list below a field near the bottom scrolls up into view
+    LaunchedEffect(showList) {
+        if (showList) { withFrameNanos { }; listInView.bringIntoView() }
+    }
+    val tokens = if (multi) value.split(',').map { it.trim() } else listOf(value.trim())
+    val current = tokens.last()
+    // what is being typed is one of the choices already: show them all (another is added, or replaces it)
+    val finished = presets.any { it.names(current) }
+    val matches = remember(presets, value) {
+        val chosen = if (multi) tokens.filter { it.isNotEmpty() } else emptyList()
+        presets.filter { p -> chosen.none { p.names(it) } || (!multi && p.names(current)) }
+            .filter { finished || it.matches(current) }
+    }
+    fun pick(p: Preset): String = when {
+        !multi -> p.value
+        finished -> (tokens.filter { it.isNotEmpty() } + p.value).joinToString(", ")
+        else -> (tokens.dropLast(1).filter { it.isNotEmpty() } + p.value).joinToString(", ")
+    }
+    Column(modifier) {
+        FormTextField(
+            value = value, onValueChange = onValueChange, label = label, placeholder = placeholder, hint = hint,
+            keyboardType = keyboardType, inputFilter = inputFilter,
+            onFocusChanged = { f -> focused = f }, currentValue = { now.value },
+            trailing = if (presets.isEmpty()) null else {
+                {
+                    Box(
+                        Modifier.minimumInteractiveComponentSize().clickable(role = Role.Button) { showList = !showList }
+                            .semantics { contentDescription = "${label ?: placeholder} 목록 ${if (showList) "닫기" else "열기"}" },
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(AppIcons.chevronDown, contentDescription = null, tint = Ink.textMuted, modifier = Modifier.size(18.dp)) }
+                }
+            },
+        )
+        if (showList && matches.isNotEmpty()) {
+            Column(
+                Modifier.fillMaxWidth().heightIn(max = 264.dp).background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
+                    .bringIntoViewRequester(listInView).verticalScroll(rememberScrollState()).testTag(listTag),
+            ) {
+                matches.forEachIndexed { i, p ->
+                    Row(
+                        Modifier.fillMaxWidth().clickable(role = Role.Button) { val v = pick(p); now.value = v; onValueChange(v); showList = false; focusManager.clearFocus() }
+                            .padding(horizontal = 12.dp, vertical = 9.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(p.value, style = AppType.small.copy(color = Ink.text), modifier = Modifier.weight(1f, fill = false))
+                        if (p.note.isNotBlank() && p.note != p.value) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(p.note, style = AppType.faint, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (i < matches.lastIndex) Box(Modifier.fillMaxWidth().height(Dimens.hairline).background(Ink.line))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 품종: varieties from the list or typed (several, comma-separated) and, once Heirloom is among them, its selection
+ * numbers (several too), kept as "Heirloom(74112, 74158)".
+ */
+@Composable
+internal fun VarietyFields(
+    variety: String,
+    numbers: String,
+    onVariety: (String) -> Unit,
+    onNumbers: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    label: String? = null,
+    placeholder: String = "",
+) {
+    Column(modifier) {
+        PresetField(variety, onVariety, VarietyOptions.varieties, label = label, placeholder = placeholder, multi = true, listTag = "presets-품종")
+        if (VarietyText.hasHeirloom(variety)) {
+            PresetField(
+                numbers, onNumbers, VarietyOptions.heirloomNumbers, Modifier.padding(top = 8.dp), label = "Heirloom 번호",
+                placeholder = "예: 74112, 74158", hint = "여러 개면 쉼표나 띄어쓰기로 나눠요. 기록에는 Heirloom(74112, 74158)으로 남아요.",
+                multi = true, keyboardType = KeyboardType.Number, inputFilter = VarietyText::typingNumbers, listTag = "presets-Heirloom 번호",
+            )
+        }
+    }
+}
+
+/** [value] as of the last composition, which a pick from a list moves on at once (see [FormTextField]'s currentValue). */
+@Composable
+private fun rememberLatest(value: String): MutableState<String> = remember { mutableStateOf(value) }.apply { this.value = value }
+
+/** 재배 고도: the number (or a range, "1800-2000") on the number keyboard, with the unit "m" shown after it and saved with it. */
+@Composable
+internal fun AltitudeField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, label: String? = null, placeholder: String = "") {
+    FormTextField(
+        value, onValueChange, modifier, label = label, placeholder = placeholder, keyboardType = KeyboardType.Number,
+        inputFilter = Altitude::typing,
+        trailing = { Text("m", style = AppType.input.copy(color = Ink.textMuted), modifier = Modifier.padding(end = 4.dp)) },
+    )
 }
 
 /** Small bordered input for dense rows (steps, blend components); IME-safe with an optional [inputFilter] like [FormTextField]. */
@@ -205,7 +366,11 @@ internal fun CompactField(
     // the box stays 36 dp tall; the surrounding layout reserves a 48 dp touch target
     var m = modifier.minimumInteractiveComponentSize().heightIn(min = 36.dp).background(Ink.surface).border(BorderStroke(Dimens.hairline, Ink.line), RectangleShape)
     if (focusRequester != null) m = m.focusRequester(focusRequester)
-    m = m.onFocusChanged { focused = it.isFocused }
+    m = m.onFocusChanged {
+        // leaving the field starts each English word with a capital, as FormTextField does
+        if (focused && !it.isFocused && keyboardType == KeyboardType.Text) EnglishCase.words(value).takeIf { t -> t != value }?.let(onValueChange)
+        focused = it.isFocused
+    }
     BasicTextField(
         value = sync.value.shownWhen(focused),
         onValueChange = { edited -> sync.onEdit(edited, inputFilter)?.let(onValueChange) },
@@ -213,7 +378,10 @@ internal fun CompactField(
         singleLine = true,
         textStyle = AppType.inputSmall.copy(color = Ink.text, textAlign = textAlign),
         cursorBrush = SolidColor(Ink.accent),
-        keyboardOptions = KeyboardOptions(keyboardType = keyboardType, imeAction = ImeAction.Next),
+        keyboardOptions = KeyboardOptions(
+            capitalization = if (keyboardType == KeyboardType.Text) KeyboardCapitalization.Words else KeyboardCapitalization.None,
+            keyboardType = keyboardType, imeAction = ImeAction.Next,
+        ),
         decorationBox = { inner ->
             Box(Modifier.padding(horizontal = 8.dp, vertical = 8.dp), contentAlignment = if (textAlign == TextAlign.Center) Alignment.Center else Alignment.CenterStart) {
                 if (sync.value.text.isEmpty()) Text(placeholder, style = AppType.inputSmall.copy(color = Ink.textFaint), maxLines = 1)

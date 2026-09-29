@@ -455,9 +455,10 @@ class AiFlowTest : CoverageFlowBase() {
         launchApp()
         openNewForm()
         typeInto(namePlaceholder, "AI 노트 테스트 원두")
+        // typed in lower case, kept as "Jasmine"
         typeInto(chipPlaceholder, "jasmine", 1)
         clickNode(button("추가"), 1)
-        waitFor(hasContentDescription("jasmine 삭제"))
+        waitFor(hasContentDescription("Jasmine 삭제"))
 
         // a small panel under the notes (not a dialog) for the taste in one's own words
         tap(button(AiTexts.ASK_FROM_FORM))
@@ -472,8 +473,8 @@ class AiFlowTest : CoverageFlowBase() {
         assertTrue("\"query\":\"ripe plum bitter finish tasting notes specialty coffee\"" in requestBody(1))
         assertTrue("\"query\":\"커피 원두 후기 잘 익은 자두 같고 끝이 쌉쌀해요\"" in requestBody(2))
         assertTrue("플레이버 휠 용어: Black Tea, Floral" in requestBody(3))
-        // the app's own terms found in the answer, in order
-        val candidates = listOf("Dark Chocolate", "자두", "다크 초콜릿", "Jasmine", "Floral")
+        // the app's own terms found in the answer, in order ("Plum" is one of the wheel's unofficial notes)
+        val candidates = listOf("Plum", "Dark Chocolate", "자두", "다크 초콜릿", "Jasmine", "Floral")
         val chip = { t: String -> button(t) and hasAnyAncestor(hasTestTag("note-candidates")) }
         candidates.forEach { assertTrue(it, has(chip(it))) }
         val lefts = candidates.map { node(chip(it)).fetchSemanticsNode().let { n -> n.positionInRoot.y * 10_000 + n.positionInRoot.x } }
@@ -484,13 +485,12 @@ class AiFlowTest : CoverageFlowBase() {
         tap(chip("Jasmine"))
         tap(button("${AiTexts.ADD_TO_NOTES} (2)"))
 
-        // back in the form: 자두 added once, Jasmine not a second time next to "jasmine"; the panel is closed
+        // back in the form: 자두 added once, Jasmine not a second time; the panel is closed
         waitFor(hasContentDescription("자두 삭제"))
         assertFalse(has(hasTestTag("ask-ai-panel")))
-        assertEquals(1, count(hasContentDescription("jasmine 삭제")))
-        assertFalse(has(hasContentDescription("Jasmine 삭제")))
+        assertEquals(1, count(hasContentDescription("Jasmine 삭제")))
         saveForm("AI 노트 테스트 원두")
-        assertEquals("jasmine, 자두", entries().single().actualNotes)
+        assertEquals("Jasmine, 자두", entries().single().actualNotes)
     }
 
     // ───────────────────────── keys and errors ─────────────────────────

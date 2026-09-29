@@ -1,13 +1,16 @@
 package com.coffeejournal.ui.ai
 
 import com.coffeejournal.domain.reference.FlavorWheel
+import com.coffeejournal.domain.reference.FlavorWheelExtras
 import com.coffeejournal.domain.reference.NoteCategories
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.serializer
 
 /**
  * Mode B's "노트 후보": the app's own vocabulary found in an answer, in the order it appears, each once. English
- * flavor-wheel terms match case-insensitively as whole words ("Black Tea", not "blackberry"); Korean note categories
+ * flavor-wheel terms — the wheel's own and the app's unofficial ones ([FlavorWheelExtras], e.g. "Plum", which an
+ * answer often quotes from a roaster) — match case-insensitively as whole words ("Black Tea", not "blackberry"); the
+ * wheel's inner-tier labels ("Other", "Sweet") are left out as too common. Korean note categories
  * and their keywords match at the start of a word, the longest first ("블루베리" is not also "베리"). A one-syllable
  * keyword ("꿀", "풀", "흙") must also end its word or be followed by a particle, so "풀바디" is not "풀".
  */
@@ -17,7 +20,7 @@ object NoteTerms {
     private val PARTICLES = "은는이가을를의와과도로에향맛내처같냄즙"
 
     private val terms: List<Term> by lazy {
-        val english = FlavorWheel.allTerms.distinct().map { t ->
+        val english = (FlavorWheel.allTerms + FlavorWheelExtras.allTerms).distinct().map { t ->
             Term(t, Regex("(?<![A-Za-z])${pattern(t)}(?![A-Za-z])", RegexOption.IGNORE_CASE))
         }
         val korean = NoteCategories.all.flatMap { c -> c.subs.flatMap { s -> listOf(s.name) + s.keywords } }.distinct().map { k ->

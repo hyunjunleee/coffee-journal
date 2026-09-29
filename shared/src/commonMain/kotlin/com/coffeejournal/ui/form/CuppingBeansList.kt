@@ -17,6 +17,7 @@ import com.coffeejournal.domain.model.CuppingBean
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.reference.ScaForm
 import com.coffeejournal.domain.rules.CvaScoring
+import com.coffeejournal.domain.rules.RegionText
 import com.coffeejournal.domain.rules.ScaScoring
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.KeyValueRow
@@ -41,7 +42,7 @@ internal fun CuppingBeansList(en: Entry) {
 private fun CuppingBeanBody(bean: CuppingBean) {
     val facts = listOf(
         "나의 순위" to bean.rank.takeIf { it.isNotBlank() }?.let { "${it}위" },
-        "지역" to bean.region,
+        "지역" to RegionText.display(bean.region),
         "농장" to bean.farmProducer,
         "고도" to bean.altitude,
         "배전" to bean.roast,

@@ -392,9 +392,14 @@ object KeyHowTos {
                 ),
                 p("‘OpenAI 결제가 필요해요’(‘결제가 필요해요’): 크레딧이 없거나 결제를 설정하지 않았어요(HTTP 429 insufficient_quota). Billing에서 충전해요."),
                 p("‘OpenAI 크레딧이 다 떨어졌어요’: 선불 잔액이 \$0이에요(credit_balance_exhausted). Billing에서 충전해요."),
+                p("‘OpenAI 요청 한도를 넘었어요’(‘한도를 넘었어요’): 분당 요청이 너무 잦았어요(HTTP 429). 잠시 뒤 다시 해요."),
                 p(
-                    "‘OpenAI 요청 한도를 넘었어요’(‘한도를 넘었어요’): 너무 잦은 요청이면 잠시 뒤 다시 해요. " +
-                        "아래 작은 글씨에 spend limit이 보이면 내가 정한 월 상한이라 Limits에서 올리거나 다음 달까지 기다려요.",
+                    "‘직접 정한 OpenAI 월 지출 한도에 닿았어요’(‘지출 한도에 닿았어요’): Limits에서 켠 월 상한(프로젝트나 조직)에 닿았어요. " +
+                        "기다려도 풀리지 않아요. Limits › Spend에서 한도를 올리거나 다음 달까지 기다려요.",
+                ),
+                p(
+                    "‘OpenAI가 이 조직에 정한 사용 한도에 닿았어요’: 등급(Tier)의 월 사용 한도예요. 결제 금액이 쌓여 등급이 오르면 한도도 올라가요. " +
+                        "‘요청이 갑자기 늘어 OpenAI가 잠시 막았어요’는 몇 분 뒤 다시 해요.",
                 ),
                 p("‘이 모델은 이 키로 쓸 수 없어요’(‘이 모델은 쓸 수 없어요’): 이 키로 열리지 않은 모델이에요. 설정의 모델에서 gpt-5-nano를 골라요."),
                 p("‘이 OpenAI 키로는 쓸 수 없어요(권한 없음)’: HTTP 403이에요. 키의 Permissions가 좁아요. \"All\"로 된 키를 새로 만들어요."),
@@ -492,8 +497,8 @@ object KeyHowTos {
                 p("‘Anthropic 크레딧이 부족해요’(‘결제가 필요해요’): 크레딧 잔액이 모자라요. Billing에서 \"Buy credits\"로 사요."),
                 p("‘Anthropic 결제에 문제가 있어요’: 결제 정보에 문제가 있어요(HTTP 402). Billing에서 결제 수단을 확인해요."),
                 p(
-                    "‘Anthropic 요청이 실패했어요 (HTTP 400).’ 아래 작은 글씨에 \"You have reached your specified API usage limits\"가 보이면 " +
-                        "내 지출 한도예요. Spend limits에서 올려요.",
+                    "‘직접 정한 Anthropic 지출 한도에 닿았어요’(‘지출 한도에 닿았어요’): Billing의 Spend limits에 정한 한도예요(HTTP 400). " +
+                        "\"Adjust limit\"로 올리면 바로 다시 돼요. 워크스페이스 한도면 ‘워크스페이스에 정한 … 지출 한도’라고 나와요.",
                 ),
                 p(
                     "같은 HTTP 400에 \"anthropic-workspace-id is required\"가 보이면 워크스페이스를 하나로 정하지 않은 키예요. " +
@@ -502,9 +507,10 @@ object KeyHowTos {
                 p("‘이 조직에서 웹 검색을 쓸 수 없어요.’: 조직 관리자가 웹 검색을 꺼 뒀어요. 콘솔의 Privacy 설정에서 켜요.", "Privacy" to CLAUDE_PRIVACY),
                 p("‘이 Anthropic 키로는 쓸 수 없어요(권한 없음)’: HTTP 403이에요. 키의 워크스페이스와 역할을 확인해요."),
                 p("‘이 모델은 이 키로 쓸 수 없어요’(‘이 모델은 쓸 수 없어요’): 설정의 모델에서 claude-sonnet-5 같은 다른 모델을 골라요."),
+                p("‘Anthropic 요청 한도를 넘었어요’: 분당 한도에 닿았어요(HTTP 429). 잠시 뒤 다시 해요."),
                 p(
-                    "‘Anthropic 요청 한도를 넘었어요’: 분당 한도면 잠시 뒤 다시 해요(HTTP 429). " +
-                        "작은 글씨에 \"monthly API usage threshold\"가 보이면 등급의 월 상한이라 다음 달 1일 오전 9시까지 기다려요.",
+                    "‘이번 달 Anthropic 사용 상한(조직 등급의 월 상한)에 닿았어요’: 등급의 월 상한이에요. 다음 달 1일 오전 9시(한국 시간)까지 " +
+                        "풀리지 않아요. Limits의 \"Request rate limit increase\"로 올려 달라고 할 수 있어요.",
                 ),
                 p("‘Anthropic 서버가 붐벼요’: HTTP 500·529예요. 몇 분 뒤 다시 해요. ‘요청이 거절됐어요’는 다른 말로 물어요."),
             ),

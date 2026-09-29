@@ -72,7 +72,7 @@ internal fun PickerSearch(
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             AppTextField(
                 value = s.query, onValueChange = onQuery, modifier = Modifier.weight(1f), placeholder = PlaceSearchTexts.PLACEHOLDER,
-                imeAction = ImeAction.Search, onImeAction = { if (!busy) search() }, enabled = !s.saving,
+                imeAction = ImeAction.Search, onImeAction = { if (!busy) search() }, enabled = !s.saving, capitalizeWords = false,
             )
             Spacer(Modifier.width(8.dp))
             PrimaryButton(PlaceSearchTexts.SEARCH, enabled = !busy, onClick = search)

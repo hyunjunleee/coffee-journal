@@ -24,6 +24,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.reference.FlavorWheel
+import com.coffeejournal.domain.reference.FlavorWheelExtras
 import com.coffeejournal.ui.about.Credits
 import com.coffeejournal.ui.form.Collapsible
 import com.coffeejournal.ui.theme.AppType
@@ -32,11 +33,25 @@ import com.coffeejournal.ui.theme.Chip
 import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.Ink
 
-/** Web renderFlavorIndex: a ring of the 9 categories and every term as a toggle chip. */
+/** The wheel section's own texts for the app's unofficial notes ([FlavorWheelExtras]). */
+object FlavorWheelTexts {
+    /** Heading of the block of unofficial notes in each category card. */
+    const val EXTRAS_LABEL = "공식 휠 밖 · 자주 쓰는 노트"
+
+    /** What TalkBack reads for an unofficial note chip. */
+    fun unofficial(term: String): String = "$term, 비공식 노트"
+}
+
+/**
+ * Web renderFlavorIndex: a ring of the 9 categories and every term of the wheel as a toggle chip; after each category's
+ * groups, apart from them, the app's own unofficial notes of that category as grey chips ([FlavorWheelExtras]).
+ */
 @Composable
 internal fun FlavorWheelSection(open: Boolean, actualNotes: List<String>, onToggleOpen: () -> Unit, onToggleTerm: (String) -> Unit) {
     Collapsible(title = "🎨 SCA Coffee Taster's Flavor Wheel", open = open, onToggle = onToggleOpen) {
         HintText("Start at the center and move outward. Select a descriptor to add it to your tasting notes.")
+        // the grey notes are the app's, not the licensed wheel's (the attribution at the bottom covers the wheel only)
+        HintText(Credits.FLAVOR_WHEEL_EXTRAS_NOTE)
         Spacer(Modifier.height(10.dp))
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             WheelRing(Modifier.size(140.dp))
@@ -83,11 +98,31 @@ private fun CategoryCard(cat: FlavorWheel.Category, lowerActual: List<String>, o
             Spacer(Modifier.width(7.dp))
             Text(cat.name, style = AppType.cardTitle)
         }
+        // the inner tier's label is a descriptor too (a taster may stop at the center), unless a group already has it
+        FlavorWheel.innerTerm(cat)?.let { term ->
+            Chip(text = term, selected = term.lowercase() in lowerActual, onClick = { onToggleTerm(term) }, modifier = Modifier.padding(top = 6.dp))
+        }
         cat.groups.forEach { group ->
             Text(group.name, style = AppType.monoSmall, modifier = Modifier.padding(top = 6.dp, bottom = 4.dp))
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 group.terms.forEach { term ->
                     Chip(text = term, selected = term.lowercase() in lowerActual, onClick = { onToggleTerm(term) })
+                }
+            }
+        }
+        val extras = FlavorWheelExtras.terms(cat.name)
+        if (extras.isNotEmpty()) {
+            // not SCA/WCR content: a block of its own after the wheel's groups, grey chips that pick like the others
+            Text(FlavorWheelTexts.EXTRAS_LABEL, style = AppType.monoSmall.copy(color = Ink.textFaint), modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                extras.forEach { term ->
+                    Chip(
+                        text = term,
+                        selected = term.lowercase() in lowerActual,
+                        onClick = { onToggleTerm(term) },
+                        muted = true,
+                        modifier = Modifier.semantics { contentDescription = FlavorWheelTexts.unofficial(term) },
+                    )
                 }
             }
         }

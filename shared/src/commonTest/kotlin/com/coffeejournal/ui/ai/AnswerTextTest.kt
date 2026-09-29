@@ -76,6 +76,16 @@ class AnswerTextTest {
         assertEquals(emptyList(), NoteTerms.find("teacup, blackberries"))
     }
 
+    @Test fun terms_includeTheWheelsUnofficialNotes_andItsMiddleTier_notItsInnerLabels() {
+        // extras (FlavorWheelExtras) are candidates too; "Olive Oil" and "Green Pepper" win over "Olive" and "Pepper"
+        assertEquals(
+            listOf("Apricot", "Tartaric Acid", "Brown Sugar", "Olive Oil", "Green Pepper", "Pink Peppercorn"),
+            NoteTerms.find("\"apricot, tartaric acid, brown sugar\" 그리고 olive oil, green pepper, pink peppercorn"),
+        )
+        // the wheel's inner labels are no candidates: "other" and "sweet" are everyday words
+        assertEquals(emptyList(), NoteTerms.find("other notes, sweet finish"))
+    }
+
     @Test fun formNotes_mergedAfterTheOldOnes_withoutDuplicates() {
         assertEquals(listOf("자스민", "Bergamot", "꿀"), NoteHelperResult.merge(listOf("자스민", "Bergamot"), listOf("bergamot", " 꿀 ", "꿀", "")))
         assertEquals(listOf("a", "b"), NoteHelperResult.decode(NoteHelperResult.encode(listOf("a", "b"))))

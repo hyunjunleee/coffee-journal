@@ -1,6 +1,7 @@
 package com.coffeejournal.domain.rules
 
 import com.coffeejournal.domain.reference.CoffeeCountries
+import com.coffeejournal.domain.reference.OriginRegions
 
 object CountryLookup {
     /** Web lookupCountry: synonyms, then substring match on English key or Korean name, insertion order. */
@@ -25,10 +26,20 @@ object CountryLookup {
 data class RegionParts(val primary: String, val sub: String, val full: String)
 
 object RegionHierarchy {
-    /** Web normalizeRegionName: exact-match Korean synonyms only. */
+    /**
+     * Web normalizeRegionName (exact-match Korean synonyms), then any spelling of a region the bean form lists
+     * ([OriginRegions]: "짐마", "Jimma", "Sidama" …) as its one English name, so the map groups them together.
+     */
     fun normalize(raw: String?): String {
         val t = (raw ?: "").trim()
-        return CoffeeCountries.regionSynonyms[t] ?: t
+        return CoffeeCountries.regionSynonyms[t] ?: spellings[t.lowercase()] ?: t
+    }
+
+    /** Every spelling of a listed region (lower case) → its English name; the first country listing it wins. */
+    private val spellings: Map<String, String> by lazy {
+        val map = LinkedHashMap<String, String>()
+        OriginRegions.all.forEach { o -> o.regions.forEach { p -> (listOf(p.ko, p.en) + p.aliases).forEach { map.getOrPut(it.trim().lowercase()) { p.en } } } }
+        map
     }
 
     /** Web regionHierarchy: "Yirgacheffe, Gedeb, Worka" → primary Yirgacheffe, sub "Gedeb, Worka". */

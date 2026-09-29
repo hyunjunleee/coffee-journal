@@ -608,7 +608,7 @@ class MoreFlowTest : FlowTestBase() {
         waitForText("새 기록")
         typeInto(namePlaceholder, "자동채움 테스트 원두")
         typeInto("예: 커피정경", "자동채움 로스터리")
-        typeInto("브라질", "르완다")
+        typeInto("에티오피아", "르완다")
         typeInto("20", "15")
         clickText("저장")
         waitUntil("first detail") { onDetailOf("자동채움 테스트 원두") }
@@ -669,7 +669,7 @@ class MoreFlowTest : FlowTestBase() {
         clickText("+ 새 기록 추가")
         waitForText("새 기록")
         typeInto(namePlaceholder, "형제 덮어쓰기 테스트")
-        typeInto("예: Heirloom(74110), Mundo Novo", "Bourbon")
+        typeInto("예: Heirloom, Mundo Novo", "Bourbon")
         typeInto("노트 추가 후 Enter (예: 오렌지)", "오렌지")
         typeInto("20", "15")
         clickText("저장")

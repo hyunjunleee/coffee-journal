@@ -18,16 +18,20 @@ import com.coffeejournal.domain.reference.RoastLevels
 import com.coffeejournal.domain.reference.ScaForm
 import com.coffeejournal.domain.rules.Prices
 import com.coffeejournal.domain.rules.ScaScoring
+import com.coffeejournal.ui.form.AltitudeField
 import com.coffeejournal.ui.form.AutocompleteField
 import com.coffeejournal.ui.form.Collapsible
 import com.coffeejournal.ui.form.CuppingBeanForm
 import com.coffeejournal.ui.form.FormMapper
 import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
+import com.coffeejournal.ui.form.OriginOptions
+import com.coffeejournal.ui.form.PresetField
 import com.coffeejournal.ui.form.RemoveButton
 import com.coffeejournal.ui.form.ScoreForm
 import com.coffeejournal.ui.form.SliderRow
 import com.coffeejournal.ui.form.TwoUp
+import com.coffeejournal.ui.form.VarietyFields
 import com.coffeejournal.ui.theme.InputFilters
 import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.ChipInput
@@ -77,18 +81,22 @@ internal fun CuppingBeanCard(
 @Composable
 private fun CuppingBeanGrid(bean: CuppingBeanForm, suggestions: FormSuggestions, onChange: (CuppingBeanForm) -> Unit) {
     TwoUp(
-        { m -> FormTextField(bean.country, { onChange(bean.copy(country = it)) }, m, placeholder = "국가") },
-        { m -> AutocompleteField(bean.region, { onChange(bean.copy(region = it)) }, regionOptions(bean.country), m, placeholder = "지역") },
+        { m -> PresetField(bean.country, { onChange(bean.copy(country = it)) }, OriginOptions.countries, m, placeholder = "국가") },
+        { m -> PresetField(bean.region, { onChange(bean.copy(region = it)) }, OriginOptions.regions(bean.country), m, placeholder = "지역") },
+    )
+    PresetField(
+        bean.subRegion, { onChange(bean.copy(subRegion = it)) }, OriginOptions.subRegions(bean.country, bean.region),
+        Modifier.fillMaxWidth().padding(bottom = 10.dp), placeholder = "세부 지역 (예: 벤사 › 코코세)",
     )
     TwoUp(
         { m -> AutocompleteField(bean.roastery, { onChange(bean.copy(roastery = it)) }, suggestions.roasteries, m, placeholder = "로스터리 (선택)") },
         { m -> AutocompleteField(bean.farmProducer, { onChange(bean.copy(farmProducer = it)) }, suggestions.farms, m, placeholder = "농장(생산자)") },
     )
     // web .cupping-bean-card-grid: altitude alone, variety across the whole row (grid-column: 1 / -1)
-    TwoUp({ m -> FormTextField(bean.altitude, { onChange(bean.copy(altitude = it)) }, m, placeholder = "재배 고도") })
-    FormTextField(
-        bean.variety, { onChange(bean.copy(variety = it)) }, Modifier.fillMaxWidth().padding(bottom = 10.dp),
-        placeholder = "품종 (예: Heirloom(74110))",
+    TwoUp({ m -> AltitudeField(bean.altitude, { onChange(bean.copy(altitude = it)) }, m, placeholder = "재배 고도") })
+    VarietyFields(
+        bean.variety, bean.heirloomNumbers, { onChange(bean.copy(variety = it)) }, { onChange(bean.copy(heirloomNumbers = it)) },
+        Modifier.fillMaxWidth().padding(bottom = 10.dp), placeholder = "품종 (예: Heirloom, Mundo Novo)",
     )
     TwoUp(
         { m ->

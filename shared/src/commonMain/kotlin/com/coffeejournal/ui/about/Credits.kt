@@ -17,6 +17,8 @@ data class Credit(
 object Credits {
     const val WEB_TEMPLATE_URL = "https://coffee-journal-empty-template.divine-pear-1472.chatgpt.site/"
     const val FLAVOR_WHEEL_ATTRIBUTION = "Coffee Taster's Flavor Wheel © 2016 SCA · WCR, CC BY-NC-ND 4.0"
+    /** Under the wheel: the grey notes (FlavorWheelExtras) are the app's own, not part of the licensed wheel. */
+    const val FLAVOR_WHEEL_EXTRAS_NOTE = "점선 테두리의 회색 노트(비공식)는 SCA·WCR 플레이버 휠에 없는 노트로, 앱이 따로 덧붙였어요."
     const val AI_HELPER_TITLE = "AI 노트 도우미 · Gemini · Tavily · OpenAI · Anthropic"
     const val PLACE_SEARCH_TITLE = "위치 지정 검색 · 기기 지도 서비스 · OpenStreetMap · 카카오 로컬"
 
@@ -31,9 +33,12 @@ object Credits {
             "Coffee Taster's Flavor Wheel",
             "The Coffee Taster's Flavor Wheel by SCA and WCR (©2016) is licensed under a Creative Commons " +
                 "Attribution-NonCommercial-NoDerivatives 4.0 International License.\n" +
-                "앱은 휠의 향미 용어와 분류를 쓰고, 휠을 앱 화면에 맞게 다시 그려 보여줘요. 비상업적 개인 기록용으로만 쓰고 있어요.",
+                "앱은 휠의 향미 용어와 분류를 쓰고, 휠을 앱 화면에 맞게 다시 그려 보여줘요. 비상업적 개인 기록용으로만 쓰고 있어요.\n" +
+                "휠 아래 각 계열의 점선 테두리 회색 노트(Apricot, Tartaric Acid 같은 '공식 휠 밖 · 자주 쓰는 노트')는 SCA·WCR 휠의 일부가 아니라 " +
+                "앱이 Counter Culture Coffee의 Taster's Flavor Wheel(2013)과 로스터리들이 흔히 쓰는 노트에서 골라 따로 덧붙인 것이에요.",
             links = listOf(
                 "SCA 플레이버 휠" to "https://sca.coffee/store/p/the-coffee-tasters-flavor-wheel-poster-english-dkx89",
+                "Counter Culture 휠 (비공식 노트)" to "https://counterculturecoffee.com/blogs/counter-culture-coffee/flavor-wheel",
                 "CC BY-NC-ND 4.0" to "https://creativecommons.org/licenses/by-nc-nd/4.0/",
             ),
         ),
