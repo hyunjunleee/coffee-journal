@@ -3,6 +3,7 @@ package com.coffeejournal.ui.bean.b
 import androidx.compose.ui.geometry.Offset
 import com.coffeejournal.domain.reference.CoffeeCountries
 import com.coffeejournal.domain.reference.OriginRegions
+import com.coffeejournal.ui.map.WorldProjection
 import kotlin.math.hypot
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -45,12 +46,16 @@ class WorldRegionsTest {
         assertEquals(ethiopia.regions, WorldRegions.of(ethiopia).take(ethiopia.regions.size))
     }
 
-    @Test fun anAddedDot_liesInItsCountry() {
-        // the simplified coastlines leave coastal and island regions a little off the land
-        val off = WorldRegions.dots.filterNot { it.web }.mapNotNull { d ->
-            val poly = polygons.firstOrNull { it.name == d.country.en } ?: return@mapNotNull "${d.country.en} has no outline"
-            val p = Offset(d.region.x, d.region.y)
-            if (poly.contains(p)) null else distanceToBorder(poly, p).takeIf { it > 3f }?.let { "${d.country.en} · ${d.region.name} ${it}u off" }
+    @Test fun everyRegion_liesInItsCountry() {
+        // Every listed region's point, not only the dots it adds: inside its country's outline, or within 1.5° of it,
+        // since the map's simplified coastlines leave coastal and island regions a little off the land. However far
+        // apart a country's regions are (Rondônia and Minas Gerais, Papua and Sumatra), a swapped or mistyped
+        // coordinate lands in another country or the sea.
+        val off = OriginRegions.all.flatMap { o -> o.regions.map { o.countryEn to it } }.mapNotNull { (country, r) ->
+            val poly = polygons.firstOrNull { it.name == country } ?: return@mapNotNull "$country has no outline"
+            val v = WorldProjection.toView(r.lat!!, r.lng!!)
+            val p = Offset(v.x.toFloat(), v.y.toFloat())
+            if (poly.contains(p)) null else distanceToBorder(poly, p).takeIf { it > 4f }?.let { "$country · ${r.en} (${r.lat}, ${r.lng}) ${it}u off" }
         }
         assertTrue(off.isEmpty(), off.joinToString("\n"))
     }
