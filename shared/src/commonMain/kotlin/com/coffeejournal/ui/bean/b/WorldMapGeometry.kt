@@ -2,8 +2,10 @@ package com.coffeejournal.ui.bean.b
 
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.Size
 import com.coffeejournal.domain.reference.CoffeeCountries
 import com.coffeejournal.domain.reference.WorldMapData
+import com.coffeejournal.ui.map.WorldMapInsets
 
 /** One country outline in viewBox units; a country may consist of several rings (islands). */
 class MapPolygon(val name: String, val rings: List<List<Offset>>) {
@@ -75,6 +77,9 @@ object WorldMapGeometry {
     fun parseAll(paths: List<WorldMapData.CountryPath> = WorldMapData.paths): List<MapPolygon> =
         paths.map { MapPolygon(it.name, parsePath(it.d)) }
 
+    /** The coffee map's outlines: the web's countries and the Hawaii inset ([WorldMapInsets]). */
+    fun parseCoffeeMap(): List<MapPolygon> = parseAll(WorldMapData.paths + WorldMapInsets.paths)
+
     /** Even-odd ray casting against one ring. */
     fun ringContains(ring: List<Offset>, x: Float, y: Float): Boolean {
         var inside = false
@@ -128,6 +133,43 @@ object WorldMapGeometry {
             if (d2 <= bestDist && accept(d.country, d.region)) { bestDist = d2; best = RegionHit(d.country, d.region) }
         }
         return best
+    }
+
+    /** A region's name written next to its dot: [text] and its box, in canvas px. */
+    data class DotLabel(val text: String, val topLeft: Offset, val size: Size)
+
+    /**
+     * Where the names of [dots] (canvas centre and name, in priority order) are written: right of the dot, else left,
+     * above or below it, each only inside the [canvas], clear of the names already placed, of every other dot and of
+     * the map's own writing ([obstacles]: the tropics' and the inset's names); a name with no room is left out at this
+     * zoom. [gap] is the space between a dot and its name.
+     */
+    fun placeLabels(
+        dots: List<Pair<Offset, String>>,
+        measure: (String) -> Size,
+        dotRadius: Float,
+        gap: Float,
+        canvas: Size,
+        obstacles: List<Rect> = emptyList(),
+    ): List<DotLabel> {
+        val placed = ArrayList<DotLabel>()
+        fun Rect.clearOf(c: Offset) = right < c.x - dotRadius || left > c.x + dotRadius || bottom < c.y - dotRadius || top > c.y + dotRadius
+        dots.forEach { (c, text) ->
+            val size = measure(text)
+            val y = c.y - size.height / 2f
+            val x = c.x - size.width / 2f
+            listOf(
+                Offset(c.x + dotRadius + gap, y), Offset(c.x - dotRadius - gap - size.width, y),
+                Offset(x, c.y - dotRadius - gap - size.height), Offset(x, c.y + dotRadius + gap),
+            ).firstNotNullOfOrNull { topLeft ->
+                val box = Rect(topLeft, size)
+                val fits = box.left >= 0f && box.top >= 0f && box.right <= canvas.width && box.bottom <= canvas.height &&
+                    placed.none { Rect(it.topLeft, it.size).overlaps(box) } && obstacles.none { it.overlaps(box) } &&
+                    dots.all { (o, _) -> o == c || box.clearOf(o) }
+                if (fits) DotLabel(text, topLeft, size) else null
+            }?.let { placed += it }
+        }
+        return placed
     }
 
     /** Scale that fits the whole viewBox into a canvas ("contain"). */

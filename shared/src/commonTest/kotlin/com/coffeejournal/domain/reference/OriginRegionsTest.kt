@@ -1,6 +1,5 @@
 package com.coffeejournal.domain.reference
 
-import kotlin.math.abs
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -111,17 +110,14 @@ class OriginRegionsTest {
         }
     }
 
-    @Test fun regionPoints_lieWithin12DegreesOfTheirCountrysOtherRegions() {
-        // sanity check against swapped or mistyped lat/lng: every region of a country with several regions has another
-        // region of that country within 12 degrees of latitude and 12 degrees of longitude (countries such as Indonesia
-        // and India are wider than 12 degrees, so the check is against the nearest other region, not all of them)
-        OriginRegions.all.filter { it.regions.size > 1 }.forEach { origin ->
-            origin.regions.forEach { r ->
-                val near = origin.regions.any { o ->
-                    o !== r && abs(o.lat!! - r.lat!!) <= 12.0 && abs(o.lng!! - r.lng!!) <= 12.0
-                }
-                assertTrue(near, "${origin.countryEn} / ${r.en} (${r.lat}, ${r.lng}) is more than 12° from every other region")
-            }
+    @Test fun koIsKorean_enIsNot_andAliasesAddSomething() {
+        allPlaces().forEach { (p, _) ->
+            assertTrue(p.ko.any { it in '\uAC00'..'\uD7A3' }, "ko of ${p.en} is not Korean: ${p.ko}")
+            assertTrue(p.en.none { it in '\uAC00'..'\uD7A3' }, "en of ${p.ko} is Korean: ${p.en}")
+            assertTrue(p.aliases.none { it == p.ko || it == p.en }, "${p.en} repeats its name as an alias: ${p.aliases}")
+            assertEquals(p.aliases.size, p.aliases.toSet().size, "${p.en} lists an alias twice: ${p.aliases}")
         }
     }
+
+    // Where each region's point lies (in its own country, on the world map's outline) is checked in WorldRegionsTest.
 }

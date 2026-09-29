@@ -22,6 +22,7 @@ import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
+import androidx.compose.ui.test.swipe
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
@@ -50,6 +51,7 @@ import com.coffeejournal.ui.form.timer.BrewTimerResult
 import com.coffeejournal.ui.guide.GuideTexts
 import com.coffeejournal.ui.guide.KeyHowTos
 import com.coffeejournal.ui.map.MapPickTarget
+import com.coffeejournal.ui.map.WorldMapInsets
 import com.coffeejournal.ui.map.WorldProjection
 import com.coffeejournal.ui.map.detail.DetailMapCamera
 import com.coffeejournal.ui.map.search.LocateResult
@@ -167,6 +169,22 @@ class RouteScreenshotTest {
             map.performTouchInput { pinch(c - Offset(100f, 0f), c - Offset(250f, 0f), c + Offset(100f, 0f), c + Offset(250f, 0f), durationMillis = 500) }
             settle()
         }
+        compose.onNode(hasText("전체 보기") and hasClickAction()).assertIsDisplayed()
+    }
+    /** Pinched in on the Hawaii inset (the web's map ends at 128°W) and panned to it: Kona and the other islands' regions. */
+    @Test fun bean_mapHawaii() = show(Route.Bean, "90-bean-map-hawaii.png") {
+        val map = compose.onNode(hasContentDescription("커피 지도.", substring = true))
+        val n = map.fetchSemanticsNode()
+        val size = Size(n.size.width.toFloat(), n.size.height.toFloat())
+        val m = WorldMapGeometry.fitScale(size.width, size.height)
+        val c = WorldMapGeometry.toCanvas(WorldMapInsets.frame.center, m, Offset(size.width / 2f, size.height / 2f))
+        // the inset is at the map's left edge: pinch with the fingers above and below it
+        repeat(3) {
+            map.performTouchInput { pinch(c - Offset(0f, 50f), c - Offset(0f, 120f), c + Offset(0f, 50f), c + Offset(0f, 120f), durationMillis = 500) }
+            settle()
+        }
+        map.performTouchInput { swipe(Offset(size.width * 0.3f, size.height * 0.5f), Offset(size.width * 0.75f, size.height * 0.5f), durationMillis = 600) }
+        settle()
         compose.onNode(hasText("전체 보기") and hasClickAction()).assertIsDisplayed()
     }
     @Test fun bean_roastery() = show(Route.Bean, "38-bean-roastery.png") { beanView("로스터리", "한국 로스터리 지도") }

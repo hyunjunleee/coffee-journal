@@ -2,13 +2,14 @@ package com.coffeejournal.ui.bean.b
 
 import com.coffeejournal.domain.reference.CoffeeCountries
 import com.coffeejournal.domain.reference.OriginRegions
-import com.coffeejournal.ui.map.WorldProjection
+import com.coffeejournal.ui.map.WorldMapInsets
 
 /**
  * The region dots of the world map: the web's own (CoffeeCountries, placed by hand) and every other representative
  * region the bean form lists (the 예가체프 · 시다모 level of [OriginRegions], not the places inside them), placed from
- * its centre point with the map's projection. A listed region that is one of the web's dots (by its English name or
- * another spelling) keeps the web's dot. Dots are named in English, as the web's are and as the map groups records.
+ * its centre point with the map's projection (Hawaii's in its inset, [WorldMapInsets]). A listed region that is one of
+ * the web's dots (by its English name or another spelling) keeps the web's dot. Dots are named in English, as the web's
+ * are and as the map groups records; zoomed in, the map writes their Korean names ([label]).
  */
 object WorldRegions {
     /** From this zoom on (1 = the fitted map) the added dots are drawn as well as the web's. */
@@ -24,11 +25,25 @@ object WorldRegions {
                 .filter { p -> p.lat != null && p.lng != null && (listOf(p.en) + p.aliases).none { it.lowercase() in taken } }
                 .distinctBy { it.en.lowercase() }
                 .map { p ->
-                    val v = WorldProjection.toView(p.lat!!, p.lng!!)
+                    val v = WorldMapInsets.toView(p.lat!!, p.lng!!)
                     CoffeeCountries.Region(p.en, v.x.toFloat(), v.y.toFloat())
                 }
         }
     }
+
+    /** From this zoom on the map writes each dot's name next to it, where there is room. */
+    const val LABEL_SCALE = 3f
+
+    private val koreanNames: Map<String, String> by lazy {
+        buildMap {
+            OriginRegions.all.forEach { o ->
+                o.regions.forEach { p -> (listOf(p.en) + p.aliases).forEach { getOrPut("${o.countryEn}|${it.lowercase()}") { p.ko } } }
+            }
+        }
+    }
+
+    /** The name written next to [d]: the region's Korean name as the bean form lists it, else its English name. */
+    fun label(d: Dot): String = koreanNames["${d.country.en}|${d.region.name.lowercase()}"] ?: d.region.name
 
     /** [c]'s regions, the web's first: what the country's panel lists. */
     fun of(c: CoffeeCountries.Country): List<CoffeeCountries.Region> = c.regions + added[c.en].orEmpty()
