@@ -1,5 +1,10 @@
 package com.coffeejournal.android
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.SemanticsActions
@@ -23,6 +28,7 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.pinch
 import androidx.compose.ui.test.swipe
+import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
@@ -45,7 +51,9 @@ import com.coffeejournal.ui.ai.AiErrors
 import com.coffeejournal.ui.ai.AiKeySlot
 import com.coffeejournal.ui.ai.AiProvider
 import com.coffeejournal.ui.ai.AiTexts
+import com.coffeejournal.ui.bean.b.WorldMapCanvas
 import com.coffeejournal.ui.bean.b.WorldMapGeometry
+import com.coffeejournal.ui.bean.b.WorldMapState
 import com.coffeejournal.ui.form.timer.BrewClock
 import com.coffeejournal.ui.form.timer.BrewTimerResult
 import com.coffeejournal.ui.guide.GuideTexts
@@ -69,6 +77,7 @@ import com.coffeejournal.ui.theme.BodyFont
 import com.coffeejournal.ui.theme.CoffeeJournalTheme
 import com.coffeejournal.ui.theme.Display
 import com.coffeejournal.ui.theme.DisplaySettings
+import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.NumberFont
 import com.coffeejournal.ui.theme.TextSize
 import com.github.takahirom.roborazzi.captureRoboImage
@@ -186,6 +195,26 @@ class RouteScreenshotTest {
         map.performTouchInput { swipe(Offset(size.width * 0.3f, size.height * 0.5f), Offset(size.width * 0.75f, size.height * 0.5f), durationMillis = 600) }
         settle()
         compose.onNode(hasText("전체 보기") and hasClickAction()).assertIsDisplayed()
+    }
+    /**
+     * The coffee map at its deepest zoom over Rwanda and Burundi (set directly: pinches drift): every region has its
+     * dot, and one too close to another sits beside its place with a line to it.
+     */
+    @Test fun bean_mapDeepest() {
+        val density = 2.625f // 420dpi
+        val w = 380f * density
+        val m = WorldMapGeometry.fitScale(w, w / 1.6f) * WorldMapGeometry.MAX_SCALE
+        val at = WorldProjection.toView(-2.4, 29.7).let { Offset(it.x.toFloat(), it.y.toFloat()) }
+        val state = WorldMapState(scale = WorldMapGeometry.MAX_SCALE, pan = (WorldMapGeometry.viewCenter - at) * m)
+        compose.setContent {
+            CoffeeJournalTheme {
+                Box(Modifier.background(Ink.bg).padding(16.dp)) {
+                    WorldMapCanvas(state = state, visited = setOf("Rwanda"), triedRegions = setOf("Rwanda|huye"), onCountryTap = {}, onRegionTap = {}, modifier = Modifier.width(380.dp))
+                }
+            }
+        }
+        settle()
+        compose.onNode(hasContentDescription("커피 지도.", substring = true)).captureRoboImage("screenshots/91-bean-map-deepest.png")
     }
     @Test fun bean_roastery() = show(Route.Bean, "38-bean-roastery.png") { beanView("로스터리", "한국 로스터리 지도") }
     /** Roasteries and a café with positions (and one found by its 지역 text), for the map screenshots. */
