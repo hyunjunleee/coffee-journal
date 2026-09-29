@@ -37,7 +37,7 @@ object WorldRegions {
     private val koreanNames: Map<String, String> by lazy {
         buildMap {
             OriginRegions.all.forEach { o ->
-                o.regions.forEach { p -> (listOf(p.en) + p.aliases).forEach { putIfAbsent("${o.countryEn}|${it.lowercase()}", p.ko) } }
+                o.regions.forEach { p -> (listOf(p.en) + p.aliases).forEach { getOrPut("${o.countryEn}|${it.lowercase()}") { p.ko } } }
             }
         }
     }
