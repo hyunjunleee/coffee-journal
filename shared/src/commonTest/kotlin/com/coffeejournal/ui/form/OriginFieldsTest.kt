@@ -142,6 +142,44 @@ class OriginFieldsTest {
         assertEquals("74112, 74158 ", VarietyText.typingNumbers("74112, 74158 번"))
     }
 
+    @Test fun heirloomNumbers_goWithTheirOwnHeirloom_andTheRestOfTheTextStaysAsTyped() {
+        // a Heirloom with its own parenthesis before the plain one: the numbers go after the plain one
+        assertEquals("Heirloom (에티오피아 재래종), Heirloom(74110)", VarietyText.join("Heirloom (에티오피아 재래종), Heirloom", "74110"))
+        val kurume = "Heirloom (Kurume), Heirloom(74110)"
+        assertEquals("Heirloom (Kurume), Heirloom" to "74110", VarietyText.split(kurume))
+        assertEquals(kurume, VarietyText.split(kurume).let { (v, n) -> VarietyText.join(v, n) })
+        // separators and spacing as typed
+        assertEquals("Typica / Bourbon" to "", VarietyText.split("Typica / Bourbon"))
+        assertEquals("Caturra & Castillo" to "", VarietyText.split("Caturra & Castillo"))
+        assertEquals("Mundo Novo / Heirloom" to "74158", VarietyText.split("Mundo Novo / Heirloom(74158)"))
+        assertEquals("Mundo Novo / Heirloom(74158)", VarietyText.join("Mundo Novo / Heirloom", "74158"))
+        // the numbers field is asked for only when there is a Heirloom they can go with
+        assertTrue(!VarietyText.hasHeirloom("Heirloom (Kurume)"))
+        assertTrue(VarietyText.hasHeirloom("Heirloom (Kurume), heirloom"))
+    }
+
+    @Test fun aRecordOpenedAndSavedForAnotherField_keepsItsOriginTextsAsTyped() {
+        val typed = listOf("Huila, Pitalito/Acevedo", "1,950 masl", "Typica / Bourbon")
+        val e = entryOf(FormMapper.newState(FormMode.EXTRACT, null, now).copy(name = "x")).copy(region = typed[0], altitude = typed[1], variety = typed[2])
+        val opened = FormMapper.fromEntry(e, FormMode.EXTRACT)
+        val saved = entryOf(opened.copy(roastery = "커피 리브레"))
+        assertEquals(typed, listOf(saved.region, saved.altitude, saved.variety))
+        // a field changed is written the form's way; the others stay as they were
+        val edited = entryOf(opened.copy(altitude = "2000"))
+        assertEquals(listOf(typed[0], "2000m", typed[2]), listOf(edited.region, edited.altitude, edited.variety))
+        // the same for a café blend's beans and a cupping's beans
+        val component = FormMapper.beanComponent(FormMapper.beanForm(com.coffeejournal.domain.model.BlendComponent(region = typed[0], altitude = typed[1], variety = typed[2])))
+        assertEquals(typed, listOf(component.region, component.altitude, component.variety))
+        val cupping = FormMapper.cuppingBeanModel(FormMapper.cuppingBeanForm(CuppingBean(name = "x", region = typed[0], altitude = typed[1], variety = typed[2])))
+        assertEquals(typed, listOf(cupping.region, cupping.altitude, cupping.variety))
+    }
+
+    @Test fun anOlderAltitudeInFreeText_isEditedAsText() {
+        assertTrue(Altitude.isNumeric("") && Altitude.isNumeric("1,950") && Altitude.isNumeric("1800-") && Altitude.isNumeric("1800 ~ 2000"))
+        assertTrue(!Altitude.isNumeric("5,000 ft") && !Altitude.isNumeric("약 2000m"))
+        assertEquals("5,000 f", Altitude.stored("5,000 f"), "a free text stays as typed, never gets an m")
+    }
+
     @Test fun theRecordForm_savesHeirloomNumbers_andOpensThemApart() {
         val s = FormMapper.newState(FormMode.EXTRACT, null, now).copy(name = "에티오피아 구지", variety = "Heirloom, Wolisho", heirloomNumbers = "74112, 74158")
         val e = entryOf(s)
@@ -172,9 +210,20 @@ class OriginFieldsTest {
         assertEquals("Heirloom(74112, 74158), Mundo Novo", EnglishCase.words("heirloom(74112, 74158), mundo novo"))
         assertEquals("SL28, 74158 Kurume", EnglishCase.words("SL28, 74158 kurume"), "digits and capitals stay")
         assertEquals("에티오피아 Sidama 벤사", EnglishCase.words("에티오피아 sidama 벤사"))
-        assertEquals("IPhone", EnglishCase.words("iPhone"), "the first letter of a word only")
+        assertEquals("iPhone", EnglishCase.words("iPhone"), "a word with a capital already stays")
         assertEquals("  Two  Spaces ", EnglishCase.words("  two  spaces "))
         assertEquals("", EnglishCase.words(""))
+    }
+
+    @Test fun englishWords_thatCapitalsWouldChange_stayAsTyped() {
+        assertEquals("Sul de Minas", EnglishCase.words("sul de minas"))
+        assertEquals("Valle del Cauca", EnglishCase.words("valle del cauca"))
+        assertEquals("Cup of Excellence", EnglishCase.words("cup of excellence"))
+        assertEquals("De La Esperanza", EnglishCase.words("de la esperanza"), "the first word always")
+        assertEquals("Comandante 24 clicks", EnglishCase.words("comandante 24 clicks"))
+        assertEquals("200 ml, pH 7.1", EnglishCase.words("200 ml, pH 7.1"))
+        assertEquals("youtube.com/@coffee", EnglishCase.words("youtube.com/@coffee"))
+        assertEquals("me@mail.kr Fritz", EnglishCase.words("me@mail.kr fritz"))
     }
 
     @Test fun notesTypedIntoTheBox_getTheirCapitals_whenAddedOrSaved() {

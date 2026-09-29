@@ -4,6 +4,7 @@ import androidx.compose.ui.geometry.Offset
 import com.coffeejournal.domain.reference.CoffeeCountries
 import com.coffeejournal.domain.reference.OriginRegions
 import com.coffeejournal.domain.rules.CountryLookup
+import com.coffeejournal.domain.rules.RegionHierarchy
 import androidx.compose.ui.geometry.Size
 import com.coffeejournal.ui.map.WorldMapInsets
 import com.coffeejournal.ui.map.WorldProjection
@@ -189,22 +190,35 @@ class WorldRegionsTest {
     }
 
     @Test fun aRecordsRegion_countsForItsDot_underEveryNameOfTheRegion() {
-        // the map marks a dot tasted by the record's region as RegionHierarchy.normalize names it, so every spelling of
-        // a listed region must come out as that region's dot name: the web's ("수마트라" → "Sumatra (Mandheling)") or
-        // the added dot's English name. A name two countries share goes to the first, so it is left out here.
-        val owners = OriginRegions.all.flatMap { o -> o.regions.flatMap { p -> (listOf(p.ko, p.en) + p.aliases).map { it.lowercase() to o.countryEn } } }
-            .groupBy({ it.first }, { it.second }).filterValues { it.toSet().size == 1 }.keys
+        // the map marks a dot tasted by the record's region as RegionHierarchy.normalize names it within the record's
+        // country, so every spelling of a listed region comes out as that region's dot name: the web's ("수마트라" →
+        // "Sumatra (Mandheling)") or the added dot's English name
         val wrong = OriginRegions.all.flatMap { o ->
             val c = CoffeeCountries.byEn.getValue(o.countryEn)
             val dotNames = WorldRegions.of(c).map { it.name }
             o.regions.flatMap { p ->
                 val names = listOf(p.ko, p.en) + p.aliases
                 val dot = dotNames.firstOrNull { d -> names.any { it.equals(d, ignoreCase = true) } }
-                names.filter { it.lowercase() in owners && dot != null && !com.coffeejournal.domain.rules.RegionHierarchy.normalize(it).equals(dot, ignoreCase = true) }
-                    .map { "${o.countryEn}: $it → ${com.coffeejournal.domain.rules.RegionHierarchy.normalize(it)}, dot $dot" }
+                names.filter { dot != null && CoffeeCountries.regionSynonyms[it] == null && !RegionHierarchy.normalize(it, o.countryEn).equals(dot, ignoreCase = true) }
+                    .map { "${o.countryEn}: $it → ${RegionHierarchy.normalize(it, o.countryEn)}, dot $dot" }
             }
         }
         assertTrue(wrong.isEmpty(), wrong.joinToString("\n"))
-        assertEquals("Sumatra (Mandheling)", com.coffeejournal.domain.rules.RegionHierarchy.normalize("수마트라"))
+        assertEquals("Sumatra (Mandheling)", RegionHierarchy.normalize("수마트라", "Indonesia"))
     }
+
+    @Test fun aRegionName_isLookedUpInTheRecordsCountryOnly() {
+        // Honduras lists "La Paz" as a spelling of one of its regions; a Bolivian "La Paz" is not that region
+        val honduras = OriginRegions.all.single { it.countryEn == "Honduras" }.regions.firstOrNull { p -> p.aliases.any { it == "La Paz" } || p.en == "La Paz" }
+        if (honduras != null) assertTrue(RegionHierarchy.normalize("La Paz", "Honduras") in WorldRegions.of(CoffeeCountries.byEn.getValue("Honduras")).map { it.name })
+        val bolivia = RegionHierarchy.normalize("La Paz", "Bolivia")
+        assertTrue(bolivia !in WorldRegions.of(CoffeeCountries.byEn.getValue("Honduras")).map { it.name }, bolivia)
+        // grouped on the map by the record's own country
+        val records = com.coffeejournal.domain.rules.BeanRecords.flatten(
+            listOf(com.coffeejournal.domain.model.Entry(id = "b", createdAt = 1, name = "볼리비아 x", country = "볼리비아", region = "La Paz, Caranavi")),
+        )
+        val stats = MapStats.compute(records)
+        assertTrue(stats.getValue("Bolivia").regions.values.none { it.label == "Marcala" }, "${stats.getValue("Bolivia").regions}")
+    }
+
 }

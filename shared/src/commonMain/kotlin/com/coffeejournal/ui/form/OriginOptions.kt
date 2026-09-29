@@ -31,7 +31,16 @@ data class Preset(val value: String, val note: String = "", val keys: List<Strin
 object OriginOptions {
     val countries: List<Preset> by lazy { CoffeeCountries.all.map { Preset(it.ko, it.en) } }
 
-    fun regions(country: String): List<Preset> {
+    /** Lists already built, by what they were asked for: a form asks again at every keystroke in the bean's fields. */
+    private val regionLists = HashMap<String, List<Preset>>()
+    private val subRegionLists = HashMap<Pair<String, String>, List<Preset>>()
+
+    fun regions(country: String): List<Preset> = regionLists.getOrPut(country.trim()) { buildRegions(country) }
+
+    fun subRegions(country: String, region: String): List<Preset> =
+        subRegionLists.getOrPut(country.trim() to region.trim()) { placeOf(country, region)?.let { paths(it.subs, prefixKo = "", prefixEn = "") } ?: emptyList() }
+
+    private fun buildRegions(country: String): List<Preset> {
         val origin = originOf(country)
         if (origin != null) return origin.regions.map { Preset(it.ko, it.en, it.aliases) }
         // a country without compiled regions keeps the map's regions; an unknown one offers all, each with its country
@@ -40,11 +49,6 @@ object OriginOptions {
             val ko = CoffeeCountries.byEn[o.countryEn]?.ko ?: o.countryEn
             o.regions.map { Preset(it.ko, "${it.en} · $ko", it.aliases) }
         }
-    }
-
-    fun subRegions(country: String, region: String): List<Preset> {
-        val place = placeOf(country, region) ?: return emptyList()
-        return paths(place.subs, prefixKo = "", prefixEn = "")
     }
 
     /** The compiled region [region] names (its Korean or English name or another spelling), in [country] when known. */

@@ -454,6 +454,25 @@ fun TextFieldValue.shownWhen(focused: Boolean): TextFieldValue =
     if (focused || (selection == TextRange.Zero && composition == null)) this else TextFieldValue(annotatedString, TextRange.Zero)
 
 /** An [ImeSafeText] for a field whose text is owned by [value]. Use it with the TextFieldValue overload of a text field. */
+/**
+ * Starts each English word of a field with a capital ([EnglishCase]) when the field is left, if its text was changed
+ * while it had the focus: a field only passed through, or still holding what a record had, is left as it is. Give it
+ * the field's text as of that moment ([ImeSafeText.value], which has the last keystroke before the owner echoes it).
+ */
+class CapitalizeOnLeave {
+    private var atFocus: String? = null
+
+    fun focused(text: String) { atFocus = text }
+
+    /** The text to report as the field is left, or null when nothing changes. */
+    fun left(text: String): String? {
+        val before = atFocus ?: return null
+        atFocus = null
+        if (text == before) return null
+        return EnglishCase.words(text).takeIf { it != text }
+    }
+}
+
 @Composable
 fun rememberImeSafeText(value: String): ImeSafeText {
     val sync = remember { ImeSafeText(value) }
@@ -500,11 +519,14 @@ fun AppTextField(
     capitalizeWords: Boolean = keyboardType == KeyboardType.Text && singleLine,
 ) {
     val sync = rememberImeSafeText(value)
+    val leave = remember { CapitalizeOnLeave() }
     AppTextFieldValue(
         value = sync.value, onValueChange = { edited -> sync.onEdit(edited, inputFilter)?.let(onValueChange) }, modifier = modifier, label = label,
         placeholder = placeholder, singleLine = singleLine, keyboardType = keyboardType, imeAction = imeAction,
         onImeAction = onImeAction, minLines = minLines, enabled = enabled, trailing = trailing, capitalizeWords = capitalizeWords,
-        onBlur = { if (capitalizeWords) EnglishCase.words(value).takeIf { it != value }?.let(onValueChange) },
+        onFocusChange = { f ->
+            if (capitalizeWords) { if (f) leave.focused(sync.value.text) else leave.left(sync.value.text)?.let(onValueChange) }
+        },
     )
 }
 
@@ -523,8 +545,8 @@ private fun AppTextFieldValue(
     enabled: Boolean,
     trailing: (@Composable () -> Unit)?,
     capitalizeWords: Boolean = false,
-    /** Called when the field loses the focus it had. */
-    onBlur: (() -> Unit)? = null,
+    /** Called when the field takes the focus (true) and when it loses the focus it had (false). */
+    onFocusChange: ((Boolean) -> Unit)? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     Column(modifier) {
@@ -533,7 +555,8 @@ private fun AppTextFieldValue(
             value = value.shownWhen(focused),
             onValueChange = onValueChange,
             modifier = Modifier.fillMaxWidth().onFocusChanged {
-                if (focused && !it.isFocused) onBlur?.invoke()
+                if (it.isFocused && !focused) onFocusChange?.invoke(true)
+                if (focused && !it.isFocused) onFocusChange?.invoke(false)
                 focused = it.isFocused
             },
             // a wrapping placeholder would make a one-line field taller than its neighbours
@@ -589,8 +612,8 @@ fun ChipInput(
     val clear = { sync.onEdit(TextFieldValue(""))?.let(onInputChange) }
     val add = {
         addChipsFromInput(sync, chips)?.let { added ->
-            // English notes start each word with a capital, like the other fields ("jasmine" → "Jasmine")
-            onChipsChange(added.chips.map(EnglishCase::words).distinct())
+            // the notes typed start each English word with a capital (NoteCanon.addChips); those there already stay
+            onChipsChange(added.chips)
             if (added.clearNow) clear() else clearPending = true
         }
     }
