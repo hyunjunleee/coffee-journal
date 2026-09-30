@@ -63,8 +63,15 @@ import org.koin.core.parameter.parametersOf
 
 /** Route.RecordForm — the record input form in 원두 / 카페 / 커핑 mode, new or editing. */
 @Composable
-fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cuppingType: String?, results: SavedStateHandle? = null) {
-    val vm = koinViewModel<RecordFormViewModel> { parametersOf(FormArgs(mode, entryId, cuppingType)) }
+fun RecordFormScreen(
+    nav: NavHostController,
+    mode: String,
+    entryId: String?,
+    cuppingType: String?,
+    results: SavedStateHandle? = null,
+    againFrom: String? = null,
+) {
+    val vm = koinViewModel<RecordFormViewModel> { parametersOf(FormArgs(mode, entryId, cuppingType, againFrom)) }
     val state by vm.state.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val loaded by vm.loaded.collectAsStateWithLifecycle()
@@ -124,6 +131,9 @@ fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cup
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             if (loaded) {
                 restoredDraft?.let { DraftBanner(it, onStartOver = vm::startOver, onClose = vm::closeDraftNotice) }
+                if (state.againFrom.isNotEmpty()) {
+                    AgainBanner(AgainTexts.banner(state.againFrom, state.cafeRecipeUsed), onClose = { vm.update { it.copy(againFrom = "") } })
+                }
                 RecordFormBody(state, suggestions, vm, nav, nameFocus, blendFocus, cuppingFocus)
             }
             Spacer(Modifier.height(96.dp))
@@ -221,6 +231,19 @@ private fun DraftBanner(draft: RestoredDraft, onStartOver: () -> Unit, onClose: 
             if (draft.droppedPhotos > 0) Text(RecordDraftTexts.PHOTOS_AGAIN, style = AppType.small, modifier = Modifier.padding(top = 2.dp))
         }
         TextLink(RecordDraftTexts.START_OVER, Ink.text, onStartOver)
+        TextLink("닫기", Ink.textMuted, onClose)
+    }
+}
+
+/** "같은 커피 다시 기록": where the form was filled from, closed with 닫기. */
+@Composable
+private fun AgainBanner(text: String, onClose: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 12.dp).background(Ink.surfaceRaised).padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+            .testTag("again-banner"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = AppType.small.copy(color = Ink.text), modifier = Modifier.weight(1f).padding(vertical = 6.dp))
         TextLink("닫기", Ink.textMuted, onClose)
     }
 }

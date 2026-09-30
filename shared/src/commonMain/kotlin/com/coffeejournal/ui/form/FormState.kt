@@ -12,7 +12,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 
 /** Arguments of the record form route, passed to the view model through Koin parameters. */
-data class FormArgs(val mode: String = FormMode.EXTRACT, val entryId: String? = null, val cuppingType: String? = null)
+/** [againFrom]: a café record whose coffee a new record is of ("같은 커피 다시 기록", [FormMapper.again]). */
+data class FormArgs(val mode: String = FormMode.EXTRACT, val entryId: String? = null, val cuppingType: String? = null, val againFrom: String? = null)
 
 /** Fields the form can scroll to / focus when validation fails. */
 enum class FormField { NAME, BLEND_ROWS, CUPPING_BEAN_NAME }
@@ -244,6 +245,8 @@ data class FormState(
     val repeatBean: Boolean = false,
     val openLauncher: RecipeLauncher? = null,
     val flavorWheelOpen: Boolean = false,
+    /** "2026.09.28 · FELT 청계천": the visit a "같은 커피 다시 기록" form was filled from, for its banner; empty otherwise. */
+    val againFrom: String = "",
     @Transient val error: FormError? = null,
     @Transient val saving: Boolean = false,
 ) {

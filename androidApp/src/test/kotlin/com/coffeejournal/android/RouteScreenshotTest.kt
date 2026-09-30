@@ -574,6 +574,11 @@ class RouteScreenshotTest {
 
     @Test fun keyGuide_gemini() = keyGuide(GuideTexts.open(AiKeySlot.GEMINI.label), "88-key-guide-gemini.png")
 
+    // v1.5.0: "+ 새 기록 추가" chooses among every kind of record; a café record can be recorded again
+    @Test fun newRecord() = show(Route.NewRecord, "92-new-record.png")
+    @Test fun recordForm_cafeAgain() = show(Route.RecordForm(mode = FormMode.CAFE, againFrom = "e4"), "93-form-cafe-again.png")
+    @Test fun entryDetail_cafe() = show(Route.EntryDetail("e4"), "94-detail-cafe.png")
+
     private fun keyGuide(link: String, file: String) {
         compose.setContent {
             CoffeeJournalTheme {

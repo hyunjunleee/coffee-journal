@@ -185,3 +185,13 @@ internal object EntryDisplay {
         return "${en.name.ifBlank { "레시피" }} (${d.month.number}/${d.day})"
     }
 }
+
+/** A café record's "같은 커피 다시 기록" (also read by the tests): a new café record filled from it ([FormMapper.again]). */
+object AgainTexts {
+    const val BUTTON = "같은 커피 다시 기록"
+    const val HINT = "카페·원두·가격을 그대로 불러와 오늘 날짜의 새 카페 기록을 열어요."
+
+    /** The banner of a form filled from the visit [from] ("2026.09.28 · FELT 청계천"). */
+    fun banner(from: String, withRecipe: Boolean): String =
+        "✓ $from 기록에서 카페·원두·${if (withRecipe) "가격·레시피를" else "가격을"} 불러왔어요. 오늘 마신 느낌과 점수만 적으면 돼요."
+}

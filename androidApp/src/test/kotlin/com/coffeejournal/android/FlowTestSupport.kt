@@ -29,6 +29,7 @@ import androidx.compose.ui.test.performTextReplacement
 import androidx.compose.ui.test.printToString
 import androidx.test.core.app.ApplicationProvider
 import com.coffeejournal.App
+import com.coffeejournal.ui.extract.NewRecordTexts
 import org.junit.After
 import org.junit.Before
 import org.junit.Rule
@@ -149,6 +150,13 @@ abstract class FlowTestBase {
     fun button(text: String): SemanticsMatcher = hasText(text) and hasClickAction()
 
     fun clickText(text: String, index: Int = 0) = clickNode(button(text), index)
+
+    /** Home's "+ 새 기록 추가", then [choice] in the chooser (NewRecordScreen): the brew form unless told otherwise. */
+    fun openNewRecord(choice: String = NewRecordTexts.BREW) {
+        clickText("+ 새 기록 추가")
+        waitForText(NewRecordTexts.COFFEE)
+        clickText(choice)
+    }
 
     fun dialogButton(text: String): SemanticsMatcher = hasText(text) and hasClickAction() and hasAnyAncestor(isDialog())
 

@@ -98,8 +98,8 @@ class RecordFormViewModel(
     private var opened: FormState? = savedState?.get<String>(OPENED_KEY)?.let(FormStateCodec::decode)
 
     // a new form waits for its draft check (so a restored draft does not replace what was typed meanwhile) or, after
-    // process death, for what it opened with when that was not kept
-    private val _loaded = MutableStateFlow(args.entryId == null && (drafts == null || (restored != null && opened != null)))
+    // process death, for what it opened with when that was not kept; "같은 커피 다시 기록" waits for the record it copies
+    private val _loaded = MutableStateFlow(args.entryId == null && args.againFrom == null && (drafts == null || (restored != null && opened != null)))
     val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
 
     private val draftKey = RecordDrafts.keyFor(args)
@@ -164,9 +164,14 @@ class RecordFormViewModel(
         val brews = entries.getAll().filter { it.isBrew }.sortedByDescending { it.createdAt }
         val lastGrind = brews.firstOrNull { it.grind.isNotBlank() }?.grind ?: ""
         val lastWater = brews.firstOrNull { it.waterType.isNotBlank() }?.waterType ?: ""
+        // "같은 커피 다시 기록": the café record copied (a plain new café form when it is gone)
+        val source = args.againFrom?.let { entries.getById(it) }
         val withDefaults = { s: FormState ->
-            if (s.mode == com.coffeejournal.ui.nav.FormMode.CAFE) s
-            else s.copy(grind = s.grind.ifBlank { lastGrind }, waterType = s.waterType.ifBlank { lastWater })
+            when {
+                source != null -> FormMapper.again(source, s.createdAt, s.draftId)
+                s.mode == com.coffeejournal.ui.nav.FormMode.CAFE -> s
+                else -> s.copy(grind = s.grind.ifBlank { lastGrind }, waterType = s.waterType.ifBlank { lastWater })
+            }
         }
         if (restored != null) {
             // after process death the saved state wins; one kept by an older version is measured against a new form

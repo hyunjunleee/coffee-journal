@@ -34,7 +34,7 @@ object RecordFormFeature : Feature {
     override fun NavGraphBuilder.routes(nav: NavHostController) {
         composable<Route.RecordForm> { backStackEntry ->
             val route = backStackEntry.toRoute<Route.RecordForm>()
-            RecordFormScreen(nav, route.mode, route.entryId, route.cuppingType, results = backStackEntry.savedStateHandle)
+            RecordFormScreen(nav, route.mode, route.entryId, route.cuppingType, results = backStackEntry.savedStateHandle, againFrom = route.againFrom)
         }
         composable<Route.EntryDetail> { backStackEntry ->
             EntryDetailScreen(nav, backStackEntry.toRoute<Route.EntryDetail>().entryId)

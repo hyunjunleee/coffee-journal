@@ -37,7 +37,7 @@ class FormFixesFlowTest : FlowTestBase() {
     private fun onDetailOf(name: String): Boolean = has(hasText(name)) && has(button("수정")) && has(button("삭제"))
 
     private fun openNewForm() {
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
     }
 

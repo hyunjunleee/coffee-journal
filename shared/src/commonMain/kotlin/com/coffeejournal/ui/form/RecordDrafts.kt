@@ -78,7 +78,9 @@ class RecordDrafts(private val settings: SettingsRepository, private val scope: 
         const val KEEP_DAYS = 30
 
         /** `device.draft.record.new.<mode>` for a new record, `device.draft.record.edit.<entry id>` for an edit. */
-        fun keyFor(args: FormArgs): String = args.entryId?.let { PREFIX + "edit." + it } ?: (PREFIX + "new." + args.mode)
+        fun keyFor(args: FormArgs): String = args.entryId?.let { PREFIX + "edit." + it }
+            ?: args.againFrom?.let { PREFIX + "again." + it }
+            ?: (PREFIX + "new." + args.mode)
 
         private val json = Json { ignoreUnknownKeys = true }
 
@@ -106,6 +108,7 @@ internal object FormDrafts {
         calc = CalcForm(),
         autofillBanner = false,
         repeatBean = false,
+        againFrom = "",
         openLauncher = null,
         flavorWheelOpen = false,
         error = null,

@@ -7,6 +7,7 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.coffeejournal.ui.extract.NewRecordTexts
 import com.coffeejournal.ui.nav.LaunchRequests
 import com.coffeejournal.ui.nav.LaunchTarget
 import com.coffeejournal.ui.notify.LaunchIntents
@@ -47,10 +48,11 @@ class LaunchTargetFlowTest : CoverageFlowBase() {
         back()
         waitForText("+ 새 기록 추가")
 
-        // the widget's "+ 새 기록" from another tab → the new-record form
+        // the widget's "+ 새 기록" from another tab → the new-record chooser, as the home tab's button opens it
         tab("tab-calendar")
         request(LaunchTarget.NEW_RECORD)
-        waitForText("새 기록")
+        waitForText(NewRecordTexts.BREW)
+        waitForText(NewRecordTexts.CAFE)
         back()
         waitForText("+ 새 기록 추가")
 
@@ -87,14 +89,14 @@ class LaunchIntentTest {
     }
 
     @Test
-    fun widgetNewRecord_coldStartsIntoTheRecordForm() {
+    fun widgetNewRecord_coldStartsIntoTheChooser() {
         val intent = LaunchIntents.open(context, LaunchTarget.NEW_RECORD)
         assertEquals("the launcher activity", MainActivity::class.java.name, intent.component?.className)
         ActivityScenario.launch<MainActivity>(intent).use { scenario ->
-            waitForText("새 기록")
-            waitForText("레시피로 시작", substring = true)
+            waitForText(NewRecordTexts.BREW)
+            waitForText(NewRecordTexts.CUPPING)
             scenario.onActivity { activity ->
-                // taken once: a recreated activity does not open another form
+                // taken once: a recreated activity does not open another chooser
                 assertNull(LaunchIntents.targetOf(activity.intent))
                 assertNull(GlobalContext.get().get<LaunchRequests>().pending.value)
             }

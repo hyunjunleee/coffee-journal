@@ -153,6 +153,29 @@ internal object FormMapper {
         return all.any { it.id != entry.id && !it.isCupping && it.createdAt < entry.createdAt && BeanNames.coreBeanName(it.name) == key }
     }
 
+    /**
+     * "같은 커피 다시 기록": a new café record of the coffee [entry] was — its café, the bean and what is known of it
+     * (a café blend's beans too), the price and, when the café told it, the recipe — dated [now], with nothing of that
+     * visit's tasting: notes, scores, memo and photos start empty. The bean shows as the repeat of a known one.
+     */
+    fun again(entry: Entry, now: Long, draftId: String = Ids.newId(now)): FormState {
+        val blank = newState(FormMode.CAFE, null, now, draftId = draftId)
+        return fromEntry(entry, FormMode.CAFE).copy(
+            editingId = null,
+            draftId = draftId,
+            category = Category.CAFE,
+            createdAt = now,
+            bagPhotos = blank.bagPhotos,
+            attributes = blank.attributes,
+            cva = blank.cva,
+            attributeNotes = blank.attributeNotes,
+            actualNotes = emptyList(),
+            notes = "",
+            repeatBean = true,
+            againFrom = listOf(Dates.ymdPadded(entry.createdAt), entry.cafeName.trim()).filter { it.isNotEmpty() }.joinToString(" · "),
+        )
+    }
+
     // ---------- saving ----------
 
     /** Text still sitting in a chip input box is committed before validation / saving (web save-entry). */

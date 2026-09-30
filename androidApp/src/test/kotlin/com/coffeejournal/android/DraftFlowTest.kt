@@ -103,7 +103,7 @@ class DraftFlowTest : FlowTestBase() {
     fun recordForm_backKeepsTheDraft_reopeningRestoresIt_savingClearsIt() {
         SampleData.seed()
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, "임시 저장 원두")
         typeInto("20", "16")
@@ -124,7 +124,7 @@ class DraftFlowTest : FlowTestBase() {
         assertTrue(runBlocking { koinGet<EntryRepository>().getAll() }.none { it.name == "임시 저장 원두" })
 
         // the next new record opens with it, and says so
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("✓ " + RecordDraftTexts.RESTORED)
         assertTrue(has(field("임시 저장 원두")))
         assertTrue(has(field("16")))
@@ -136,7 +136,7 @@ class DraftFlowTest : FlowTestBase() {
 
         // a new form after the save starts blank, and backing out of it does not ask
         back()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         waitFor(field(namePlaceholder))
         assertFalse(has(hasText("✓ " + RecordDraftTexts.RESTORED)))
@@ -150,7 +150,7 @@ class DraftFlowTest : FlowTestBase() {
     fun recordForm_systemBack_discardAndLeave_deletesTheDraft() {
         SampleData.seed()
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, "지울 원두")
         waitUntil("the draft is written") { stored(newKey) != null }
@@ -165,7 +165,7 @@ class DraftFlowTest : FlowTestBase() {
         settle()
         assertNull(stored(newKey))
 
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         waitFor(field(namePlaceholder))
         assertFalse(has(hasText("✓ " + RecordDraftTexts.RESTORED)))
@@ -523,7 +523,7 @@ class DraftFlowTest : FlowTestBase() {
     private fun leaveQuestionAndBanner(question: String, banner: String) {
         SampleData.seed()
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, "케냐 니에리 기통가 AA")
         back()
@@ -531,7 +531,7 @@ class DraftFlowTest : FlowTestBase() {
         captureScreenRoboImage(question)
         clickNode(dialogButton(RecordDraftTexts.LEAVE))
         waitForText("+ 새 기록 추가")
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("✓ " + RecordDraftTexts.RESTORED)
         settle()
         captureScreenRoboImage(banner)
