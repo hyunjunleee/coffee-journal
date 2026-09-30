@@ -133,7 +133,7 @@ class AccessibilityFlowTest : FlowTestBase() {
     @Test
     fun recordFormFlavorWheel_ringIsLabelled_descriptorsAreCheckboxes() {
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         val header = hasText("🎨 SCA Coffee Taster's Flavor Wheel") and hasClickAction()
         clickNode(header)

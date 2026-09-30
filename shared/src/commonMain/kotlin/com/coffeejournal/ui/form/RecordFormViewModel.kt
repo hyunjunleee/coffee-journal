@@ -85,6 +85,8 @@ class RecordFormViewModel(
     private val savedState: SavedStateHandle? = null,
     /** Keeps the typed form as a draft in the settings table while it is written. Null in plain unit tests. */
     private val drafts: RecordDrafts? = null,
+    /** Which parts of the form are folded, kept on this device. Null in plain unit tests (nothing folded). */
+    private val foldStore: FormFoldStore? = null,
 ) : ViewModel() {
     private val restored: FormState? = savedState?.get<String>(STATE_KEY)?.let(FormStateCodec::decode)
 
@@ -98,8 +100,8 @@ class RecordFormViewModel(
     private var opened: FormState? = savedState?.get<String>(OPENED_KEY)?.let(FormStateCodec::decode)
 
     // a new form waits for its draft check (so a restored draft does not replace what was typed meanwhile) or, after
-    // process death, for what it opened with when that was not kept
-    private val _loaded = MutableStateFlow(args.entryId == null && (drafts == null || (restored != null && opened != null)))
+    // process death, for what it opened with when that was not kept; "같은 커피 다시 기록" waits for the record it copies
+    private val _loaded = MutableStateFlow(args.entryId == null && args.againFrom == null && (drafts == null || (restored != null && opened != null)))
     val loaded: StateFlow<Boolean> = _loaded.asStateFlow()
 
     private val draftKey = RecordDrafts.keyFor(args)
@@ -110,6 +112,24 @@ class RecordFormViewModel(
     private val _restoredDraft = MutableStateFlow(savedState?.get<Int>(DRAFT_NOTICE_KEY)?.let(::RestoredDraft))
     /** The form opened with the draft left last time (the banner with 새로 쓰기); null otherwise or once closed. */
     val restoredDraft: StateFlow<RestoredDraft?> = _restoredDraft.asStateFlow()
+
+    private val _folds = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    /** Which parts of the form are folded, per kind of record ([FormFold]): read before the form shows. */
+    val folds: StateFlow<Map<String, Boolean>> = _folds.asStateFlow()
+
+    /** Folds or unfolds [part] for records of the kind being written, for this and the next forms. */
+    fun toggleFold(part: String) {
+        val category = _state.value.category
+        setFolds(_folds.value + (FormFold.key(category, part) to !FormFold.isFolded(_folds.value, category, part)))
+    }
+
+    /** 모두 접기 / 모두 펼치기: every part of this kind of record. */
+    fun foldAll(folded: Boolean) = setFolds(FormFold.all(_folds.value, _state.value.category, folded))
+
+    private fun setFolds(next: Map<String, Boolean>) {
+        _folds.value = next
+        foldStore?.save(next)
+    }
 
     /** The running save, so a second tap on 저장 while it is in flight does nothing. */
     private var saveJob: Job? = null
@@ -145,6 +165,7 @@ class RecordFormViewModel(
     }
 
     private suspend fun load() {
+        foldStore?.let { _folds.value = it.load() }
         val id = args.entryId
         if (id != null) {
             val en = entries.getById(id)
@@ -164,9 +185,14 @@ class RecordFormViewModel(
         val brews = entries.getAll().filter { it.isBrew }.sortedByDescending { it.createdAt }
         val lastGrind = brews.firstOrNull { it.grind.isNotBlank() }?.grind ?: ""
         val lastWater = brews.firstOrNull { it.waterType.isNotBlank() }?.waterType ?: ""
+        // "같은 커피 다시 기록": the café record copied (a plain new café form when it is gone)
+        val source = args.againFrom?.let { entries.getById(it) }
         val withDefaults = { s: FormState ->
-            if (s.mode == com.coffeejournal.ui.nav.FormMode.CAFE) s
-            else s.copy(grind = s.grind.ifBlank { lastGrind }, waterType = s.waterType.ifBlank { lastWater })
+            when {
+                source != null -> FormMapper.again(source, s.createdAt, s.draftId)
+                s.mode == com.coffeejournal.ui.nav.FormMode.CAFE -> s
+                else -> s.copy(grind = s.grind.ifBlank { lastGrind }, waterType = s.waterType.ifBlank { lastWater })
+            }
         }
         if (restored != null) {
             // after process death the saved state wins; one kept by an older version is measured against a new form

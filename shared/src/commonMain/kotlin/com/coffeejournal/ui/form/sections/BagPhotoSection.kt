@@ -24,7 +24,6 @@ import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.GhostButton
 import com.coffeejournal.ui.theme.Ink
-import com.coffeejournal.ui.theme.SectionLabel
 
 /** 원두 봉투 사진 2장 (web #bag-photo-section). */
 @Composable
@@ -34,7 +33,6 @@ internal fun BagPhotoSection(
     onPick: (Int, ByteArray) -> Unit,
     onRemove: (Int) -> Unit,
 ) {
-    SectionLabel("원두 봉투 사진", hint = "(선택, 최대 2장 — 첫 번째가 대표 사진)")
     slots.take(2).forEachIndexed { index, slot ->
         PhotoSlotRow(
             slot = slot,

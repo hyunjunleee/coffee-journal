@@ -63,8 +63,15 @@ import org.koin.core.parameter.parametersOf
 
 /** Route.RecordForm — the record input form in 원두 / 카페 / 커핑 mode, new or editing. */
 @Composable
-fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cuppingType: String?, results: SavedStateHandle? = null) {
-    val vm = koinViewModel<RecordFormViewModel> { parametersOf(FormArgs(mode, entryId, cuppingType)) }
+fun RecordFormScreen(
+    nav: NavHostController,
+    mode: String,
+    entryId: String?,
+    cuppingType: String?,
+    results: SavedStateHandle? = null,
+    againFrom: String? = null,
+) {
+    val vm = koinViewModel<RecordFormViewModel> { parametersOf(FormArgs(mode, entryId, cuppingType, againFrom)) }
     val state by vm.state.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val loaded by vm.loaded.collectAsStateWithLifecycle()
@@ -124,6 +131,9 @@ fun RecordFormScreen(nav: NavHostController, mode: String, entryId: String?, cup
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter)) {
             if (loaded) {
                 restoredDraft?.let { DraftBanner(it, onStartOver = vm::startOver, onClose = vm::closeDraftNotice) }
+                if (state.againFrom.isNotEmpty()) {
+                    AgainBanner(AgainTexts.banner(state.againFrom, state.category, state.isCafe && state.cafeRecipeUsed), onClose = { vm.update { it.copy(againFrom = "") } })
+                }
                 RecordFormBody(state, suggestions, vm, nav, nameFocus, blendFocus, cuppingFocus)
             }
             Spacer(Modifier.height(96.dp))
@@ -143,6 +153,9 @@ private fun RecordFormBody(
     cuppingFocus: FocusRequester,
 ) {
     val update: ((FormState) -> FormState) -> Unit = vm::update
+    val foldMap by vm.folds.collectAsStateWithLifecycle()
+    val folds = Folds({ FormFold.isFolded(foldMap, state.category, it) }, vm::toggleFold)
+    FoldAllRow(FormFold.parts(state.category).map(folds.isFolded), onFoldAll = vm::foldAll)
     if (state.isBrew) {
         RecipeLauncherSection(
             open = state.openLauncher,
@@ -157,7 +170,7 @@ private fun RecordFormBody(
     }
     BasicSection(state, update)
     if (state.isCupping) {
-        CuppingSection(state, suggestions, cuppingFocus, update)
+        CuppingSection(state, suggestions, cuppingFocus, update, folds)
         return
     }
     // a café record: the cafés there are (added by hand too) for 카페 이름, whose "위치 지정" saves the position at once
@@ -166,16 +179,35 @@ private fun RecordFormBody(
         state, suggestions, nameFocus, blendFocus, vm::onNameTyped, vm::onNameBlur, update, cafes = cafes,
         onPickCafePlace = dropUnlessResumed { nav.navigate(Route.MapPicker(target = MapPickTarget.CAFE, name = state.cafeName.trim())) },
     )
-    BeanInfoSection(state, suggestions, update)
+    FoldSection(
+        "원두 상세 정보", folds.isFolded(FormFold.ORIGIN), FormFold.originLine(state), { folds.toggle(FormFold.ORIGIN) }, tag = FormFold.ORIGIN,
+    ) { BeanInfoSection(state, suggestions, update) }
     // Web hideBagPhotoSection: a repeat brew of a known bean has no bag photos of its own (photos it already has stay).
     val bagPhotosHidden = state.repeatBean && state.bagPhotos.none { it.hasImage }
-    if (!state.isCafe && !bagPhotosHidden) BagPhotoSection(state.bagPhotos, vm::photoModel, vm::setPhoto, vm::removePhoto)
+    if (!state.isCafe && !bagPhotosHidden) {
+        FoldSection(
+            "원두 봉투 사진", folds.isFolded(FormFold.BAG_PHOTOS), FormFold.bagPhotosLine(state), { folds.toggle(FormFold.BAG_PHOTOS) },
+            hint = "(선택, 최대 2장 — 첫 번째가 대표 사진)", tag = FormFold.BAG_PHOTOS,
+        ) { BagPhotoSection(state.bagPhotos, vm::photoModel, vm::setPhoto, vm::removePhoto) }
+    }
     // a double tap opens one timer, not two
-    RecipeSection(state, suggestions, update, onOpenTimer = dropUnlessResumed { nav.navigate(vm.timerRoute()) })
+    RecipeSection(state, suggestions, update, onOpenTimer = dropUnlessResumed { nav.navigate(vm.timerRoute()) }, folds = folds)
     // the dialog closes on the first tap of 묻기, so one question opens one answer screen
     TastingSection(state, update, onAskAi = { query ->
         nav.navigate(Route.NoteHelper(mode = NoteMode.DESCRIBE.key, query = query, returnToForm = true))
-    })
+    }, folds = folds)
+}
+
+/** 모두 접기 · 모두 펼치기 over the form's folding parts ([folded] as they are now); each is shown while it would change something. */
+@Composable
+private fun FoldAllRow(folded: List<Boolean>, onFoldAll: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (folded.any { !it }) TextLink(FormFold.FOLD_ALL, Ink.textMuted, { onFoldAll(true) }, Modifier.testTag("fold-all"))
+        if (folded.any { it }) TextLink(FormFold.UNFOLD_ALL, Ink.textMuted, { onFoldAll(false) }, Modifier.testTag("unfold-all"))
+    }
 }
 
 /** Sticky bottom bar (web .form-actions). */
@@ -221,6 +253,19 @@ private fun DraftBanner(draft: RestoredDraft, onStartOver: () -> Unit, onClose: 
             if (draft.droppedPhotos > 0) Text(RecordDraftTexts.PHOTOS_AGAIN, style = AppType.small, modifier = Modifier.padding(top = 2.dp))
         }
         TextLink(RecordDraftTexts.START_OVER, Ink.text, onStartOver)
+        TextLink("닫기", Ink.textMuted, onClose)
+    }
+}
+
+/** "같은 커피 다시 기록": where the form was filled from, closed with 닫기. */
+@Composable
+private fun AgainBanner(text: String, onClose: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 12.dp).background(Ink.surfaceRaised).padding(start = 12.dp, top = 4.dp, bottom = 4.dp)
+            .testTag("again-banner"),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(text, style = AppType.small.copy(color = Ink.text), modifier = Modifier.weight(1f).padding(vertical = 6.dp))
         TextLink("닫기", Ink.textMuted, onClose)
     }
 }

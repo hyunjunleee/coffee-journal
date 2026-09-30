@@ -185,3 +185,28 @@ internal object EntryDisplay {
         return "${en.name.ifBlank { "레시피" }} (${d.month.number}/${d.day})"
     }
 }
+
+/**
+ * A record's "같은 커피 다시 기록" (also read by the tests): a new record of the same kind filled from it
+ * ([FormMapper.again]); a cupping's is "같은 원두로 다시 커핑".
+ */
+object AgainTexts {
+    const val BUTTON = "같은 커피 다시 기록"
+    const val CUPPING_BUTTON = "같은 원두로 다시 커핑"
+
+    fun button(category: String): String = if (category == Category.CUPPING) CUPPING_BUTTON else BUTTON
+
+    /** What comes along, as the button's hint and the banner say it. */
+    private fun what(category: String, withRecipe: Boolean): String = when (category) {
+        Category.CAFE -> if (withRecipe) "카페·원두·가격·레시피를" else "카페·원두·가격을"
+        Category.CUPPING -> "커핑 종류·장소·원두 정보를"
+        else -> "원두 정보·레시피를"
+    }
+
+    fun hint(category: String, withRecipe: Boolean): String =
+        "${what(category, withRecipe)} 그대로 불러와 오늘 날짜의 새 ${if (category == Category.CUPPING) "커핑" else "기록"}을 열어요."
+
+    /** The banner of a form filled from the record of [from] ("2026.09.28 · FELT 청계천"). */
+    fun banner(from: String, category: String, withRecipe: Boolean): String =
+        "✓ $from 기록에서 ${what(category, withRecipe)} 불러왔어요. 오늘 느낀 맛과 점수만 적으면 돼요."
+}

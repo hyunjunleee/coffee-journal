@@ -45,7 +45,7 @@ class FlowTest : FlowTestBase() {
 
     /** Home → "+ 새 기록 추가" → name + dose → 저장; ends on the new record's detail screen. */
     private fun createBrewFromHome(name: String = newBean, dose: String = "17") {
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, name)
         typeInto(dosePlaceholder, dose)
@@ -250,7 +250,7 @@ class FlowTest : FlowTestBase() {
         assertTrue(runBlocking { koinGet<MiscRepository>().getAll().any { it.type == MiscType.DRIPPER && it.name == dripper } })
 
         tab("tab-extract")
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         clickNode(field("칼리타 웨이브"))
         waitFor(button(dripper), "dripper suggestion")
@@ -319,7 +319,7 @@ class FlowTest : FlowTestBase() {
         launchApp()
         waitForText("0 entries")
         val bean = "에티오피아 시다마 벤사 테스트"
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, bean)
         typeInto("예: 커피정경", "테스트 로스터리")
@@ -391,7 +391,7 @@ class FlowTest : FlowTestBase() {
         createBrewFromHome(name = bean, dose = "15")
         back()
         waitForText("1 entries")
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, bean)
         typeInto("예: 커피정경", "형제 로스터리")

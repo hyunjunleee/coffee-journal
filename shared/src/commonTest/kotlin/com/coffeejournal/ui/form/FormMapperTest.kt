@@ -221,7 +221,6 @@ class FormMapperTest {
         assertEquals("워시드", s.cuppingBeans[0].process)
         assertEquals("더블", s.cuppingBeans[0].processSub)
         assertEquals("15,000", s.cuppingBeans[0].price)
-        assertTrue(s.cuppingBeans[0].evaluationOpen)
         assertEquals("기타", s.cuppingBeans[1].process)
         assertEquals("카보닉", s.cuppingBeans[1].processOther)
         val back = FormMapper.toEntry(s, en.id, en, emptyList(), now)

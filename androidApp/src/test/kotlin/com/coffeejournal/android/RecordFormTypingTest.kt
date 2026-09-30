@@ -58,7 +58,7 @@ class RecordFormTypingTest : FlowTestBase() {
     @Test
     fun hangulComposition_numberFilter_andComputedTime() {
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
 
         // a Hangul name, one jamo at a time, with a space committed between the words

@@ -486,6 +486,49 @@ internal fun Collapsible(title: String, open: Boolean, onToggle: () -> Unit, mod
     }
 }
 
+/**
+ * A part of the record form that folds ([FormFold]): its header — the section label and a chevron, one 48 dp button
+ * TalkBack reads with its state — folds and unfolds it; folded, a line of what it holds ([summary]) shows under it.
+ * [compact]: inside a card (a cupping bean), with a field label instead of the section label.
+ */
+@Composable
+internal fun FoldSection(
+    title: String,
+    folded: Boolean,
+    summary: String,
+    onToggle: () -> Unit,
+    modifier: Modifier = Modifier,
+    hint: String? = null,
+    compact: Boolean = false,
+    tag: String? = null,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Column(modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = MinTouch)
+                .clickable(onClickLabel = if (folded) "펼치기" else "접기", role = Role.Button, onClick = onToggle)
+                .semantics { stateDescription = if (folded) "접힘" else "펼쳐짐" }
+                .let { if (tag != null) it.testTag("fold-$tag") else it }
+                .padding(top = if (compact) 0.dp else 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+                Text(title, style = if (compact) AppType.fieldLabel else AppType.sectionLabel)
+                if (hint != null) Text(hint, style = AppType.faint, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(start = 6.dp))
+            }
+            Icon(if (folded) AppIcons.chevronRight else AppIcons.chevronDown, contentDescription = null, tint = Ink.textMuted, modifier = Modifier.size(16.dp))
+        }
+        if (folded) {
+            if (summary.isNotBlank()) {
+                Text(summary, style = AppType.small, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(bottom = 8.dp))
+            }
+        } else {
+            Spacer(Modifier.height(if (compact) 2.dp else 4.dp))
+            content()
+        }
+    }
+}
+
 /** Card of the recipe launcher panels (web .champ-card). */
 @Composable
 internal fun LauncherCard(

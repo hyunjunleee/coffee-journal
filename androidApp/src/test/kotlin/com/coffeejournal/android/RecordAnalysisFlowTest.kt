@@ -208,6 +208,9 @@ class RecordAnalysisFlowTest : CoverageFlowBase() {
         assertTrue(has(hasText("균형이 좋음")))
         tap(button("수정"))
         waitForText("기록 수정")
+        // the evaluation starts folded (FormFold.CUPPING_EVALUATION), saying its CVA score
+        waitForText("CVA 89.50")
+        tap(hasTestTag("fold-cuppingEvaluation"))
         waitFor(button("CVA"))
         assertTrue("the bean reopens on its CVA sheet", isSelected(button("CVA")))
         waitForText("SCA CVA · 묘사 + 정동 평가")

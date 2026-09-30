@@ -19,6 +19,7 @@ import com.coffeejournal.domain.rules.Altitude
 import com.coffeejournal.domain.rules.BeanNames
 import com.coffeejournal.domain.rules.BlendBeans
 import com.coffeejournal.domain.rules.CuppingTypes
+import com.coffeejournal.domain.rules.CvaAssessment
 import com.coffeejournal.domain.rules.CvaScoring
 import com.coffeejournal.domain.rules.Dates
 import com.coffeejournal.domain.rules.Ids
@@ -151,6 +152,48 @@ internal object FormMapper {
         val key = BeanNames.coreBeanName(entry.name)
         if (key.isBlank()) return false
         return all.any { it.id != entry.id && !it.isCupping && it.createdAt < entry.createdAt && BeanNames.coreBeanName(it.name) == key }
+    }
+
+    /**
+     * "같은 커피 다시 기록": a new record of the coffee [entry] was, of the same kind, dated [now] — the bean and what is
+     * known of it (a blend's beans too), the recipe of a brew, the café, its price and the recipe it told, a cupping's
+     * kind, place and beans with their info — with nothing of that time's tasting: notes, scores, ranks, memos and
+     * photos start empty (a photo file belongs to one record). A brew or café bean shows as the repeat of a known one.
+     */
+    fun again(entry: Entry, now: Long, draftId: String = Ids.newId(now)): FormState {
+        val mode = EntryDisplay.formModeFor(entry.category)
+        val blank = newState(mode, null, now, draftId = draftId)
+        val source = fromEntry(entry, mode)
+        return source.copy(
+            editingId = null,
+            draftId = draftId,
+            createdAt = now,
+            bagPhotos = blank.bagPhotos,
+            attributes = blank.attributes,
+            cva = blank.cva,
+            attributeNotes = blank.attributeNotes,
+            actualNotes = emptyList(),
+            notes = "",
+            cuppingNotes = "",
+            cuppingBeans = source.cuppingBeans.map { b ->
+                b.copy(
+                    id = "", actualNotes = emptyList(), evaluation = emptyMap(), evaluationScores = emptyMap(),
+                    cva = CvaAssessment(), rank = "", memo = "",
+                )
+            },
+            repeatBean = !entry.isCupping,
+            againFrom = againLabel(entry),
+        )
+    }
+
+    /** "2026.09.18 · FELT 청계천": the day of [entry] and where it was, for the banner of a form filled from it. */
+    fun againLabel(entry: Entry): String {
+        val place = when {
+            entry.isCafe -> entry.cafeName
+            entry.isCupping && CuppingTypes.effective(entry) != CuppingType.HOME -> entry.cuppingPlace
+            else -> ""
+        }
+        return listOf(Dates.ymdPadded(entry.createdAt), place.trim()).filter { it.isNotEmpty() }.joinToString(" · ")
     }
 
     // ---------- saving ----------
@@ -403,7 +446,6 @@ internal object FormMapper {
             actualNotes = NoteCanon.parseChips(b.actualNotes),
             evaluation = b.evaluation.filterKeys { !CvaScoring.isCvaKey(it) },
             evaluationScores = b.evaluationScores.filterKeys { !CvaScoring.isCvaKey(it) },
-            evaluationOpen = b.evaluation.isNotEmpty() || b.evaluationScores.isNotEmpty(),
             scoreForm = if (CvaScoring.present(b.evaluationScores, b.evaluation)) ScoreForm.CVA else ScoreForm.SCA2004,
             cva = CvaScoring.fromMaps(b.evaluationScores, b.evaluation),
             memo = b.memo,

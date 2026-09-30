@@ -10,6 +10,7 @@ import androidx.compose.ui.unit.dp
 import com.coffeejournal.domain.model.CuppingType
 import com.coffeejournal.ui.form.CuppingBeanForm
 import com.coffeejournal.ui.form.FieldBlock
+import com.coffeejournal.ui.form.Folds
 import com.coffeejournal.ui.form.FormField
 import com.coffeejournal.ui.form.FormState
 import com.coffeejournal.ui.form.FormSuggestions
@@ -25,6 +26,7 @@ internal fun CuppingSection(
     suggestions: FormSuggestions,
     firstBeanFocus: FocusRequester,
     update: ((FormState) -> FormState) -> Unit,
+    folds: Folds = Folds.NONE,
 ) {
     FieldBlock {
         FieldLabel("커핑 유형")
@@ -49,6 +51,7 @@ internal fun CuppingSection(
             suggestions = suggestions,
             nameFocus = if (index == 0) firstBeanFocus else null,
             error = if (index == 0 && state.error?.field == FormField.CUPPING_BEAN_NAME) state.error.message else null,
+            folds = folds,
             onChange = { change ->
                 update { s ->
                     val current = s.cuppingBeans.getOrNull(index) ?: return@update s

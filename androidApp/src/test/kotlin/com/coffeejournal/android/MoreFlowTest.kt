@@ -66,7 +66,7 @@ class MoreFlowTest : FlowTestBase() {
     private fun onDetailOf(name: String): Boolean = has(hasText(name)) && has(button("수정")) && has(button("삭제"))
 
     private fun createBrewFromHome(name: String = newBean, dose: String = "17") {
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, name)
         typeInto("20", dose)
@@ -152,7 +152,7 @@ class MoreFlowTest : FlowTestBase() {
     fun more04_saveWithoutName_showsErrorAndSavesNothing() {
         SampleData.seed()
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         clickText("저장")
         waitForText("원두 이름을 입력해 주세요.")
@@ -208,7 +208,7 @@ class MoreFlowTest : FlowTestBase() {
     fun more07_createMyRecipe_thenApplyItInANewRecord() {
         SampleData.seed()
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         clickText("⭐ 내 레시피")
         clickText("+ 새 레시피 만들기")
@@ -417,7 +417,7 @@ class MoreFlowTest : FlowTestBase() {
         launchApp()
         createBrewFromHome(name = "재료 에티오피아 구지", dose = "15")
         back()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         clickText("직접 블렌드")
         typeInto("원두 선택", "재료 에티오피아 구지")
@@ -581,7 +581,7 @@ class MoreFlowTest : FlowTestBase() {
     @Test
     fun more23_dripbagRecord_onlyUnderSmallPackFilter() {
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         clickText("드립백")
         typeInto(namePlaceholder, "드립백 테스트 원두")
@@ -604,7 +604,7 @@ class MoreFlowTest : FlowTestBase() {
     @Test
     fun more24_secondRecordOfSameBean_autofillsBagInfoOnNameBlur() {
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, "자동채움 테스트 원두")
         typeInto("예: 커피정경", "자동채움 로스터리")
@@ -614,7 +614,7 @@ class MoreFlowTest : FlowTestBase() {
         waitUntil("first detail") { onDetailOf("자동채움 테스트 원두") }
         back()
 
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, "자동채움 테스트 원두")
         typeInto("20", "16") // moving focus away from the name field triggers the autofill
@@ -657,7 +657,7 @@ class MoreFlowTest : FlowTestBase() {
         assertEquals(MiscType.SOURCE, item.type)
 
         tab("tab-extract")
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         clickNode(field("예: 커피정경"))
         waitFor(button("테스트 로스터스 성수"), "roastery suggestion in the record form")
@@ -666,7 +666,7 @@ class MoreFlowTest : FlowTestBase() {
     @Test
     fun more27_siblingValuesAreNeverOverwritten() {
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, "형제 덮어쓰기 테스트")
         typeInto("예: Heirloom, Mundo Novo", "Bourbon")
@@ -676,7 +676,7 @@ class MoreFlowTest : FlowTestBase() {
         waitUntil("first detail") { onDetailOf("형제 덮어쓰기 테스트") }
         back()
 
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, "형제 덮어쓰기 테스트")
         typeInto("20", "16") // blur → autofill copies Bourbon / 오렌지 into the empty fields
@@ -694,7 +694,7 @@ class MoreFlowTest : FlowTestBase() {
     @Test
     fun more28_scoredRecord_totalOnFormDetailAndHomeGroup() {
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, "점수 테스트 원두")
         typeInto("20", "15")
@@ -753,7 +753,7 @@ class MoreFlowTest : FlowTestBase() {
     @Test
     fun more30_doubleTapSave_recordFormCreatesOneRecord() {
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, "더블탭 기록")
         doubleTapSave() // the button turns into "저장 중..." after the first tap, so the second tap finds nothing to hit
@@ -822,7 +822,7 @@ class MoreFlowTest : FlowTestBase() {
     @Test
     fun more35_nameParensRoastery_reachesThePantryBag() {
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto(namePlaceholder, "에티오피아 구지 괄호 테스트 (모모스)")
         waitForText("괄호에서 인식: 로스터리: 모모스")

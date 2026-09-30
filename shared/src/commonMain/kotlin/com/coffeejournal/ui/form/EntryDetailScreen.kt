@@ -34,6 +34,7 @@ import com.coffeejournal.ui.theme.AppType
 import com.coffeejournal.ui.theme.Dimens
 import com.coffeejournal.ui.theme.EmptyNote
 import com.coffeejournal.ui.theme.GhostButton
+import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.Ink
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.ScreenTitleBar
@@ -69,6 +70,11 @@ fun EntryDetailScreen(nav: NavHostController, entryId: String) {
             else -> Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = Dimens.gutter).navigationBarsPadding()) {
                 EntryDetailContent(en, ui.siblings, ui.isBest, vm::photoPath)
                 if (en.isCafe) CafePlaceRow(nav, en.cafeName, Modifier.padding(top = 8.dp))
+                PrimaryButton(
+                    AgainTexts.button(en.category), modifier = Modifier.fillMaxWidth().padding(top = 18.dp),
+                    onClick = { nav.navigate(Route.RecordForm(mode = EntryDisplay.formModeFor(en.category), againFrom = en.id)) },
+                )
+                HintText(AgainTexts.hint(en.category, withRecipe = en.isCafe && FormMapper.hasRecipe(en)), Modifier.padding(top = 6.dp))
                 flash?.let { Text(it, style = AppType.small.copy(color = Ink.good), modifier = Modifier.padding(top = 12.dp)) }
                 DetailActions(
                     en = en, isBest = ui.isBest, canBeBest = ui.bestKeys.isNotEmpty(),

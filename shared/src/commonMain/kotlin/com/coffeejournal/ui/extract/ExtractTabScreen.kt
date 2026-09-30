@@ -40,7 +40,6 @@ import com.coffeejournal.ui.extract.components.GroupActions
 import com.coffeejournal.ui.extract.components.SmallPackCardView
 import com.coffeejournal.ui.extract.components.searchResultItems
 import com.coffeejournal.ui.theme.imeOverlapPadding
-import com.coffeejournal.ui.nav.FormMode
 import com.coffeejournal.ui.nav.Route
 import com.coffeejournal.ui.theme.AppIcons
 import com.coffeejournal.ui.theme.AppTextField
@@ -67,7 +66,8 @@ fun ExtractTabScreen(nav: NavHostController) {
     val query by vm.query.collectAsStateWithLifecycle()
     val summaryDraft by vm.summaryDraft.collectAsStateWithLifecycle()
     val photoStore = koinInject<PhotoStore>()
-    val newRecord = { nav.navigate(Route.RecordForm(mode = FormMode.EXTRACT)) }
+    // every kind of record: 직접 내린 커피, 카페, 커핑, 원두, 공부, 장비, 장소 (NewRecordScreen)
+    val newRecord = { nav.navigate(Route.NewRecord) }
     val openEntry = { id: String -> nav.navigate(Route.EntryDetail(id)) }
 
     Box(Modifier.fillMaxSize()) {

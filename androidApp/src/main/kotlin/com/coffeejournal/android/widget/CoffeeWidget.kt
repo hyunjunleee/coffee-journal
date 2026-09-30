@@ -47,7 +47,7 @@ import org.koin.core.context.GlobalContext
 
 /**
  * Home-screen widget: the Coffee D-day, the bean being drunk with its remaining grams (the home tab's pill and
- * 마시는 중 card, same texts) and "+ 새 기록", which opens the app straight into the new-record form. Tapping anywhere
+ * 마시는 중 card, same texts) and "+ 새 기록", which opens the app straight into the new-record chooser. Tapping anywhere
  * else opens the home tab. Archive look: ivory, ink, monospace numbers, square corners, hairline.
  */
 class CoffeeWidget : GlanceAppWidget() {

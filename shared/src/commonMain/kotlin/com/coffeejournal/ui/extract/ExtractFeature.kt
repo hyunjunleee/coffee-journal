@@ -13,7 +13,7 @@ import com.coffeejournal.ui.nav.Route
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
-/** Home tab (새로운 추출) plus the bean pantry, the 추출 비교 table and 통계. */
+/** Home tab (새로운 추출) plus the new-record chooser, the bean pantry, the 추출 비교 table and 통계. */
 object ExtractFeature : Feature {
     override val module = module {
         viewModel { ExtractViewModel(get(), get(), get(), get(), get(), get()) }
@@ -22,6 +22,7 @@ object ExtractFeature : Feature {
         viewModel { (itemId: String) -> PantryEditorViewModel(itemId.ifBlank { null }, get(), get()) }
         viewModel { (beanKey: String) -> BrewCompareViewModel(beanKey, get(), get()) }
         viewModel { StatsViewModel(get(), get()) }
+        viewModel { NewRecordViewModel(get()) }
     }
 
     override fun NavGraphBuilder.routes(nav: NavHostController) {
@@ -29,5 +30,6 @@ object ExtractFeature : Feature {
         composable<Route.PantryEditor> { back -> PantryEditorScreen(nav, back.toRoute<Route.PantryEditor>().itemId) }
         composable<Route.BrewCompare> { back -> BrewCompareScreen(nav, back.toRoute<Route.BrewCompare>().beanKey) }
         composable<Route.Stats> { StatsScreen(nav) }
+        composable<Route.NewRecord> { NewRecordScreen(nav) }
     }
 }

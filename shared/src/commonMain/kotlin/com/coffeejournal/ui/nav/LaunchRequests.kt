@@ -18,7 +18,7 @@ enum class LaunchTarget(val id: String) {
     /** 원두 보관함 (a bag's peak, a bean running low). */
     PANTRY("pantry"),
 
-    /** A new brew record (the widget's "+ 새 기록"). */
+    /** The new-record chooser (the widget's "+ 새 기록"), as the home tab's "+ 새 기록 추가" opens it. */
     NEW_RECORD("new-record");
 
     companion object {
@@ -65,6 +65,6 @@ fun NavHostController.openLaunchTarget(target: LaunchTarget) {
     when (target) {
         LaunchTarget.HOME -> Unit
         LaunchTarget.PANTRY -> navigate(Route.Pantry) { launchSingleTop = true }
-        LaunchTarget.NEW_RECORD -> navigate(Route.RecordForm(mode = FormMode.EXTRACT)) { launchSingleTop = true }
+        LaunchTarget.NEW_RECORD -> navigate(Route.NewRecord) { launchSingleTop = true }
     }
 }

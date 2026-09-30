@@ -145,7 +145,7 @@ class SaveRaceFlowTest : FlowTestBase() {
             }
         })
         launchApp()
-        clickText("+ 새 기록 추가")
+        openNewRecord()
         waitForText("새 기록")
         typeInto("예: 콜롬비아 라 플라타 게이샤 워시드", "뒤로가기 테스트 원두")
         clickText("저장")
