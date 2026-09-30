@@ -22,8 +22,10 @@ object RecordFormFeature : Feature {
     override val module: Module = module {
         // one draft store for the app: its writes run on the app scope, so the last one lands after the form closed
         single { RecordDrafts(get(), get<AppScope>()) }
-        // the second-to-last get() is the destination's SavedStateHandle, created by Koin from the view model's CreationExtras
-        viewModel { (args: FormArgs) -> RecordFormViewModel(args, get(), get(), get(), get(), get(), get(), get(), get()) }
+        // the form's folds, kept on this device like the drafts
+        single { FormFoldStore(get(), get<AppScope>()) }
+        // the third-to-last get() is the destination's SavedStateHandle, created by Koin from the view model's CreationExtras
+        viewModel { (args: FormArgs) -> RecordFormViewModel(args, get(), get(), get(), get(), get(), get(), get(), get(), get()) }
         viewModel { (entryId: String) -> EntryDetailViewModel(entryId, get(), get(), get(), get()) }
         viewModelOf(::MyRecipesViewModel)
         single<BrewClock> { SystemBrewClock }

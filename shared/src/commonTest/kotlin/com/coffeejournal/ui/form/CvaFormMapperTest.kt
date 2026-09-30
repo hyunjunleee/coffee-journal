@@ -66,7 +66,6 @@ class CvaFormMapperTest {
         val form = FormMapper.cuppingBeanForm(model)
         assertEquals(ScoreForm.CVA, form.scoreForm)
         assertEquals(cva, form.cva)
-        assertTrue(form.evaluationOpen)
         // a 2004 bean is untouched
         val plain = FormMapper.cuppingBeanForm(CuppingBean(name = "케냐", evaluationScores = mapOf("acidity" to 9.0)))
         assertEquals(ScoreForm.SCA2004, plain.scoreForm)

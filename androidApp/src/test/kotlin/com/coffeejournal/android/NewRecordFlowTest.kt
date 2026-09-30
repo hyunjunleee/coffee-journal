@@ -83,7 +83,7 @@ class NewRecordFlowTest : CoverageFlowBase() {
         waitForText("FELT 청계천")
         clickText(AgainTexts.BUTTON)
         waitFor(hasTestTag("again-banner"))
-        waitForText(AgainTexts.banner("2026.09.18 · FELT 청계천", withRecipe = true))
+        waitForText(AgainTexts.banner("2026.09.18 · FELT 청계천", Category.CAFE, withRecipe = true))
         assertTrue("café name filled", has(field("FELT 청계천")))
         assertTrue("bean name filled", has(field("브라질 세하도 내추럴")))
         assertTrue("price filled", has(field("6,500")))
@@ -112,7 +112,7 @@ class NewRecordFlowTest : CoverageFlowBase() {
         launchApp()
         clickText("+ 새 기록 추가")
         waitForText(NewRecordTexts.AGAIN)
-        waitForText("FELT 청계천 · 2026.09.18")
+        waitForText("카페 · FELT 청계천 · 2026.09.18")
         clickText("브라질 세하도 내추럴")
         waitFor(hasTestTag("again-banner"))
 
@@ -133,5 +133,53 @@ class NewRecordFlowTest : CoverageFlowBase() {
         waitForText("카페 이름")
         assertFalse(has(hasTestTag("draft-banner")))
         assertFalse(has(hasTestTag("again-banner")))
+    }
+
+    @Test
+    fun aBrewAgain_isABrewOfTheSameBeanAndRecipe() {
+        SampleData.seed()
+        val source = entry("e2")!!
+        launchApp()
+        clickText("+ 새 기록 추가")
+        waitForText(NewRecordTexts.AGAIN)
+        waitForText("직접 내림 · 2026.09.23")
+        clickText("에티오피아 예가체프 워카 첼베사")
+        waitFor(hasTestTag("again-banner"))
+        waitForText("레시피로 시작", substring = true)
+        saveForm("에티오피아 예가체프 워카 첼베사")
+        val again = entries().filter { it.isBrew }.maxBy { it.createdAt }
+        assertNotEquals(source.id, again.id)
+        assertEquals(Dates.today(), Dates.toLocalDate(again.createdAt))
+        assertEquals(source.name, again.name)
+        assertEquals(source.dripper, again.dripper)
+        assertEquals(source.dose, again.dose)
+        assertEquals(source.temp, again.temp)
+        assertEquals(source.steps, again.steps)
+        assertEquals("", again.actualNotes)
+        assertEquals("", again.notes)
+        assertEquals("the first brew is left as it was", source, entry("e2"))
+    }
+
+    @Test
+    fun aCuppingAgain_bringsItsBeans_withoutThatDaysScores() {
+        SampleData.seed()
+        val source = entry("e5")!!
+        launchApp()
+        clickText("+ 새 기록 추가")
+        waitForText("커핑 · 커피플랜트 성수 · 2026.09.06")
+        clickText(source.name)
+        waitFor(hasTestTag("again-banner"))
+        assertTrue(has(field("케냐 키리냐가 AA")))
+        assertTrue(has(field("파나마 보케테 게이샤")))
+        assertFalse("that day's ranks stay with it", has(field("1")))
+        clickText("저장")
+        waitUntil("the new cupping's detail") { has(button(AgainTexts.CUPPING_BUTTON)) && !has(hasTestTag("again-banner")) }
+        val cuppings = entries().filter { it.isCupping }.sortedBy { it.createdAt }
+        assertEquals(2, cuppings.size)
+        val again = cuppings.last()
+        assertEquals(source.cuppingBeans.map { it.name }, again.cuppingBeans.map { it.name })
+        assertTrue(again.cuppingBeans.all { it.rank.isBlank() && it.actualNotes.isBlank() && it.evaluationScores.isEmpty() })
+        assertEquals("", again.notes)
+        assertEquals("the first cupping is left as it was", source, entry("e5"))
     }
 }

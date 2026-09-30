@@ -132,7 +132,7 @@ fun RecordFormScreen(
             if (loaded) {
                 restoredDraft?.let { DraftBanner(it, onStartOver = vm::startOver, onClose = vm::closeDraftNotice) }
                 if (state.againFrom.isNotEmpty()) {
-                    AgainBanner(AgainTexts.banner(state.againFrom, state.cafeRecipeUsed), onClose = { vm.update { it.copy(againFrom = "") } })
+                    AgainBanner(AgainTexts.banner(state.againFrom, state.category, state.isCafe && state.cafeRecipeUsed), onClose = { vm.update { it.copy(againFrom = "") } })
                 }
                 RecordFormBody(state, suggestions, vm, nav, nameFocus, blendFocus, cuppingFocus)
             }
@@ -153,6 +153,9 @@ private fun RecordFormBody(
     cuppingFocus: FocusRequester,
 ) {
     val update: ((FormState) -> FormState) -> Unit = vm::update
+    val foldMap by vm.folds.collectAsStateWithLifecycle()
+    val folds = Folds({ FormFold.isFolded(foldMap, state.category, it) }, vm::toggleFold)
+    FoldAllRow(FormFold.parts(state.category).map(folds.isFolded), onFoldAll = vm::foldAll)
     if (state.isBrew) {
         RecipeLauncherSection(
             open = state.openLauncher,
@@ -167,7 +170,7 @@ private fun RecordFormBody(
     }
     BasicSection(state, update)
     if (state.isCupping) {
-        CuppingSection(state, suggestions, cuppingFocus, update)
+        CuppingSection(state, suggestions, cuppingFocus, update, folds)
         return
     }
     // a café record: the cafés there are (added by hand too) for 카페 이름, whose "위치 지정" saves the position at once
@@ -176,16 +179,35 @@ private fun RecordFormBody(
         state, suggestions, nameFocus, blendFocus, vm::onNameTyped, vm::onNameBlur, update, cafes = cafes,
         onPickCafePlace = dropUnlessResumed { nav.navigate(Route.MapPicker(target = MapPickTarget.CAFE, name = state.cafeName.trim())) },
     )
-    BeanInfoSection(state, suggestions, update)
+    FoldSection(
+        "원두 상세 정보", folds.isFolded(FormFold.ORIGIN), FormFold.originLine(state), { folds.toggle(FormFold.ORIGIN) }, tag = FormFold.ORIGIN,
+    ) { BeanInfoSection(state, suggestions, update) }
     // Web hideBagPhotoSection: a repeat brew of a known bean has no bag photos of its own (photos it already has stay).
     val bagPhotosHidden = state.repeatBean && state.bagPhotos.none { it.hasImage }
-    if (!state.isCafe && !bagPhotosHidden) BagPhotoSection(state.bagPhotos, vm::photoModel, vm::setPhoto, vm::removePhoto)
+    if (!state.isCafe && !bagPhotosHidden) {
+        FoldSection(
+            "원두 봉투 사진", folds.isFolded(FormFold.BAG_PHOTOS), FormFold.bagPhotosLine(state), { folds.toggle(FormFold.BAG_PHOTOS) },
+            hint = "(선택, 최대 2장 — 첫 번째가 대표 사진)", tag = FormFold.BAG_PHOTOS,
+        ) { BagPhotoSection(state.bagPhotos, vm::photoModel, vm::setPhoto, vm::removePhoto) }
+    }
     // a double tap opens one timer, not two
-    RecipeSection(state, suggestions, update, onOpenTimer = dropUnlessResumed { nav.navigate(vm.timerRoute()) })
+    RecipeSection(state, suggestions, update, onOpenTimer = dropUnlessResumed { nav.navigate(vm.timerRoute()) }, folds = folds)
     // the dialog closes on the first tap of 묻기, so one question opens one answer screen
     TastingSection(state, update, onAskAi = { query ->
         nav.navigate(Route.NoteHelper(mode = NoteMode.DESCRIBE.key, query = query, returnToForm = true))
-    })
+    }, folds = folds)
+}
+
+/** 모두 접기 · 모두 펼치기 over the form's folding parts ([folded] as they are now); each is shown while it would change something. */
+@Composable
+private fun FoldAllRow(folded: List<Boolean>, onFoldAll: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.End),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (folded.any { !it }) TextLink(FormFold.FOLD_ALL, Ink.textMuted, { onFoldAll(true) }, Modifier.testTag("fold-all"))
+        if (folded.any { it }) TextLink(FormFold.UNFOLD_ALL, Ink.textMuted, { onFoldAll(false) }, Modifier.testTag("unfold-all"))
+    }
 }
 
 /** Sticky bottom bar (web .form-actions). */

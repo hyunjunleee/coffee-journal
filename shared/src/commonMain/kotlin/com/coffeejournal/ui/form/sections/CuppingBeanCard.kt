@@ -20,8 +20,10 @@ import com.coffeejournal.domain.rules.Prices
 import com.coffeejournal.domain.rules.ScaScoring
 import com.coffeejournal.ui.form.AltitudeField
 import com.coffeejournal.ui.form.AutocompleteField
-import com.coffeejournal.ui.form.Collapsible
 import com.coffeejournal.ui.form.CuppingBeanForm
+import com.coffeejournal.ui.form.FoldSection
+import com.coffeejournal.ui.form.Folds
+import com.coffeejournal.ui.form.FormFold
 import com.coffeejournal.ui.form.FormMapper
 import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
@@ -50,6 +52,8 @@ internal fun CuppingBeanCard(
     /** A change to this bean, applied to the form's latest state of it (a pick and a blur in one tap both land). */
     onChange: ((CuppingBeanForm) -> CuppingBeanForm) -> Unit,
     onRemove: () -> Unit,
+    /** 원두 정보 and 노트 fold for every bean card together ([FormFold.CUPPING_BEAN_INFO], [FormFold.CUPPING_BEAN_NOTES]). */
+    folds: Folds = Folds.NONE,
 ) {
     HairlineCard {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
@@ -72,10 +76,23 @@ internal fun CuppingBeanCard(
                 placeholder = "블렌드 구성 (알면 입력, 예: 에티오피아 + 콜롬비아)",
             )
         }
-        Spacer(Modifier.height(10.dp))
-        CuppingBeanGrid(bean, suggestions, onChange)
-        CuppingBeanProcessRoast(bean, onChange)
-        CuppingBeanNotes(bean, onChange)
+        Spacer(Modifier.height(4.dp))
+        FoldSection(
+            "원두 정보", folds.isFolded(FormFold.CUPPING_BEAN_INFO), FormFold.cuppingBeanInfoLine(bean),
+            { folds.toggle(FormFold.CUPPING_BEAN_INFO) }, compact = true, tag = FormFold.CUPPING_BEAN_INFO,
+        ) {
+            CuppingBeanGrid(bean, suggestions, onChange)
+            CuppingBeanProcessRoast(bean, onChange)
+        }
+        FoldSection(
+            "노트", folds.isFolded(FormFold.CUPPING_BEAN_NOTES), FormFold.cuppingBeanNotesLine(bean),
+            { folds.toggle(FormFold.CUPPING_BEAN_NOTES) }, compact = true, tag = FormFold.CUPPING_BEAN_NOTES,
+        ) { CuppingBeanNoteChips(bean, onChange) }
+        FoldSection(
+            "항목별 평가 (선택)", folds.isFolded(FormFold.CUPPING_EVALUATION), FormFold.cuppingEvaluationLine(bean),
+            { folds.toggle(FormFold.CUPPING_EVALUATION) }, compact = true, tag = FormFold.CUPPING_EVALUATION,
+        ) { CuppingBeanEvaluation(bean, onChange) }
+        CuppingBeanMemo(bean, onChange)
     }
 }
 
@@ -129,7 +146,7 @@ private fun CuppingBeanProcessRoast(bean: CuppingBeanForm, onChange: ((CuppingBe
 }
 
 @Composable
-private fun CuppingBeanNotes(bean: CuppingBeanForm, onChange: ((CuppingBeanForm) -> CuppingBeanForm) -> Unit) {
+private fun CuppingBeanNoteChips(bean: CuppingBeanForm, onChange: ((CuppingBeanForm) -> CuppingBeanForm) -> Unit) {
     FieldLabel("예상 노트")
     ChipInput(
         chips = bean.expectedNotes, onChipsChange = { onChange { b -> b.copy(expectedNotes = it) } },
@@ -144,25 +161,31 @@ private fun CuppingBeanNotes(bean: CuppingBeanForm, onChange: ((CuppingBeanForm)
         placeholder = "노트 입력 후 Enter (예: 라즈베리)",
     )
     Spacer(Modifier.height(12.dp))
-    Collapsible(title = "항목별 평가 (선택)", open = bean.evaluationOpen, onToggle = { onChange { b -> b.copy(evaluationOpen = !b.evaluationOpen) } }) {
-        ScoreFormSeg(bean.scoreForm) { onChange { b -> b.copy(scoreForm = it) } }
-        Spacer(Modifier.height(8.dp))
-        if (bean.scoreForm == ScoreForm.CVA) {
-            CvaSheet(bean.cva, onChange = { onChange { b -> b.copy(cva = it) } })
-        } else ScaForm.cuppingEvaluationFields.forEach { (key, label) ->
-            val score = bean.evaluationScores[key]
-            SliderRow(
-                label = label, value = score, min = 6.0, max = 10.0, step = 0.25,
-                readout = score?.let { ScaScoring.format2(it) } ?: "–",
-                onChange = { v -> onChange { b -> b.copy(evaluationScores = b.evaluationScores + (key to v)) } },
-            )
-            FormTextField(
-                value = bean.evaluation[key] ?: "", onValueChange = { onChange { b -> b.copy(evaluation = b.evaluation + (key to it)) } },
-                placeholder = "$label 메모", singleLine = false, modifier = Modifier.padding(bottom = 8.dp),
-            )
-        }
+}
+
+@Composable
+private fun CuppingBeanEvaluation(bean: CuppingBeanForm, onChange: ((CuppingBeanForm) -> CuppingBeanForm) -> Unit) {
+    ScoreFormSeg(bean.scoreForm) { onChange { b -> b.copy(scoreForm = it) } }
+    Spacer(Modifier.height(8.dp))
+    if (bean.scoreForm == ScoreForm.CVA) {
+        CvaSheet(bean.cva, onChange = { onChange { b -> b.copy(cva = it) } })
+    } else ScaForm.cuppingEvaluationFields.forEach { (key, label) ->
+        val score = bean.evaluationScores[key]
+        SliderRow(
+            label = label, value = score, min = 6.0, max = 10.0, step = 0.25,
+            readout = score?.let { ScaScoring.format2(it) } ?: "–",
+            onChange = { v -> onChange { b -> b.copy(evaluationScores = b.evaluationScores + (key to v)) } },
+        )
+        FormTextField(
+            value = bean.evaluation[key] ?: "", onValueChange = { onChange { b -> b.copy(evaluation = b.evaluation + (key to it)) } },
+            placeholder = "$label 메모", singleLine = false, modifier = Modifier.padding(bottom = 8.dp),
+        )
     }
-    Spacer(Modifier.height(12.dp))
+}
+
+@Composable
+private fun CuppingBeanMemo(bean: CuppingBeanForm, onChange: ((CuppingBeanForm) -> CuppingBeanForm) -> Unit) {
+    Spacer(Modifier.height(8.dp))
     FormTextField(
         value = bean.memo, onValueChange = { onChange { b -> b.copy(memo = it) } }, label = "메모", singleLine = false, minLines = 2,
         placeholder = "온도 변화, 질감, 비교, 수업에서 들은 내용 등을 자유롭게 적어보세요.",

@@ -27,6 +27,9 @@ import com.coffeejournal.domain.reference.ScaForm
 import com.coffeejournal.domain.rules.ScaScoring
 import com.coffeejournal.ui.ai.AiTexts
 import com.coffeejournal.ui.form.FieldBlock
+import com.coffeejournal.ui.form.FoldSection
+import com.coffeejournal.ui.form.Folds
+import com.coffeejournal.ui.form.FormFold
 import com.coffeejournal.ui.form.FormState
 import com.coffeejournal.ui.form.ScoreForm
 import com.coffeejournal.ui.form.FormTextField
@@ -44,50 +47,61 @@ import com.coffeejournal.ui.theme.HintText
 import com.coffeejournal.ui.theme.PrimaryButton
 import com.coffeejournal.ui.theme.Seg
 import com.coffeejournal.ui.theme.Ink
-import com.coffeejournal.ui.theme.SectionLabel
 
 /**
- * 테이스팅: SCA 커핑 폼, 플레이버 휠, 내가 느낀 노트, 추출 관련 메모. [onAskAi] opens the AI note helper (mode B) with a
- * described taste; the notes it finds come back through the form's back stack entry (NoteHelperResult).
+ * 테이스팅: SCA 커핑 평가, 노트(플레이버 휠 · 내가 느낀 노트), 메모 — each part folds ([FormFold]). [onAskAi] opens the
+ * AI note helper (mode B) with a described taste; the notes it finds come back through the form's back stack entry
+ * (NoteHelperResult).
  */
 @Composable
-internal fun TastingSection(state: FormState, update: ((FormState) -> FormState) -> Unit, onAskAi: ((String) -> Unit)? = null) {
-    SectionLabel("테이스팅")
-    FieldBlock {
-        FieldLabel("SCA 커핑 평가 (100점)")
-        ScoreFormSeg(state.scoreForm) { form -> update { it.copy(scoreForm = form) } }
-        ScoreFormSwitchHint(state)
-        Spacer(Modifier.height(8.dp))
-        if (state.scoreForm == ScoreForm.CVA) {
-            CvaSheet(state.cva, onChange = { v -> update { it.copy(cva = v) } })
-        } else {
-            ScaSheet(state, update)
+internal fun TastingSection(
+    state: FormState,
+    update: ((FormState) -> FormState) -> Unit,
+    onAskAi: ((String) -> Unit)? = null,
+    folds: Folds = Folds.NONE,
+) {
+    FoldSection(
+        "SCA 커핑 평가 (100점)", folds.isFolded(FormFold.SCORE), FormFold.scoreLine(state), { folds.toggle(FormFold.SCORE) }, tag = FormFold.SCORE,
+    ) {
+        FieldBlock {
+            ScoreFormSeg(state.scoreForm) { form -> update { it.copy(scoreForm = form) } }
+            ScoreFormSwitchHint(state)
+            Spacer(Modifier.height(8.dp))
+            if (state.scoreForm == ScoreForm.CVA) {
+                CvaSheet(state.cva, onChange = { v -> update { it.copy(cva = v) } })
+            } else {
+                ScaSheet(state, update)
+            }
         }
     }
-    FlavorWheelSection(
-        open = state.flavorWheelOpen,
-        actualNotes = state.actualNotes,
-        onToggleOpen = { update { it.copy(flavorWheelOpen = !it.flavorWheelOpen) } },
-        onToggleTerm = { term -> update { it.copy(actualNotes = toggleNote(it.actualNotes, term)) } },
-    )
-    Spacer(Modifier.height(12.dp))
-    FieldBlock {
-        var askOpen by rememberSaveable { mutableStateOf(false) }
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            FieldLabel("내가 느낀 노트 — 실제로 맛본 것", Modifier.weight(1f))
-            if (onAskAi != null) TextLink(AiTexts.ASK_FROM_FORM, Ink.text, { askOpen = !askOpen })
-        }
-        if (onAskAi != null) AskAiPanel(askOpen, onToggle = { askOpen = !askOpen }, onAsk = onAskAi)
-        ChipInput(
-            chips = state.actualNotes, onChipsChange = { v -> update { it.copy(actualNotes = v) } },
-            input = state.actualInput, onInputChange = { v -> update { it.copy(actualInput = v) } },
+    FoldSection("노트", folds.isFolded(FormFold.NOTES), FormFold.notesLine(state), { folds.toggle(FormFold.NOTES) }, tag = FormFold.NOTES) {
+        FlavorWheelSection(
+            open = state.flavorWheelOpen,
+            actualNotes = state.actualNotes,
+            onToggleOpen = { update { it.copy(flavorWheelOpen = !it.flavorWheelOpen) } },
+            onToggleTerm = { term -> update { it.copy(actualNotes = toggleNote(it.actualNotes, term)) } },
         )
-        NotesSuggestRow(state.expectedNotes, state.actualNotes) { note -> update { it.copy(actualNotes = it.actualNotes + note) } }
+        Spacer(Modifier.height(12.dp))
+        FieldBlock {
+            var askOpen by rememberSaveable { mutableStateOf(false) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                FieldLabel("내가 느낀 노트 — 실제로 맛본 것", Modifier.weight(1f))
+                if (onAskAi != null) TextLink(AiTexts.ASK_FROM_FORM, Ink.text, { askOpen = !askOpen })
+            }
+            if (onAskAi != null) AskAiPanel(askOpen, onToggle = { askOpen = !askOpen }, onAsk = onAskAi)
+            ChipInput(
+                chips = state.actualNotes, onChipsChange = { v -> update { it.copy(actualNotes = v) } },
+                input = state.actualInput, onInputChange = { v -> update { it.copy(actualInput = v) } },
+            )
+            NotesSuggestRow(state.expectedNotes, state.actualNotes) { note -> update { it.copy(actualNotes = it.actualNotes + note) } }
+        }
     }
-    FormTextField(
-        value = state.notes, onValueChange = { v -> update { it.copy(notes = v) } }, label = "추출 관련 메모",
-        placeholder = "맛, 개선할 점, 다음에 시도할 것 등", singleLine = false, minLines = 3,
-    )
+    FoldSection("메모", folds.isFolded(FormFold.MEMO), FormFold.memoLine(state), { folds.toggle(FormFold.MEMO) }, tag = FormFold.MEMO) {
+        FormTextField(
+            value = state.notes, onValueChange = { v -> update { it.copy(notes = v) } }, label = "추출 관련 메모",
+            placeholder = "맛, 개선할 점, 다음에 시도할 것 등", singleLine = false, minLines = 3,
+        )
+    }
 }
 
 /**

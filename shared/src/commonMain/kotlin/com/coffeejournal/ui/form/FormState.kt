@@ -123,7 +123,6 @@ data class CuppingBeanForm(
     val actualInput: String = "",
     val evaluation: Map<String, String> = emptyMap(),
     val evaluationScores: Map<String, Double> = emptyMap(),
-    val evaluationOpen: Boolean = false,
     /** "항목별 평가" form: [ScoreForm.SCA2004] (the 8 fields above) or [ScoreForm.CVA]. */
     val scoreForm: String = ScoreForm.SCA2004,
     val cva: CvaAssessment = CvaAssessment(),

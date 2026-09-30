@@ -100,7 +100,6 @@ internal object FormDrafts {
      */
     fun content(state: FormState): FormState = state.copy(
         draftId = "",
-        cuppingBeans = state.cuppingBeans.map { it.copy(evaluationOpen = false) },
         tempHint = "",
         cafeRecipeOpen = false,
         cafeRecipeUsed = false,

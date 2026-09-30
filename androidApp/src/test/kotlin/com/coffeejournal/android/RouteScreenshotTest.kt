@@ -54,6 +54,7 @@ import com.coffeejournal.ui.ai.AiTexts
 import com.coffeejournal.ui.bean.b.WorldMapCanvas
 import com.coffeejournal.ui.bean.b.WorldMapGeometry
 import com.coffeejournal.ui.bean.b.WorldMapState
+import com.coffeejournal.ui.form.FormFold
 import com.coffeejournal.ui.form.timer.BrewClock
 import com.coffeejournal.ui.form.timer.BrewTimerResult
 import com.coffeejournal.ui.guide.GuideTexts
@@ -578,6 +579,11 @@ class RouteScreenshotTest {
     @Test fun newRecord() = show(Route.NewRecord, "92-new-record.png")
     @Test fun recordForm_cafeAgain() = show(Route.RecordForm(mode = FormMode.CAFE, againFrom = "e4"), "93-form-cafe-again.png")
     @Test fun entryDetail_cafe() = show(Route.EntryDetail("e4"), "94-detail-cafe.png")
+    // most of the record form folds; folded, a part says what it holds
+    @Test fun recordForm_folded() = show(Route.RecordForm(mode = FormMode.EXTRACT, entryId = "e1"), "95-form-folded.png") { click(FormFold.FOLD_ALL) }
+    @Test fun recordForm_cuppingFolded() = show(Route.RecordForm(mode = FormMode.CUPPING, entryId = "e5"), "96-form-cupping-folded.png") {
+        click(FormFold.FOLD_ALL)
+    }
 
     private fun keyGuide(link: String, file: String) {
         compose.setContent {

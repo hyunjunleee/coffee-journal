@@ -171,6 +171,8 @@ class FormRouteTest {
         val waitField = compose.onAllNodes(hasText("10") and androidx.compose.ui.test.hasSetTextAction()).onFirst().getBoundsInRoot()
         assertTrue("'이번 물량(g)' starts at the pour column (${header.left} vs ${toggle.left})", header.left >= toggle.left && header.left < toggle.right)
         assertTrue("'대기(초)' starts over the wait input (${waitHeader.left} vs ${waitField.left})", waitHeader.left >= waitField.left && waitHeader.left < waitField.right)
-        assertTrue("no '메모' column header over the water input", compose.onAllNodes(hasText("메모")).fetchSemanticsNodes().size <= 1)
+        // the reference table's '메모' is the only one besides the form's 메모 part header
+        val memoTexts = hasText("메모") and androidx.compose.ui.test.hasTestTag("fold-memo").not()
+        assertTrue("no '메모' column header over the water input", compose.onAllNodes(memoTexts).fetchSemanticsNodes().size <= 1)
     }
 }

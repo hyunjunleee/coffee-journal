@@ -3,6 +3,8 @@ package com.coffeejournal.ui.form
 import com.coffeejournal.domain.model.BeanMode
 import com.coffeejournal.domain.model.BlendComponent
 import com.coffeejournal.domain.model.Category
+import com.coffeejournal.domain.model.CuppingBean
+import com.coffeejournal.domain.model.CuppingType
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.RecipeStep
 import com.coffeejournal.domain.rules.Dates
@@ -103,11 +105,77 @@ class AgainRecordTest {
         assertTrue(FormDrafts.changed(opened, opened.copy(notes = "오늘은 더 달았다")))
     }
 
-    @Test fun theBanner_saysWhereItCameFrom() {
+    @Test fun theBanner_saysWhereItCameFrom_andWhatCameAlong() {
         assertEquals(
-            "✓ 2026.09.18 · FELT 청계천 기록에서 카페·원두·가격·레시피를 불러왔어요. 오늘 마신 느낌과 점수만 적으면 돼요.",
-            AgainTexts.banner("2026.09.18 · FELT 청계천", withRecipe = true),
+            "✓ 2026.09.18 · FELT 청계천 기록에서 카페·원두·가격·레시피를 불러왔어요. 오늘 느낀 맛과 점수만 적으면 돼요.",
+            AgainTexts.banner("2026.09.18 · FELT 청계천", Category.CAFE, withRecipe = true),
         )
-        assertTrue(AgainTexts.banner("2026.09.18", withRecipe = false).contains("카페·원두·가격을 불러왔어요"))
+        assertTrue(AgainTexts.banner("2026.09.18", Category.CAFE, withRecipe = false).contains("카페·원두·가격을 불러왔어요"))
+        assertTrue(AgainTexts.banner("2026.09.21", Category.BEAN, withRecipe = false).contains("원두 정보·레시피를 불러왔어요"))
+        assertTrue(AgainTexts.banner("2026.09.06", Category.CUPPING, withRecipe = false).contains("커핑 종류·장소·원두 정보를 불러왔어요"))
+        assertEquals("같은 커피 다시 기록", AgainTexts.button(Category.BEAN))
+        assertEquals("같은 원두로 다시 커핑", AgainTexts.button(Category.CUPPING))
+    }
+
+    @Test fun aBrew_comesBackWithItsBeanAndRecipe_asABrew() {
+        val brew = Entry(
+            id = "e1", createdAt = visit, category = Category.BEAN, name = "에티오피아 예가체프 워카 첼베사", roastery = "커피 리브레",
+            country = "에티오피아", dripper = "오리가미", grind = "코만단테 24클릭", dose = "15", water = "240", temp = "92",
+            steps = listOf(RecipeStep(time = "0:00", water = "40", wait = "30")), actualNotes = "자스민", notes = "좋았다",
+            bagPhotos = listOf("bag.jpg"), attributes = ScaScoring.defaultAttributes() + ("flavor" to 8.5),
+        )
+        val s = FormMapper.again(brew, today, draftId = "new2")
+        assertEquals(FormMode.EXTRACT, s.mode)
+        assertEquals(Category.BEAN, s.category)
+        assertEquals(today, s.createdAt)
+        assertEquals("오리가미", s.dripper)
+        assertEquals("코만단테 24클릭", s.grind)
+        assertEquals("15", s.dose)
+        assertEquals(1, s.steps.size)
+        assertEquals("2026.09.18", s.againFrom)
+        assertTrue(s.repeatBean, "the bag belongs to the first record of the bean")
+        assertTrue(s.actualNotes.isEmpty())
+        assertEquals("", s.notes)
+        assertEquals(ScaScoring.defaultAttributes(), s.attributes)
+        assertTrue(s.bagPhotos.none { it.hasImage })
+        val saved = FormMapper.toEntry(s, s.draftId, null, emptyList(), today)
+        assertEquals(Category.BEAN, saved.category)
+        assertEquals(brew.name, saved.name)
+        assertEquals("", saved.cafeName)
+    }
+
+    @Test fun aCupping_comesBackWithItsBeans_withoutThatDaysNotesScoresAndRanks() {
+        val cupping = Entry(
+            id = "e5", createdAt = visit, category = Category.CUPPING, name = "커피플랜트 퍼블릭 커핑", cuppingType = CuppingType.PUBLIC,
+            cuppingPlace = "커피플랜트 성수", notes = "케냐가 압도적이었다.",
+            cuppingBeans = listOf(
+                CuppingBean(
+                    id = "cb1", name = "케냐 키리냐가 AA", country = "케냐", variety = "SL28", process = "워시드", rank = "1",
+                    expectedNotes = "블랙커런트", actualNotes = "토마토", memo = "산미가 밝다", evaluationScores = mapOf("aroma" to 8.0),
+                ),
+                CuppingBean(id = "cb2", name = "파나마 보케테 게이샤", rank = "2", actualNotes = "자스민"),
+            ),
+        )
+        val s = FormMapper.again(cupping, today, draftId = "new3")
+        assertEquals(FormMode.CUPPING, s.mode)
+        assertEquals(Category.CUPPING, s.category)
+        assertEquals(CuppingType.PUBLIC, s.cuppingType)
+        assertEquals("커피플랜트 성수", s.cuppingPlace)
+        assertEquals("", s.cuppingNotes)
+        assertEquals("2026.09.18 · 커피플랜트 성수", s.againFrom)
+        assertFalse(s.repeatBean)
+        assertEquals(listOf("케냐 키리냐가 AA", "파나마 보케테 게이샤"), s.cuppingBeans.map { it.name })
+        val kenya = s.cuppingBeans.first()
+        assertEquals("케냐", kenya.country)
+        assertEquals("SL28", kenya.variety)
+        assertEquals(listOf("블랙커런트"), kenya.expectedNotes)
+        assertEquals("", kenya.id)
+        assertEquals("", kenya.rank)
+        assertEquals("", kenya.memo)
+        assertTrue(kenya.actualNotes.isEmpty())
+        assertTrue(kenya.evaluationScores.isEmpty())
+        val saved = FormMapper.toEntry(s, s.draftId, null, emptyList(), today)
+        assertEquals(2, saved.cuppingBeans.size)
+        assertEquals("", saved.notes)
     }
 }

@@ -30,6 +30,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.navigation.NavHostController
 import com.coffeejournal.data.repo.EntryRepository
 import com.coffeejournal.domain.model.CafePlace
+import com.coffeejournal.domain.model.Category
 import com.coffeejournal.domain.model.Entry
 import com.coffeejournal.domain.model.MiscType
 import com.coffeejournal.domain.reference.EquipmentTypes
@@ -62,7 +63,7 @@ object NewRecordTexts {
     const val CUPPING = "커핑"
     const val CUPPING_HINT = "퍼블릭 · 홈커핑 · 수업, 여러 원두를 한 번에"
     const val AGAIN = "같은 커피 다시"
-    const val AGAIN_HINT = "최근 카페 기록 그대로, 오늘 날짜로"
+    const val AGAIN_HINT = "최근 기록 그대로, 오늘 날짜로"
     const val BEAN = "원두"
     const val PANTRY = "원두 보관함에 원두 추가"
     const val PANTRY_HINT = "산 원두 봉투: 용량, 로스팅일, 남은 양"
@@ -84,26 +85,52 @@ object NewRecordTexts {
 /** What the chooser lists besides the fixed choices. */
 object NewRecordLogic {
     /**
-     * The café coffees drunk last, newest first, each café-and-bean pair once (as [CafePlace.key] and
-     * [BeanNames.coreBeanName] match them): what "같은 커피 다시" offers to record again.
+     * The coffees recorded last, newest first — brewed, had at a café or cupped — each kind, place and bean once (a café
+     * as [CafePlace.key], a bean as [BeanNames.coreBeanName] match them): what "같은 커피 다시" offers to record again.
      */
-    fun recentCafeCoffees(entries: List<Entry>, limit: Int = 3): List<Entry> =
+    fun recentCoffees(entries: List<Entry>, limit: Int = 4): List<Entry> =
         entries.asSequence()
-            .filter { it.isCafe && it.name.isNotBlank() }
+            .filter { title(it).isNotBlank() }
             .sortedByDescending { it.createdAt }
-            .distinctBy { CafePlace.key(it.cafeName) + "|" + BeanNames.coreBeanName(it.name) }
+            .distinctBy { listOf(it.category.ifBlank { Category.BEAN }, CafePlace.key(place(it)), BeanNames.coreBeanName(title(it))).joinToString("|") }
             .take(limit)
             .toList()
 
-    /** "FELT 청계천 · 2026.09.28" under a coffee to record again. */
-    fun againLine(entry: Entry): String =
-        listOf(entry.cafeName.trim(), Dates.ymdPadded(entry.createdAt)).filter { it.isNotEmpty() }.joinToString(" · ")
+    /** What a coffee to record again is called: its bean, or a cupping's name (else its beans). */
+    fun title(entry: Entry): String = when {
+        entry.isCupping -> entry.name.ifBlank { entry.cuppingBeans.map { it.name }.filter { it.isNotBlank() }.joinToString(", ") }
+        entry.name.isBlank() -> ""
+        else -> BeanNames.displayName(entry.name)
+    }
+
+    private fun place(entry: Entry): String = when {
+        entry.isCafe -> entry.cafeName
+        entry.isCupping -> entry.cuppingPlace
+        else -> ""
+    }
+
+    /** "카페 · FELT 청계천 · 2026.09.18" under a coffee to record again. */
+    fun againLine(entry: Entry): String {
+        val kind = when {
+            entry.isCafe -> "카페"
+            entry.isCupping -> "커핑"
+            else -> "직접 내림"
+        }
+        return listOf(kind, place(entry).trim(), Dates.ymdPadded(entry.createdAt)).filter { it.isNotEmpty() }.joinToString(" · ")
+    }
+
+    /** The form mode a record of [entry]'s kind opens in. */
+    fun modeFor(entry: Entry): String = when {
+        entry.isCafe -> FormMode.CAFE
+        entry.isCupping -> FormMode.CUPPING
+        else -> FormMode.EXTRACT
+    }
 }
 
 class NewRecordViewModel(entries: EntryRepository) : ViewModel() {
     /** Null until the records are read. */
     val recent: StateFlow<List<Entry>?> = entries.observeAll()
-        .deriveOffMain { NewRecordLogic.recentCafeCoffees(it) }
+        .deriveOffMain { NewRecordLogic.recentCoffees(it) }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 }
 
@@ -131,8 +158,8 @@ fun NewRecordScreen(nav: NavHostController) {
                 SectionLabel(NewRecordTexts.AGAIN, hint = NewRecordTexts.AGAIN_HINT)
                 again.forEachIndexed { i, en ->
                     if (i > 0) Hairline()
-                    ChoiceRow(BeanNames.displayName(en.name), NewRecordLogic.againLine(en)) {
-                        open(Route.RecordForm(mode = FormMode.CAFE, againFrom = en.id))
+                    ChoiceRow(NewRecordLogic.title(en), NewRecordLogic.againLine(en)) {
+                        open(Route.RecordForm(mode = NewRecordLogic.modeFor(en), againFrom = en.id))
                     }
                 }
             }

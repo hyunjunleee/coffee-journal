@@ -22,6 +22,9 @@ import com.coffeejournal.ui.form.AutocompleteField
 import com.coffeejournal.ui.form.Collapsible
 import com.coffeejournal.ui.form.FormMapper
 import com.coffeejournal.ui.form.FormNumbers
+import com.coffeejournal.ui.form.Folds
+import com.coffeejournal.ui.form.FormFold
+import com.coffeejournal.ui.form.FoldSection
 import com.coffeejournal.ui.form.FormState
 import com.coffeejournal.ui.form.FormSuggestions
 import com.coffeejournal.ui.form.FormTextField
@@ -34,17 +37,25 @@ import com.coffeejournal.ui.theme.fontScaled
 import com.coffeejournal.ui.theme.SectionLabel
 
 /**
- * 레시피 필드 + 추출 예시(읽기 전용) + 추출 단계 로그. A 카페 record folds it all away: coffee had at a café usually
- * comes without a recipe, so it opens only when the café told one (and opens by itself on a record that has one).
- * Folding it again keeps what was typed, and it is saved.
+ * 레시피 필드 + 추출 예시(읽기 전용) + 추출 단계 로그. A brew's folds like the form's other parts ([FormFold.RECIPE]). A
+ * 카페 record folds it all away: coffee had at a café usually comes without a recipe, so it opens only when the café
+ * told one (and opens by itself on a record that has one). Folding it again keeps what was typed, and it is saved.
  */
 @Composable
-internal fun RecipeSection(state: FormState, suggestions: FormSuggestions, update: ((FormState) -> FormState) -> Unit, onOpenTimer: () -> Unit) {
-    SectionLabel("레시피")
+internal fun RecipeSection(
+    state: FormState,
+    suggestions: FormSuggestions,
+    update: ((FormState) -> FormState) -> Unit,
+    onOpenTimer: () -> Unit,
+    folds: Folds = Folds.NONE,
+) {
     if (!state.isCafe) {
-        RecipeFields(state, suggestions, update, onOpenTimer)
+        FoldSection(
+            "레시피", folds.isFolded(FormFold.RECIPE), FormFold.recipeLine(state), { folds.toggle(FormFold.RECIPE) }, tag = FormFold.RECIPE,
+        ) { RecipeFields(state, suggestions, update, onOpenTimer) }
         return
     }
+    SectionLabel("레시피")
     Collapsible(
         title = "레시피 입력 (카페에서 알려준 경우)", open = state.cafeRecipeOpen,
         onToggle = { update { it.copy(cafeRecipeOpen = !it.cafeRecipeOpen, cafeRecipeUsed = true) } },
